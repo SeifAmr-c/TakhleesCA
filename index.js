@@ -1,5 +1,7 @@
 const express = require('express');
 const mysql = require('mysql');
+const PORT = 3000;
+const app = express();
 
 const db = mysql.createConnection({
     host: 'localhost',
@@ -13,7 +15,6 @@ db.connect((err) => {
     console.log('Connected to MySQL server');
 });
 
-const app = express();
 app.get('/createdb', (req, res) => {
     let sql = 'CREATE DATABASE IF NOT EXISTS Takhlees';
     db.query(sql, (err, result) => {
@@ -219,6 +220,7 @@ app.get('/createCompanyPayment', (req, res) => {
         res.send("CompanyPayment table created successfully")
     });
 }) ;
-app.listen(3000, () => {
-    console.log('Server is running on port 3000');
+
+app.listen(PORT, () => {
+    console.log(`your server is up and run on http://localhost:${PORT}`);
 });
