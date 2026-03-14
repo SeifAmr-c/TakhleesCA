@@ -67,7 +67,7 @@ app.get('/User',(req,res)=>{
 app.post('/User',(req,res)=>{
   console.log("Post Request Received");
   
-  var type = req.body.Type ?? req.body.type;
+  var type = req.body.Type;
   if (type == "C"){
     con.query("INSERT INTO User (`FirstName`, `LastName`,`Email`,`Password`,`Type`) VALUES (?,?,?,?,?); INSERT INTO Client (`ClientID`,`PhoneNumber`,`NationalID`,`Address`) VALUES ((SELECT UserID FROM User WHERE Email = ?),?,?,?);", 
       [req.body.FirstName,req.body.LastName,req.body.Email,req.body.Password,req.body.Type,req.body.Email,req.body.PhoneNumber,req.body.NationalID,req.body.Address], function (err, results, 
