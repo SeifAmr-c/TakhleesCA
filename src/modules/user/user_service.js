@@ -20,10 +20,12 @@ app.get('/',(req,res)=>{
 });
 
 app.get('/User',(req,res)=>{
-    var user_id= req.query.UserID;
-    var type = req.query.Type;
-    if (user_id == '%' && type == "C"){
-        con.query("SELECT * FROM User RIGHT JOIN Client ON User.UserID = Client.ClientID where User.UserID LIKE ?", [user_id], function (err, result, fields) {
+  let user_id = req.query.UserID ?? req.query.userId ?? req.query.id ?? req.query.user_id;
+  if (!user_id) {
+    user_id = '%';
+  }
+    if (user_id == '%'){
+        con.query("SELECT * FROM (User LEFT JOIN Client ON User.UserID = Client.ClientID) LEFT JOIN Admin ON User.UserID = Admin.AdminID where User.UserID LIKE ?", [user_id], function (err, result, fields) {
             if (err) {
               console.error(err);
               return res.status(500).json({ error: "Database error" });
@@ -31,36 +33,16 @@ app.get('/User',(req,res)=>{
             res.json(result);
             console.log(result);
           });
-    }
-    else if (user_id == '%' && type == "A"){
-        con.query("SELECT * FROM User RIGHT JOIN Admin ON User.UserID = Admin.ClientID where User.UserID LIKE ?", [user_id], function (err, result, fields) {
-            if (err) {
-              console.error(err);
-              return res.status(500).json({ error: "Database error" });
-            }
-            res.json(result);
-            console.log(result);
-          });
-    }
-    else if (type == "C"){
-    con.query("SELECT * FROM User RIGHT JOIN Client ON User.UserID = Client.ClientID where UserID = ?", [user_id], function (err, result, fields) {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: "Database error" });
-        }
-        res.json(result);
-        console.log(result);
-        });
     }
     else{
-    con.query("SELECT * FROM User RIGHT JOIN Admin ON User.UserID = Admin.AdminID where UserID = ?", [user_id], function (err, result, fields) {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: "Database error" });
-        }
-        res.json(result);
-        console.log(result);
-      });
+      con.query(
+        "SELECT * FROM (User LEFT JOIN Client ON User.UserID = Client.ClientID) LEFT JOIN Admin ON User.UserID = Admin.AdminID WHERE User.UserID = ?", [user_id], function (err, result, fields) {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Database error" });
+          }
+          res.json(result);
+        });
     }
 });
 
