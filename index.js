@@ -1,19 +1,10 @@
-const express = require('express');
-const mysql = require('mysql');
+import express from 'express'
+import db from "./connection";
+
 const PORT = 3000;
 const app = express();
 
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'Takhlees',
-});
-
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to MySQL server');
-});
+app.use(express.json());
 
 app.get('/createdb', (req, res) => {
     let sql = 'CREATE DATABASE IF NOT EXISTS Takhlees';
@@ -220,6 +211,44 @@ app.get('/createCompanyPayment', (req, res) => {
         res.send("CompanyPayment table created successfully")
     });
 }) ;
+
+// Insert User (Client or Admin) - for Postman
+app.post('/User', (req, res) => {
+    const type = req.body.Type;
+    const userFields = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type];
+
+    db.query('INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?)', userFields, (err, userResult) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        const userId = userResult.insertId;
+
+        if (type === 'C') {
+            db.query(
+                'INSERT INTO Client (ClientID, PhoneNumber, NationalID, Address) VALUES (?,?,?,?)',
+                [userId, req.body.PhoneNumber, req.body.NationalID, req.body.Address],
+                (err2) => {
+                    if (err2) {
+                        console.error(err2);
+                        return res.status(500).json({ error: 'Database error', details: err2.message });
+                    }
+                    res.json({ Status: 'OK', Message: 'User + Client added with Id ' + userId });
+                }
+            );
+        } else if (type === 'A') {
+            db.query('INSERT INTO Admin (AdminID, LastLogin) VALUES (?, NOW())', [userId], (err2) => {
+                if (err2) {
+                    console.error(err2);
+                    return res.status(500).json({ error: 'Database error', details: err2.message });
+                }
+                res.json({ Status: 'OK', Message: 'User + Admin added with Id ' + userId });
+            });
+        } else {
+            res.status(400).json({ error: 'Invalid Type. Use "C" for Client or "A" for Admin' });
+        }
+    });
+});
 
 app.listen(PORT, () => {
     console.log(`your server is up and run on http://localhost:${PORT}`);

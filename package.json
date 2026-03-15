@@ -7,6 +7,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "start": "node src/modules/user/user_service.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
