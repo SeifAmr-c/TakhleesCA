@@ -11,12 +11,25 @@ app.get('/', (req, res) => {
 });
 
 app.get('/User', (req, res) => {
-    let user_id = req.query.UserID ?? req.query.userId ?? req.query.id ?? req.query.user_id;
-    if (!user_id) user_id = '%';
+    const raw = req.query.UserID;
 
-    const sql = user_id === '%'
-        ? 'SELECT * FROM (User LEFT JOIN Client ON User.UserID = Client.ClientID) LEFT JOIN Admin ON User.UserID = Admin.AdminID WHERE User.UserID LIKE ?'
-        : 'SELECT * FROM (User LEFT JOIN Client ON User.UserID = Client.ClientID) LEFT JOIN Admin ON User.UserID = Admin.AdminID WHERE User.UserID = ?';
+    let user_id;
+    if (raw === undefined || raw === null || raw === '') {
+        user_id = '%';
+    } else if (raw === '%') {
+        user_id = '%';
+    } else {
+        const n = Number(raw);
+        if (!Number.isInteger(n) || n < 1) {
+            return res.status(400).json({
+                error: 'Invalid UserID. Use a positive integer or %.',
+            });
+        }
+        user_id = String(n);
+    }
+
+    const sql =
+        'SELECT * FROM (User LEFT JOIN Client ON User.UserID = Client.ClientID) LEFT JOIN Admin ON User.UserID = Admin.AdminID WHERE User.UserID LIKE ?';
 
     db.query(sql, [user_id], (err, result) => {
         if (err) {
@@ -62,6 +75,128 @@ app.post('/User', (req, res) => {
     } else {
         res.status(400).json({ error: 'Invalid type. Use "C" for Client or "A" for Admin' });
     }
+});
+
+app.delete('/users', (req, res) => {
+    const UserID =
+        req.query.UserID;
+    if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
+        return res.status(400).json({ error: 'UserID is required (query)' });
+    }
+    const uid = Number(UserID);
+    if (!Number.isFinite(uid)) {
+        return res.status(400).json({ error: 'Invalid UserID' });
+    }
+    const sql = `
+        DELETE FROM Client WHERE ClientID = ?;
+        DELETE FROM Admin WHERE AdminID = ?;
+        DELETE FROM User WHERE UserID = ?
+    `;
+    db.query(sql, [uid, uid, uid], (err) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        res.json({ Status: 'OK', Message: `UserID [${uid}] deleted successfully` });
+        console.log(`Delete request processed for UserID [${uid}]`);
+    });
+});
+
+app.put('/users', (req, res) => {
+    console.log('PUT Request Received');
+    const UserID = req.query.UserID;
+    if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
+        return res.status(400).json({ error: 'UserID is required (query)' });
+    }
+    const uid = Number(UserID);
+    if (!Number.isFinite(uid) || !Number.isInteger(uid) || uid < 1) {
+        return res.status(400).json({ error: 'Invalid UserID' });
+    }
+    const { FirstName, LastName, Email, Password, Type } = req.body;
+    const sql =
+        'UPDATE User SET FirstName = ?, LastName = ?, Email = ?, Password = ?, Type = ? WHERE UserID = ?';
+    db.query(sql, [FirstName, LastName, Email, Password, Type, uid], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'User not found', UserID: uid });
+        }
+        res.json({ Status: 'OK', Message: `UserID [${uid}] updated successfully` });
+        console.log(`UserID [${uid}] updated successfully`);
+    });
+});
+
+// PUT /Client?ClientID= — body: PhoneNumber, NationalID, Address
+app.put('/Client', (req, res) => {
+    const raw = req.query.ClientID;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+        return res.status(400).json({ error: 'ClientID is required (query)' });
+    }
+    const clientId = Number(raw);
+    if (!Number.isInteger(clientId) || clientId < 1) {
+        return res.status(400).json({ error: 'Invalid ClientID' });
+    }
+
+    const { PhoneNumber, NationalID, Address } = req.body;
+    const phoneDigits = String(PhoneNumber ?? '').replace(/\D/g, '');
+    const nidDigits = String(NationalID ?? '').replace(/\D/g, '');
+    const phone = parseInt(phoneDigits, 10);
+    const nid = parseInt(nidDigits, 10);
+    const address = String(Address ?? '').trim();
+
+    if (!Number.isFinite(phone)) {
+        return res.status(400).json({ error: 'Invalid PhoneNumber' });
+    }
+    if (!Number.isFinite(nid)) {
+        return res.status(400).json({ error: 'Invalid NationalID' });
+    }
+    if (!address) {
+        return res.status(400).json({ error: 'Address is required' });
+    }
+
+    const sql =
+        'UPDATE Client SET PhoneNumber = ?, NationalID = ?, Address = ? WHERE ClientID = ?';
+    db.query(sql, [phone, nid, address, clientId], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Client not found', ClientID: clientId });
+        }
+        res.json({ Status: 'OK', Message: `ClientID [${clientId}] updated successfully` });
+    });
+});
+
+// PUT /Admin?AdminID= — body (optional): LastLogin; if omitted, uses NOW()
+app.put('/Admin', (req, res) => {
+    const raw = req.query.AdminID;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+        return res.status(400).json({ error: 'AdminID is required (query)' });
+    }
+    const adminId = Number(raw);
+    if (!Number.isInteger(adminId) || adminId < 1) {
+        return res.status(400).json({ error: 'Invalid AdminID' });
+    }
+
+    const sql =
+        req.body.LastLogin != null
+            ? 'UPDATE Admin SET LastLogin = ? WHERE AdminID = ?'
+            : 'UPDATE Admin SET LastLogin = NOW() WHERE AdminID = ?';
+    const params =
+        req.body.LastLogin != null ? [req.body.LastLogin, adminId] : [adminId];
+    db.query(sql, params, (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Admin not found', AdminID: adminId });
+        }
+        res.json({ Status: 'OK', Message: `AdminID [${adminId}] updated successfully` });
+    });
 });
 
 app.listen(PORT, () => {
