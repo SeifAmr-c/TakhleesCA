@@ -44,42 +44,99 @@ app.post('/User', (req, res) => {
     console.log('Post Request Received');
     const type = req.body.Type;
 
-    if (type === 'C') {
-        const sql = `
-            INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?);
-            INSERT INTO Client (ClientID, PhoneNumber, NationalID, Address) VALUES ((SELECT UserID FROM User WHERE Email = ?),?,?,?)
-        `;
-        const params = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type, req.body.Email, req.body.PhoneNumber, req.body.NationalID, req.body.Address];
-        db.query(sql, params, (err, results) => {
+    db.query(
+        "SELECT UserID FROM User WHERE Email = ?",
+        [req.body.Email],
+        function (err, emailResult) {
             if (err) {
                 console.error(err);
                 return res.status(500).json({ error: 'Database error', details: err.message });
             }
-            const userResult = Array.isArray(results) ? results[0] : results;
-            res.json({ Status: 'OK', Message: 'Record Added Successfully with Id ' + userResult.insertId });
-        });
-    } else if (type === 'A') {
-        const sql = `
-            INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?);
-            INSERT INTO Admin (AdminID, LastLogin) VALUES ((SELECT UserID FROM User WHERE Email = ?), NOW())
-        `;
-        const params = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type, req.body.Email];
-        db.query(sql, params, (err, results) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ error: 'Database error', details: err.message });
+
+            if (emailResult.length > 0) {
+                return res.status(409).json({
+                    "Status": "Error",
+                    "Message": "Email [" + req.body.Email + "] already exists. Please use a unique Email."
+                });
             }
-            const userResult = Array.isArray(results) ? results[0] : results;
-            res.json({ Status: 'OK', Message: 'Record Added Successfully with Id ' + userResult.insertId });
-        });
-    } else {
-        res.status(400).json({ error: 'Invalid type. Use "C" for Client or "A" for Admin' });
-    }
+
+            if (type === 'C') {
+
+                db.query(
+                    "SELECT ClientID FROM Client WHERE PhoneNumber = ?",
+                    [req.body.PhoneNumber],
+                    function (err, phoneResult) {
+                        if (err) {
+                            console.error(err);
+                            return res.status(500).json({ error: 'Database error', details: err.message });
+                        }
+
+                        if (phoneResult.length > 0) {
+                            return res.status(409).json({
+                                "Status": "Error",
+                                "Message": "Phone Number [" + req.body.PhoneNumber + "] already exists. Please use a unique Phone Number."
+                            });
+                        }
+
+                        db.query(
+                            "SELECT ClientID FROM Client WHERE NationalID = ?",
+                            [req.body.NationalID],
+                            function (err, nidResult) {
+                                if (err) {
+                                    console.error(err);
+                                    return res.status(500).json({ error: 'Database error', details: err.message });
+                                }
+
+                                if (nidResult.length > 0) {
+                                    return res.status(409).json({
+                                        "Status": "Error",
+                                        "Message": "National ID [" + req.body.NationalID + "] already exists. Please use a unique National ID."
+                                    });
+                                }
+
+                                const sql = `
+                                    INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?);
+                                    INSERT INTO Client (ClientID, PhoneNumber, NationalID, Address) VALUES ((SELECT UserID FROM User WHERE Email = ?),?,?,?)
+                                `;
+                                const params = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type, req.body.Email, req.body.PhoneNumber, req.body.NationalID, req.body.Address];
+                                db.query(sql, params, (err, results) => {
+                                    if (err) {
+                                        console.error(err);
+                                        return res.status(500).json({ error: 'Database error', details: err.message });
+                                    }
+                                    const userResult = Array.isArray(results) ? results[0] : results;
+                                    res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + userResult.insertId });
+                                });
+                            }
+                        );
+                    }
+                );
+
+            } else if (type === 'A') {
+
+                const sql = `
+                    INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?);
+                    INSERT INTO Admin (AdminID, LastLogin) VALUES ((SELECT UserID FROM User WHERE Email = ?), NOW())
+                `;
+                const params = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type, req.body.Email];
+                db.query(sql, params, (err, results) => {
+                    if (err) {
+                        console.error(err);
+                        return res.status(500).json({ error: 'Database error', details: err.message });
+                    }
+                    const userResult = Array.isArray(results) ? results[0] : results;
+                    res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + userResult.insertId });
+                });
+
+            } else {
+                res.status(400).json({ error: 'Invalid type. Use "C" for Client or "A" for Admin' });
+            }
+        }
+    );
 });
 
 app.delete('/users', (req, res) => {
-    const UserID =
-        req.query.UserID;
+    const UserID = req.query.UserID;
     if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
         return res.status(400).json({ error: 'UserID is required (query)' });
     }
@@ -87,19 +144,38 @@ app.delete('/users', (req, res) => {
     if (!Number.isFinite(uid)) {
         return res.status(400).json({ error: 'Invalid UserID' });
     }
-    const sql = `
-        DELETE FROM Client WHERE ClientID = ?;
-        DELETE FROM Admin WHERE AdminID = ?;
-        DELETE FROM User WHERE UserID = ?
-    `;
-    db.query(sql, [uid, uid, uid], (err) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error', details: err.message });
+
+    db.query(
+        "SELECT UserID FROM User WHERE UserID = ?",
+        [uid],
+        function (err, result) {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: 'Database error', details: err.message });
+            }
+
+            if (result.length === 0) {
+                return res.status(404).json({
+                    "Status": "Error",
+                    "Message": "Record Id [" + uid + "] does not exist or has already been deleted."
+                });
+            }
+
+            const sql = `
+                DELETE FROM Client WHERE ClientID = ?;
+                DELETE FROM Admin WHERE AdminID = ?;
+                DELETE FROM User WHERE UserID = ?
+            `;
+            db.query(sql, [uid, uid, uid], (err) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({ error: 'Database error', details: err.message });
+                }
+                res.status(200).json({ "Status": "OK", "Message": "UserID [" + uid + "] deleted successfully" });
+                console.log("Delete request processed for UserID [" + uid + "]");
+            });
         }
-        res.json({ Status: 'OK', Message: `UserID [${uid}] deleted successfully` });
-        console.log(`Delete request processed for UserID [${uid}]`);
-    });
+    );
 });
 
 app.put('/users', (req, res) => {
@@ -128,7 +204,6 @@ app.put('/users', (req, res) => {
     });
 });
 
-// PUT /Client?ClientID= — body: PhoneNumber, NationalID, Address
 app.put('/Client', (req, res) => {
     const raw = req.query.ClientID;
     if (raw === undefined || raw === null || String(raw).trim() === '') {
@@ -170,7 +245,6 @@ app.put('/Client', (req, res) => {
     });
 });
 
-// PUT /Admin?AdminID= — body (optional): LastLogin; if omitted, uses NOW()
 app.put('/Admin', (req, res) => {
     const raw = req.query.AdminID;
     if (raw === undefined || raw === null || String(raw).trim() === '') {
