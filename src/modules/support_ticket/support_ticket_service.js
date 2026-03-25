@@ -20,6 +20,48 @@ app.post('/supportticket',(req,res)=>{
     console.log("Record Added"+ result.insertId);
     });
     });
-    app.listen(PORT,
-    ()=> console.log (`your server is up and run on http://localhost:${PORT}`)
-    );
+
+
+app.get('/supportticket',(req,res)=>{
+const TicketID= req.query.TicketID;      
+if (TicketID == '%'){
+db.query("SELECT * FROM supportticket where TicketID LIKE ?", [TicketID], function (err, result, fields)
+{
+if (err) throw err;
+res.json(result);
+console.log(result);
+});
+}
+else{
+db.query("SELECT * FROM supportticket where TicketID = ?", [TicketID], function (err, result, fields) {
+if (err) throw err;
+res.json(result);
+console.log(result);
+});
+}
+});
+
+app.delete('/supportticket',(req,res)=>{
+    const TicketID = req.query.TicketID;
+    db.query("DELETE FROM supportticket where TicketID = ?", [TicketID], function (err, result, fields) {
+    if (err) throw err;
+    res.json({"Status":"OK", "Message" : "Record Id ["+req.query.TicketID+"] deleted Successfully"});
+    console.log("Delete Request Received for record ["+req.query.TicketID+"] received");
+    });
+    });
+
+app.put('/supportticket',(req,res)=>{
+    console.log("PUT Request Received");
+    const TicketID= req.query.TicketID;
+    db.query("UPDATE supportticket SET `Resolved`= ? WHERE TicketID = " + TicketID ,
+    [req.body.Resolved], function (err, result, fields) {
+    if (err) throw err;
+    res.json({"Status":"OK", "Message": "Record Id ["+ TicketID + "] is Updated Successfully"});
+    console.log("Record Id ["+ TicketID+ "] is Updated Successfully");
+    });
+    });
+        
+
+app.listen(PORT,
+()=> console.log (`your server is up and run on http://localhost:${PORT}`)
+);
