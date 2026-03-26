@@ -1,6 +1,4 @@
-import express from 'express';
 import db from '../../Database/connection.js';
-
 // ── getUser ──────────────────────────────────────────────
 export const getUser = (req, res) => {
     const raw = req.query.UserID;
