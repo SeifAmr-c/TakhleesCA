@@ -1,0 +1,11 @@
+import { Router } from "express";
+import * as supportTicketService from "./support_ticket.service.js";
+
+const router = Router();
+
+router.post("/", supportTicketService.createSupportTicket);
+router.get("/", supportTicketService.getSupportTicket);
+router.delete("/", supportTicketService.deleteSupportTicket);
+router.put("/", supportTicketService.updateSupportTicket);
+
+export default router;

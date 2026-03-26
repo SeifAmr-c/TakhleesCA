@@ -1,16 +1,8 @@
 import express from 'express';
 import db from '../../Database/connection.js';
 
-const PORT = 3000;
-const app = express();
-app.use(express.json());
-
-app.get('/', (req, res) => {
-    console.log(`Incoming Request http://localhost:${PORT}`);
-    res.status(200).send('<H1>Welcome TO Node.js Server</H1>');
-});
-
-app.get('/User', (req, res) => {
+// ── getUser ──────────────────────────────────────────────
+export const getUser = (req, res) => {
     const raw = req.query.UserID;
 
     let user_id;
@@ -38,9 +30,10 @@ app.get('/User', (req, res) => {
         }
         res.json(result);
     });
-});
+};
 
-app.post('/User', (req, res) => {
+// ── createUser ───────────────────────────────────────────
+export const createUser = (req, res) => {
     console.log('Post Request Received');
     const type = req.body.Type;
 
@@ -133,9 +126,10 @@ app.post('/User', (req, res) => {
             }
         }
     );
-});
+};
 
-app.delete('/users', (req, res) => {
+// ── deleteUser ───────────────────────────────────────────
+export const deleteUser = (req, res) => {
     const UserID = req.query.UserID;
     if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
         return res.status(400).json({ error: 'UserID is required (query)' });
@@ -176,9 +170,10 @@ app.delete('/users', (req, res) => {
             });
         }
     );
-});
+};
 
-app.put('/users', (req, res) => {
+// ── updateUser ───────────────────────────────────────────
+export const updateUser = (req, res) => {
     console.log('PUT Request Received');
     const UserID = req.query.UserID;
     if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
@@ -202,9 +197,10 @@ app.put('/users', (req, res) => {
         res.json({ Status: 'OK', Message: `UserID [${uid}] updated successfully` });
         console.log(`UserID [${uid}] updated successfully`);
     });
-});
+};
 
-app.put('/Client', (req, res) => {
+// ── updateClient ─────────────────────────────────────────
+export const updateClient = (req, res) => {
     const raw = req.query.ClientID;
     if (raw === undefined || raw === null || String(raw).trim() === '') {
         return res.status(400).json({ error: 'ClientID is required (query)' });
@@ -243,9 +239,10 @@ app.put('/Client', (req, res) => {
         }
         res.json({ Status: 'OK', Message: `ClientID [${clientId}] updated successfully` });
     });
-});
+};
 
-app.put('/Admin', (req, res) => {
+// ── updateAdmin ──────────────────────────────────────────
+export const updateAdmin = (req, res) => {
     const raw = req.query.AdminID;
     if (raw === undefined || raw === null || String(raw).trim() === '') {
         return res.status(400).json({ error: 'AdminID is required (query)' });
@@ -271,8 +268,4 @@ app.put('/Admin', (req, res) => {
         }
         res.json({ Status: 'OK', Message: `AdminID [${adminId}] updated successfully` });
     });
-});
-
-app.listen(PORT, () => {
-    console.log(`Server is up and running on http://localhost:${PORT}`);
-});
+};

@@ -1,0 +1,13 @@
+import { Router } from "express";
+import * as userService from "./user.service.js";
+
+const router = Router();
+
+router.get("/", userService.getUser);
+router.post("/", userService.createUser);
+router.delete("/", userService.deleteUser);
+router.put("/", userService.updateUser);
+router.put("/client", userService.updateClient);
+router.put("/admin", userService.updateAdmin);
+
+export default router;

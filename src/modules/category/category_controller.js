@@ -1,0 +1,11 @@
+import { Router } from "express";
+import * as categoryService from "./category.service.js";
+
+const router = Router();
+
+router.post("/", categoryService.createCategory);
+router.get("/", categoryService.getCategory);
+router.delete("/", categoryService.deleteCategory);
+router.put("/", categoryService.updateCategory);
+
+export default router;

@@ -1,9 +1,16 @@
 import express from "express";
 
-//  Import your module routers 
 import authRouter from "./modules/auth/auth.controller.js";
-// import userRouter from "./modules/user/user.controller.js";
-
+import userRouter from "./modules/user/user_controller.js";
+import applicationRouter from "./modules/application/application_controller.js";
+import categoryRouter from "./modules/category/category_controller.js";
+import companyRouter from "./modules/company/company_controller.js";
+import companyEmployeeRouter from "./modules/company_employee/company_employee_controller.js";
+import companyPaymentRouter from "./modules/company_payment/company_payment_controller.js";
+import documentRouter from "./modules/document/document_controller.js";
+import paymentRouter from "./modules/payment/payment_controller.js";
+import reviewRouter from "./modules/review/review_controller.js";
+import supportTicketRouter from "./modules/support_ticket/support_ticket_controller.js";
 
 export const bootstrap = () => {
   const app = express();
@@ -13,12 +20,20 @@ export const bootstrap = () => {
   // -----------------------------
   app.use(express.json());
 
-
-
   // -----------------------------
   // Main Router (API Mount)
   // -----------------------------
   app.use("/auth", authRouter);
+  app.use("/user", userRouter);
+  app.use("/application", applicationRouter);
+  app.use("/category", categoryRouter);
+  app.use("/company", companyRouter);
+  app.use("/companyemployee", companyEmployeeRouter);
+  app.use("/companypayment", companyPaymentRouter);
+  app.use("/document", documentRouter);
+  app.use("/payment", paymentRouter);
+  app.use("/review", reviewRouter);
+  app.use("/supportticket", supportTicketRouter);
 
   // -----------------------------
   // 404 Handler
