@@ -1,5 +1,5 @@
 import { Router } from "express";
-import * as supportTicketService from "./support_ticket.service.js";
+import * as supportTicketService from "./support_ticket_service.js";
 
 const router = Router();
 
