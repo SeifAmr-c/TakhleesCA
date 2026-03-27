@@ -70,7 +70,7 @@ export const updateCompany = (req, res) => {
     console.log("PUT Request Received");
     const CompanyID = req.query.CompanyID;
 
-    db.query("SELECT CompanyID FROM company WHERE CompanyID = ?", [CompanyID], function (err, result) {
+    db.query("SELECT * FROM company WHERE CompanyID = ?", [CompanyID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -79,11 +79,24 @@ export const updateCompany = (req, res) => {
             });
         }
 
-        db.query("UPDATE company SET `Comm` = ? WHERE CompanyID = ?",
-            [req.body.Comm, CompanyID], function (err, result) {
+        const existing          = result[0];
+        const Name              = req.body.Name              !== undefined ? req.body.Name              : existing.Name;
+        const ContactEmail      = req.body.ContactEmail      !== undefined ? req.body.ContactEmail      : existing.ContactEmail;
+        const FoundingDate      = req.body.FoundingDate      !== undefined ? req.body.FoundingDate      : existing.FoundingDate;
+        const Password          = req.body.Password          !== undefined ? req.body.Password          : existing.Password;
+        const Comm              = req.body.Comm              !== undefined ? req.body.Comm              : existing.Comm;
+        const RegistrationDate  = req.body.RegistrationDate  !== undefined ? req.body.RegistrationDate  : existing.RegistrationDate;
+        const TaxNumber         = req.body.TaxNumber         !== undefined ? req.body.TaxNumber         : existing.TaxNumber;
+        const VerficationStatus = req.body.VerficationStatus !== undefined ? req.body.VerficationStatus : existing.VerficationStatus;
+
+        db.query(
+            "UPDATE company SET `Name` = ?, `ContactEmail` = ?, `FoundingDate` = ?, `Password` = ?, `Comm` = ?, `RegistrationDate` = ?, `TaxNumber` = ?, `VerficationStatus` = ? WHERE CompanyID = ?",
+            [Name, ContactEmail, FoundingDate, Password, Comm, RegistrationDate, TaxNumber, VerficationStatus, CompanyID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] is Updated Successfully" });
                 console.log("Record Id [" + CompanyID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

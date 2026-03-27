@@ -49,7 +49,7 @@ export const updatePayment = (req, res) => {
     console.log("PUT Request Received");
     const PaymentID = req.query.PaymentID;
 
-    db.query("SELECT PaymentID FROM payment WHERE PaymentID = ?", [PaymentID], function (err, result) {
+    db.query("SELECT * FROM payment WHERE PaymentID = ?", [PaymentID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -58,11 +58,20 @@ export const updatePayment = (req, res) => {
             });
         }
 
-        db.query("UPDATE payment SET `Amount` = ? WHERE PaymentID = ?",
-            [req.body.Amount, PaymentID], function (err, result) {
+        const existing       = result[0];
+        const PaymentDate    = req.body.PaymentDate    !== undefined ? req.body.PaymentDate    : existing.PaymentDate;
+        const Amount         = req.body.Amount         !== undefined ? req.body.Amount         : existing.Amount;
+        const PaymentGateway = req.body.PaymentGateway !== undefined ? req.body.PaymentGateway : existing.PaymentGateway;
+        const ApplicationID  = req.body.ApplicationID  !== undefined ? req.body.ApplicationID  : existing.ApplicationID;
+
+        db.query(
+            "UPDATE payment SET `PaymentDate` = ?, `Amount` = ?, `PaymentGateway` = ?, `ApplicationID` = ? WHERE PaymentID = ?",
+            [PaymentDate, Amount, PaymentGateway, ApplicationID, PaymentID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + PaymentID + "] is Updated Successfully" });
                 console.log("Record Id [" + PaymentID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

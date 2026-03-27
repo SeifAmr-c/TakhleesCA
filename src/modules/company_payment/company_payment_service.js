@@ -49,7 +49,7 @@ export const updateCompanyPayment = (req, res) => {
     console.log("PUT Request Received");
     const CompanyPaymentID = req.query.CompanyPaymentID;
 
-    db.query("SELECT CompanyPaymentID FROM companypayment WHERE CompanyPaymentID = ?", [CompanyPaymentID], function (err, result) {
+    db.query("SELECT * FROM companypayment WHERE CompanyPaymentID = ?", [CompanyPaymentID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -58,11 +58,20 @@ export const updateCompanyPayment = (req, res) => {
             });
         }
 
-        db.query("UPDATE companypayment SET `Amount` = ? WHERE CompanyPaymentID = ?",
-            [req.body.Amount, CompanyPaymentID], function (err, result) {
+        const existing    = result[0];
+        const PaymentDate = req.body.PaymentDate !== undefined ? req.body.PaymentDate : existing.PaymentDate;
+        const Amount      = req.body.Amount      !== undefined ? req.body.Amount      : existing.Amount;
+        const CompanyID   = req.body.CompanyID   !== undefined ? req.body.CompanyID   : existing.CompanyID;
+        const PaymentID   = req.body.PaymentID   !== undefined ? req.body.PaymentID   : existing.PaymentID;
+
+        db.query(
+            "UPDATE companypayment SET `PaymentDate` = ?, `Amount` = ?, `CompanyID` = ?, `PaymentID` = ? WHERE CompanyPaymentID = ?",
+            [PaymentDate, Amount, CompanyID, PaymentID, CompanyPaymentID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyPaymentID + "] is Updated Successfully" });
                 console.log("Record Id [" + CompanyPaymentID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

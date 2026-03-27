@@ -49,7 +49,7 @@ export const updateDocument = (req, res) => {
     console.log("PUT Request Received");
     const DocumentID = req.query.DocumentID;
 
-    db.query("SELECT DocumentID FROM document WHERE DocumentID = ?", [DocumentID], function (err, result) {
+    db.query("SELECT * FROM document WHERE DocumentID = ?", [DocumentID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -58,11 +58,21 @@ export const updateDocument = (req, res) => {
             });
         }
 
-        db.query("UPDATE document SET `VerficationStatus` = ? WHERE DocumentID = ?",
-            [req.body.VerficationStatus, DocumentID], function (err, result) {
+        const existing          = result[0];
+        const DocType           = req.body.DocType           !== undefined ? req.body.DocType           : existing.DocType;
+        const UploadDate        = req.body.UploadDate        !== undefined ? req.body.UploadDate        : existing.UploadDate;
+        const VerficationStatus = req.body.VerficationStatus !== undefined ? req.body.VerficationStatus : existing.VerficationStatus;
+        const ClientID          = req.body.ClientID          !== undefined ? req.body.ClientID          : existing.ClientID;
+        const ApplicationID     = req.body.ApplicationID     !== undefined ? req.body.ApplicationID     : existing.ApplicationID;
+
+        db.query(
+            "UPDATE document SET `DocType` = ?, `UploadDate` = ?, `VerficationStatus` = ?, `ClientID` = ?, `ApplicationID` = ? WHERE DocumentID = ?",
+            [DocType, UploadDate, VerficationStatus, ClientID, ApplicationID, DocumentID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + DocumentID + "] is Updated Successfully" });
                 console.log("Record Id [" + DocumentID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

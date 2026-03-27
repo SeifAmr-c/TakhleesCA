@@ -49,7 +49,7 @@ export const updateCategory = (req, res) => {
     console.log("PUT Request Received");
     const CategoryID = req.query.CategoryID;
 
-    db.query("SELECT CategoryID FROM category WHERE CategoryID = ?", [CategoryID], function (err, result) {
+    db.query("SELECT * FROM category WHERE CategoryID = ?", [CategoryID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -58,11 +58,17 @@ export const updateCategory = (req, res) => {
             });
         }
 
-        db.query("UPDATE category SET `Type` = ? WHERE CategoryID = ?",
-            [req.body.Type, CategoryID], function (err, result) {
+        const existing = result[0];
+        const Type     = req.body.Type !== undefined ? req.body.Type : existing.Type;
+
+        db.query(
+            "UPDATE category SET `Type` = ? WHERE CategoryID = ?",
+            [Type, CategoryID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] is Updated Successfully" });
                 console.log("Record Id [" + CategoryID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

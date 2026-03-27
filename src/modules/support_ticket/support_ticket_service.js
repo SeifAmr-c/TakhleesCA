@@ -37,6 +37,7 @@ export const deleteSupportTicket = (req, res) => {
             });
         }
 
+        // ── Record exists → proceed with DELETE ──────────────────────────────
         db.query("DELETE FROM supportticket WHERE TicketID = ?", [TicketID], function (err, result) {
             if (err) throw err;
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + TicketID + "] deleted Successfully" });
@@ -49,7 +50,7 @@ export const updateSupportTicket = (req, res) => {
     console.log("PUT Request Received");
     const TicketID = req.query.TicketID;
 
-    db.query("SELECT TicketID FROM supportticket WHERE TicketID = ?", [TicketID], function (err, result) {
+    db.query("SELECT * FROM supportticket WHERE TicketID = ?", [TicketID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -58,11 +59,20 @@ export const updateSupportTicket = (req, res) => {
             });
         }
 
-        db.query("UPDATE supportticket SET `Resolved` = ? WHERE TicketID = ?",
-            [req.body.Resolved, TicketID], function (err, result) {
+        const existing = result[0];
+        const Issue    = req.body.Issue    !== undefined ? req.body.Issue    : existing.Issue;
+        const Resolved = req.body.Resolved !== undefined ? req.body.Resolved : existing.Resolved;
+        const AdminID  = req.body.AdminID  !== undefined ? req.body.AdminID  : existing.AdminID;
+        const ClientID = req.body.ClientID !== undefined ? req.body.ClientID : existing.ClientID;
+
+        db.query(
+            "UPDATE supportticket SET `Issue` = ?, `Resolved` = ?, `AdminID` = ?, `ClientID` = ? WHERE TicketID = ?",
+            [Issue, Resolved, AdminID, ClientID, TicketID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + TicketID + "] is Updated Successfully" });
                 console.log("Record Id [" + TicketID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

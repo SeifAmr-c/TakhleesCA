@@ -44,7 +44,6 @@ export const getApplication = (req, res) => {
 export const deleteApplication = (req, res) => {
     const ApplicationID = req.query.ApplicationID;
 
-    // ── Validation: Check if the record exists before deleting ──────────────
     db.query("SELECT ApplicationID FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
@@ -66,7 +65,7 @@ export const updateApplication = (req, res) => {
     console.log("PUT Request Received");
     const ApplicationID = req.query.ApplicationID;
 
-    db.query("SELECT ApplicationID FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
+    db.query("SELECT * FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -75,12 +74,24 @@ export const updateApplication = (req, res) => {
             });
         }
 
-        // ── Record exists → proceed with UPDATE ──────────────────────────────
-        db.query("UPDATE application SET `Status` = ? WHERE ApplicationID = ?",
-            [req.body.Status, ApplicationID], function (err, result) {
+        const existing         = result[0];
+        const PaymentType      = req.body.PaymentType      !== undefined ? req.body.PaymentType      : existing.PaymentType;
+        const CompletionDate   = req.body.CompletionDate   !== undefined ? req.body.CompletionDate   : existing.CompletionDate;
+        const SubmissionDate   = req.body.SubmissionDate   !== undefined ? req.body.SubmissionDate   : existing.SubmissionDate;
+        const TrackingNumber   = req.body.TrackingNumber   !== undefined ? req.body.TrackingNumber   : existing.TrackingNumber;
+        const Status           = req.body.Status           !== undefined ? req.body.Status           : existing.Status;
+        const DeliveryAddress  = req.body.DeliveryAddress  !== undefined ? req.body.DeliveryAddress  : existing.DeliveryAddress;
+        const CompanyEmployeeID = req.body.CompanyEmployeeID !== undefined ? req.body.CompanyEmployeeID : existing.CompanyEmployeeID;
+        const CategoryID       = req.body.CategoryID       !== undefined ? req.body.CategoryID       : existing.CategoryID;
+
+        db.query(
+            "UPDATE application SET `PaymentType` = ?, `CompletionDate` = ?, `SubmissionDate` = ?, `TrackingNumber` = ?, `Status` = ?, `DeliveryAddress` = ?, `CompanyEmployeeID` = ?, `CategoryID` = ? WHERE ApplicationID = ?",
+            [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompanyEmployeeID, CategoryID, ApplicationID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] is Updated Successfully" });
                 console.log("Record Id [" + ApplicationID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };

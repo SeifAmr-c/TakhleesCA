@@ -70,7 +70,7 @@ export const updateCompanyEmployee = (req, res) => {
     console.log("PUT Request Received");
     const EmployeeID = req.query.EmployeeID;
 
-    db.query("SELECT EmployeeID FROM companyemployee WHERE EmployeeID = ?", [EmployeeID], function (err, result) {
+    db.query("SELECT * FROM companyemployee WHERE EmployeeID = ?", [EmployeeID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
             return res.status(404).json({
@@ -79,11 +79,21 @@ export const updateCompanyEmployee = (req, res) => {
             });
         }
 
-        db.query("UPDATE companyemployee SET `FirstName` = ? WHERE EmployeeID = ?",
-            [req.body.FirstName, EmployeeID], function (err, result) {
+        const existing  = result[0];
+        const Email     = req.body.Email     !== undefined ? req.body.Email     : existing.Email;
+        const FirstName = req.body.FirstName !== undefined ? req.body.FirstName : existing.FirstName;
+        const LastName  = req.body.LastName  !== undefined ? req.body.LastName  : existing.LastName;
+        const Phone     = req.body.Phone     !== undefined ? req.body.Phone     : existing.Phone;
+        const CompanyID = req.body.CompanyID !== undefined ? req.body.CompanyID : existing.CompanyID;
+
+        db.query(
+            "UPDATE companyemployee SET `Email` = ?, `FirstName` = ?, `LastName` = ?, `Phone` = ?, `CompanyID` = ? WHERE EmployeeID = ?",
+            [Email, FirstName, LastName, Phone, CompanyID, EmployeeID],
+            function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + EmployeeID + "] is Updated Successfully" });
                 console.log("Record Id [" + EmployeeID + "] is Updated Successfully");
-            });
+            }
+        );
     });
 };
