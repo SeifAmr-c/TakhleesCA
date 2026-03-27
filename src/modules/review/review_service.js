@@ -5,8 +5,8 @@ export const createReview = (req, res) => {
     db.query("INSERT INTO review (`Review`,`Rating`,`ApplicationID`,`CategoryID`) VALUES (?,?,?,?)",
         [req.body.Review, req.body.Rating, req.body.ApplicationID, req.body.CategoryID], function (err, result) {
             if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added" + result.insertId);
+            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
+            console.log("Record Added " + result.insertId);
         });
 };
 
@@ -27,20 +27,42 @@ export const getReview = (req, res) => {
 
 export const deleteReview = (req, res) => {
     const ReviewID = req.query.ReviewID;
-    db.query("DELETE FROM review where ReviewID = ?", [ReviewID], function (err, result) {
+
+    db.query("SELECT ReviewID FROM review WHERE ReviewID = ?", [ReviewID], function (err, result) {
         if (err) throw err;
-        res.json({ "Status": "OK", "Message": "Record Id [" + ReviewID + "] deleted Successfully" });
-        console.log("Delete Request Received for record [" + ReviewID + "] received");
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + ReviewID + "] does not exist or has already been deleted."
+            });
+        }
+
+        db.query("DELETE FROM review WHERE ReviewID = ?", [ReviewID], function (err, result) {
+            if (err) throw err;
+            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ReviewID + "] deleted Successfully" });
+            console.log("Delete Request Received for record [" + ReviewID + "] received");
+        });
     });
 };
 
 export const updateReview = (req, res) => {
     console.log("PUT Request Received");
     const ReviewID = req.query.ReviewID;
-    db.query("UPDATE review SET `Rating`= ? WHERE ReviewID = " + ReviewID,
-        [req.body.Rating], function (err, result) {
-            if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Id [" + ReviewID + "] is Updated Successfully" });
-            console.log("Record Id [" + ReviewID + "] is Updated Successfully");
-        });
+
+    db.query("SELECT ReviewID FROM review WHERE ReviewID = ?", [ReviewID], function (err, result) {
+        if (err) throw err;
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + ReviewID + "] does not exist or has already been deleted. Update aborted."
+            });
+        }
+
+        db.query("UPDATE review SET `Rating` = ? WHERE ReviewID = ?",
+            [req.body.Rating, ReviewID], function (err, result) {
+                if (err) throw err;
+                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ReviewID + "] is Updated Successfully" });
+                console.log("Record Id [" + ReviewID + "] is Updated Successfully");
+            });
+    });
 };

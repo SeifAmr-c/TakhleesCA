@@ -43,6 +43,8 @@ export const getApplication = (req, res) => {
 
 export const deleteApplication = (req, res) => {
     const ApplicationID = req.query.ApplicationID;
+
+    // ── Validation: Check if the record exists before deleting ──────────────
     db.query("SELECT ApplicationID FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
@@ -51,6 +53,7 @@ export const deleteApplication = (req, res) => {
                 "Message": "Record Id [" + ApplicationID + "] does not exist or has already been deleted."
             });
         }
+
         db.query("DELETE FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
             if (err) throw err;
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] deleted Successfully" });
@@ -62,10 +65,22 @@ export const deleteApplication = (req, res) => {
 export const updateApplication = (req, res) => {
     console.log("PUT Request Received");
     const ApplicationID = req.query.ApplicationID;
-    db.query("UPDATE application SET `Status`= ? WHERE ApplicationID = " + ApplicationID,
-        [req.body.Status], function (err, result) {
-            if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] is Updated Successfully" });
-            console.log("Record Id [" + ApplicationID + "] is Updated Successfully");
-        });
+
+    db.query("SELECT ApplicationID FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
+        if (err) throw err;
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + ApplicationID + "] does not exist or has already been deleted. Update aborted."
+            });
+        }
+
+        // ── Record exists → proceed with UPDATE ──────────────────────────────
+        db.query("UPDATE application SET `Status` = ? WHERE ApplicationID = ?",
+            [req.body.Status, ApplicationID], function (err, result) {
+                if (err) throw err;
+                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] is Updated Successfully" });
+                console.log("Record Id [" + ApplicationID + "] is Updated Successfully");
+            });
+    });
 };

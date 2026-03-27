@@ -48,6 +48,7 @@ export const getCompany = (req, res) => {
 
 export const deleteCompany = (req, res) => {
     const CompanyID = req.query.CompanyID;
+
     db.query("SELECT CompanyID FROM company WHERE CompanyID = ?", [CompanyID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
@@ -56,6 +57,7 @@ export const deleteCompany = (req, res) => {
                 "Message": "Record Id [" + CompanyID + "] does not exist or has already been deleted."
             });
         }
+
         db.query("DELETE FROM company WHERE CompanyID = ?", [CompanyID], function (err, result) {
             if (err) throw err;
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] deleted Successfully" });
@@ -67,10 +69,21 @@ export const deleteCompany = (req, res) => {
 export const updateCompany = (req, res) => {
     console.log("PUT Request Received");
     const CompanyID = req.query.CompanyID;
-    db.query("UPDATE company SET `Comm`= ? WHERE CompanyID = " + CompanyID,
-        [req.body.Comm], function (err, result) {
-            if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] is Updated Successfully" });
-            console.log("Record Id [" + CompanyID + "] is Updated Successfully");
-        });
+
+    db.query("SELECT CompanyID FROM company WHERE CompanyID = ?", [CompanyID], function (err, result) {
+        if (err) throw err;
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + CompanyID + "] does not exist or has already been deleted. Update aborted."
+            });
+        }
+
+        db.query("UPDATE company SET `Comm` = ? WHERE CompanyID = ?",
+            [req.body.Comm, CompanyID], function (err, result) {
+                if (err) throw err;
+                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] is Updated Successfully" });
+                console.log("Record Id [" + CompanyID + "] is Updated Successfully");
+            });
+    });
 };
