@@ -48,6 +48,7 @@ export const getCompanyEmployee = (req, res) => {
 
 export const deleteCompanyEmployee = (req, res) => {
     const EmployeeID = req.query.EmployeeID;
+
     db.query("SELECT EmployeeID FROM companyemployee WHERE EmployeeID = ?", [EmployeeID], function (err, result) {
         if (err) throw err;
         if (result.length === 0) {
@@ -56,6 +57,7 @@ export const deleteCompanyEmployee = (req, res) => {
                 "Message": "Record Id [" + EmployeeID + "] does not exist or has already been deleted."
             });
         }
+
         db.query("DELETE FROM companyemployee WHERE EmployeeID = ?", [EmployeeID], function (err, result) {
             if (err) throw err;
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + EmployeeID + "] deleted Successfully" });
@@ -67,10 +69,21 @@ export const deleteCompanyEmployee = (req, res) => {
 export const updateCompanyEmployee = (req, res) => {
     console.log("PUT Request Received");
     const EmployeeID = req.query.EmployeeID;
-    db.query("UPDATE companyemployee SET `FirstName`= ? WHERE EmployeeID = " + EmployeeID,
-        [req.body.FirstName], function (err, result) {
-            if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Id [" + EmployeeID + "] is Updated Successfully" });
-            console.log("Record Id [" + EmployeeID + "] is Updated Successfully");
-        });
+
+    db.query("SELECT EmployeeID FROM companyemployee WHERE EmployeeID = ?", [EmployeeID], function (err, result) {
+        if (err) throw err;
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + EmployeeID + "] does not exist or has already been deleted. Update aborted."
+            });
+        }
+
+        db.query("UPDATE companyemployee SET `FirstName` = ? WHERE EmployeeID = ?",
+            [req.body.FirstName, EmployeeID], function (err, result) {
+                if (err) throw err;
+                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + EmployeeID + "] is Updated Successfully" });
+                console.log("Record Id [" + EmployeeID + "] is Updated Successfully");
+            });
+    });
 };

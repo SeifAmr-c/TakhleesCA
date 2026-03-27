@@ -5,8 +5,8 @@ export const createCategory = (req, res) => {
     db.query("INSERT INTO category (`Type`) VALUES (?)",
         [req.body.Type], function (err, result) {
             if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added" + result.insertId);
+            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
+            console.log("Record Added " + result.insertId);
         });
 };
 
@@ -27,20 +27,42 @@ export const getCategory = (req, res) => {
 
 export const deleteCategory = (req, res) => {
     const CategoryID = req.query.CategoryID;
-    db.query("DELETE FROM category where CategoryID = ?", [CategoryID], function (err, result) {
+
+    db.query("SELECT CategoryID FROM category WHERE CategoryID = ?", [CategoryID], function (err, result) {
         if (err) throw err;
-        res.json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] deleted Successfully" });
-        console.log("Delete Request Received for record [" + CategoryID + "] received");
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + CategoryID + "] does not exist or has already been deleted."
+            });
+        }
+
+        db.query("DELETE FROM category WHERE CategoryID = ?", [CategoryID], function (err, result) {
+            if (err) throw err;
+            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] deleted Successfully" });
+            console.log("Delete Request Received for record [" + CategoryID + "] received");
+        });
     });
 };
 
 export const updateCategory = (req, res) => {
     console.log("PUT Request Received");
     const CategoryID = req.query.CategoryID;
-    db.query("UPDATE category SET `Type`= ? WHERE CategoryID = " + CategoryID,
-        [req.body.Type], function (err, result) {
-            if (err) throw err;
-            res.json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] is Updated Successfully" });
-            console.log("Record Id [" + CategoryID + "] is Updated Successfully");
-        });
+
+    db.query("SELECT CategoryID FROM category WHERE CategoryID = ?", [CategoryID], function (err, result) {
+        if (err) throw err;
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + CategoryID + "] does not exist or has already been deleted. Update aborted."
+            });
+        }
+
+        db.query("UPDATE category SET `Type` = ? WHERE CategoryID = ?",
+            [req.body.Type, CategoryID], function (err, result) {
+                if (err) throw err;
+                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] is Updated Successfully" });
+                console.log("Record Id [" + CategoryID + "] is Updated Successfully");
+            });
+    });
 };
