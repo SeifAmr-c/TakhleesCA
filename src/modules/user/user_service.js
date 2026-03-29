@@ -386,7 +386,7 @@ export const me = async (req, res, next) => {
 // ── onlineUsers (list active sessions) ──────────────────
 export const onlineUsers = async (req, res, next) => {
   try {
-    const sessions = await runQuery("SELECT data FROM sessions WHERE expires > NOW()");
+    const sessions = await runQuery("SELECT data FROM sessions WHERE expires > UNIX_TIMESTAMP()");
     const userIds = sessions
       .map((row) => {
         try {

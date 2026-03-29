@@ -1,7 +1,6 @@
 import express from "express";
 import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
-import mysql2 from "mysql2/promise";
 
 import userRouter from "./modules/user/user_controller.js";
 import applicationRouter from "./modules/application/application_controller.js";
@@ -23,15 +22,13 @@ export const bootstrap = () => {
   app.use(express.json());
 
   const MySQLStore = MySQLStoreFactory(session);
-  const sessionPool = mysql2.createPool({
+  const sessionStore = new MySQLStore({
     host: 'localhost',
     user: 'root',
     password: '',
     database: 'Takhlees',
-  });
-  const sessionStore = new MySQLStore({
     createDatabaseTable: true,
-  }, sessionPool);
+  });
 
   app.use(session({
     secret: 'takhlees-secret-key',
