@@ -1,6 +1,7 @@
 import express from "express";
+import session from "express-session";
+import MySQLStoreFactory from "express-mysql-session";
 
-import authRouter from "./modules/auth/auth.controller.js";
 import userRouter from "./modules/user/user_controller.js";
 import applicationRouter from "./modules/application/application_controller.js";
 import categoryRouter from "./modules/category/category_controller.js";
@@ -20,10 +21,25 @@ export const bootstrap = () => {
   // -----------------------------
   app.use(express.json());
 
+  const MySQLStore = MySQLStoreFactory(session);
+  const sessionStore = new MySQLStore({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'Takhlees',
+  });
+
+  app.use(session({
+    secret: 'takhlees-secret-key',
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 30 * 60 * 1000 },
+  }));
+
   // -----------------------------
   // Main Router (API Mount)
   // -----------------------------
-  app.use("/auth", authRouter);
   app.use("/user", userRouter);
   app.use("/application", applicationRouter);
   app.use("/category", categoryRouter);
