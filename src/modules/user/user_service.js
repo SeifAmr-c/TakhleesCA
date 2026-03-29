@@ -337,12 +337,19 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ ok: false, message: "Invalid email or password." });
     }
 
-    req.session.userId = userRow.UserID;
-
-    return res.status(200).json({
-      ok: true,
-      message: "Logged in successfully.",
-      data: { user: sanitizeUser(userRow) },
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ ok: false, message: "Session error." });
+      }
+      req.session.userId = userRow.UserID;
+      req.session.save(() => {
+        return res.status(200).json({
+          ok: true,
+          message: "Logged in successfully.",
+          data: { user: sanitizeUser(userRow) },
+        });
+      });
     });
   } catch (err) {
     return next(err);
