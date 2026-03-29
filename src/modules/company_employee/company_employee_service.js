@@ -66,7 +66,6 @@ export const deleteCompanyEmployee = (req, res) => {
     });
 };
 
-// ── searchCompanyEmployee ────────────────────────────────
 export const searchCompanyEmployee = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;

@@ -46,7 +46,6 @@ export const deleteSupportTicket = (req, res) => {
     });
 };
 
-// ── searchSupportTicket ──────────────────────────────────
 export const searchSupportTicket = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;

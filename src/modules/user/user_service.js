@@ -268,7 +268,6 @@ export const updateAdmin = (req, res) => {
     });
 };
 
-// ── searchUser ──────────────────────────────────────────
 export const searchUser = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;

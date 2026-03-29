@@ -45,7 +45,6 @@ export const deleteDocument = (req, res) => {
     });
 };
 
-// ── searchDocument ───────────────────────────────────────
 export const searchDocument = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;

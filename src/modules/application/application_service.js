@@ -61,7 +61,6 @@ export const deleteApplication = (req, res) => {
     });
 };
 
-// ── searchApplication ────────────────────────────────────
 export const searchApplication = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;
