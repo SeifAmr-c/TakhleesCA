@@ -61,6 +61,30 @@ export const deleteApplication = (req, res) => {
     });
 };
 
+// ── searchApplication ────────────────────────────────────
+export const searchApplication = (req, res) => {
+    const keyword = req.query.keyword;
+    const keyvalue = req.query.keyvalue;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const allowedColumns = ['ApplicationID', 'PaymentType', 'TrackingNumber', 'Status', 'CompanyEmployeeID', 'CategoryID'];
+    if (!allowedColumns.includes(keyword)) {
+        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+    }
+    if (!keyvalue) {
+        return res.status(400).json({ error: 'keyvalue is required' });
+    }
+
+    const sql = `SELECT * FROM application WHERE ${keyword} = ? ORDER BY ApplicationID ${sort}`;
+    db.query(sql, [keyvalue], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(result);
+    });
+};
+
 export const updateApplication = (req, res) => {
     console.log("PUT Request Received");
     const ApplicationID = req.query.ApplicationID;

@@ -5,6 +5,7 @@ const router = Router();
 
 router.post("/", paymentService.createPayment);
 router.get("/", paymentService.getPayment);
+router.get("/search", paymentService.searchPayment);
 router.delete("/", paymentService.deletePayment);
 router.put("/", paymentService.updatePayment);
 

@@ -5,6 +5,7 @@ const router = Router();
 
 router.post("/", documentService.createDocument);
 router.get("/", documentService.getDocument);
+router.get("/search", documentService.searchDocument);
 router.delete("/", documentService.deleteDocument);
 router.put("/", documentService.updateDocument);
 

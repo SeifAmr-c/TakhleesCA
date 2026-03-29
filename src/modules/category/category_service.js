@@ -45,6 +45,30 @@ export const deleteCategory = (req, res) => {
     });
 };
 
+// ── searchCategory ───────────────────────────────────────
+export const searchCategory = (req, res) => {
+    const keyword = req.query.keyword;
+    const keyvalue = req.query.keyvalue;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const allowedColumns = ['CategoryID', 'Type'];
+    if (!allowedColumns.includes(keyword)) {
+        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+    }
+    if (!keyvalue) {
+        return res.status(400).json({ error: 'keyvalue is required' });
+    }
+
+    const sql = `SELECT * FROM category WHERE ${keyword} = ? ORDER BY CategoryID ${sort}`;
+    db.query(sql, [keyvalue], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(result);
+    });
+};
+
 export const updateCategory = (req, res) => {
     console.log("PUT Request Received");
     const CategoryID = req.query.CategoryID;

@@ -5,6 +5,7 @@ const router = Router();
 
 router.post("/", reviewService.createReview);
 router.get("/", reviewService.getReview);
+router.get("/search", reviewService.searchReview);
 router.delete("/", reviewService.deleteReview);
 router.put("/", reviewService.updateReview);
 

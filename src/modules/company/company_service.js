@@ -66,6 +66,30 @@ export const deleteCompany = (req, res) => {
     });
 };
 
+// ── searchCompany ────────────────────────────────────────
+export const searchCompany = (req, res) => {
+    const keyword = req.query.keyword;
+    const keyvalue = req.query.keyvalue;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const allowedColumns = ['CompanyID', 'Name', 'ContactEmail', 'TaxNumber', 'VerficationStatus'];
+    if (!allowedColumns.includes(keyword)) {
+        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+    }
+    if (!keyvalue) {
+        return res.status(400).json({ error: 'keyvalue is required' });
+    }
+
+    const sql = `SELECT * FROM company WHERE ${keyword} = ? ORDER BY CompanyID ${sort}`;
+    db.query(sql, [keyvalue], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(result);
+    });
+};
+
 export const updateCompany = (req, res) => {
     console.log("PUT Request Received");
     const CompanyID = req.query.CompanyID;

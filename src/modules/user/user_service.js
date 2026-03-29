@@ -267,3 +267,27 @@ export const updateAdmin = (req, res) => {
         res.json({ Status: 'OK', Message: `AdminID [${adminId}] updated successfully` });
     });
 };
+
+// ── searchUser ──────────────────────────────────────────
+export const searchUser = (req, res) => {
+    const keyword = req.query.keyword;
+    const keyvalue = req.query.keyvalue;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const allowedColumns = ['UserID', 'FirstName', 'LastName', 'Email', 'Type'];
+    if (!allowedColumns.includes(keyword)) {
+        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+    }
+    if (!keyvalue) {
+        return res.status(400).json({ error: 'keyvalue is required' });
+    }
+
+    const sql = `SELECT * FROM User WHERE ${keyword} = ? ORDER BY UserID ${sort}`;
+    db.query(sql, [keyvalue], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(result);
+    });
+};

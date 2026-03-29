@@ -5,6 +5,7 @@ const router = Router();
 
 router.post("/", companyService.createCompany);
 router.get("/", companyService.getCompany);
+router.get("/search", companyService.searchCompany);
 router.delete("/", companyService.deleteCompany);
 router.put("/", companyService.updateCompany);
 

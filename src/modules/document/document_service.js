@@ -45,6 +45,30 @@ export const deleteDocument = (req, res) => {
     });
 };
 
+// ── searchDocument ───────────────────────────────────────
+export const searchDocument = (req, res) => {
+    const keyword = req.query.keyword;
+    const keyvalue = req.query.keyvalue;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const allowedColumns = ['DocumentID', 'DocType', 'VerficationStatus', 'ClientID', 'ApplicationID'];
+    if (!allowedColumns.includes(keyword)) {
+        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+    }
+    if (!keyvalue) {
+        return res.status(400).json({ error: 'keyvalue is required' });
+    }
+
+    const sql = `SELECT * FROM document WHERE ${keyword} = ? ORDER BY DocumentID ${sort}`;
+    db.query(sql, [keyvalue], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(result);
+    });
+};
+
 export const updateDocument = (req, res) => {
     console.log("PUT Request Received");
     const DocumentID = req.query.DocumentID;

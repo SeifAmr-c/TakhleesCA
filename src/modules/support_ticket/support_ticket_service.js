@@ -46,6 +46,30 @@ export const deleteSupportTicket = (req, res) => {
     });
 };
 
+// ── searchSupportTicket ──────────────────────────────────
+export const searchSupportTicket = (req, res) => {
+    const keyword = req.query.keyword;
+    const keyvalue = req.query.keyvalue;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const allowedColumns = ['TicketID', 'Issue', 'Resolved', 'AdminID', 'ClientID'];
+    if (!allowedColumns.includes(keyword)) {
+        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+    }
+    if (!keyvalue) {
+        return res.status(400).json({ error: 'keyvalue is required' });
+    }
+
+    const sql = `SELECT * FROM supportticket WHERE ${keyword} = ? ORDER BY TicketID ${sort}`;
+    db.query(sql, [keyvalue], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(result);
+    });
+};
+
 export const updateSupportTicket = (req, res) => {
     console.log("PUT Request Received");
     const TicketID = req.query.TicketID;
