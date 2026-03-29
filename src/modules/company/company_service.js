@@ -66,7 +66,6 @@ export const deleteCompany = (req, res) => {
     });
 };
 
-// ── searchCompany ────────────────────────────────────────
 export const searchCompany = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;

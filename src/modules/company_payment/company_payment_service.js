@@ -45,7 +45,6 @@ export const deleteCompanyPayment = (req, res) => {
     });
 };
 
-// ── searchCompanyPayment ─────────────────────────────────
 export const searchCompanyPayment = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;

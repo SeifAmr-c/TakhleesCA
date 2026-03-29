@@ -45,7 +45,6 @@ export const deleteCategory = (req, res) => {
     });
 };
 
-// ── searchCategory ───────────────────────────────────────
 export const searchCategory = (req, res) => {
     const keyword = req.query.keyword;
     const keyvalue = req.query.keyvalue;
