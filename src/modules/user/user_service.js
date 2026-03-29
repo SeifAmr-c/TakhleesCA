@@ -68,102 +68,6 @@ export const getUser = (req, res) => {
     });
 };
 
-// ── createUser ───────────────────────────────────────────
-export const createUser = (req, res) => {
-    console.log('Post Request Received');
-    const type = req.body.Type;
-
-    db.query(
-        "SELECT UserID FROM User WHERE Email = ?",
-        [req.body.Email],
-        function (err, emailResult) {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ error: 'Database error', details: err.message });
-            }
-
-            if (emailResult.length > 0) {
-                return res.status(409).json({
-                    "Status": "Error",
-                    "Message": "Email [" + req.body.Email + "] already exists. Please use a unique Email."
-                });
-            }
-
-            if (type === 'C') {
-
-                db.query(
-                    "SELECT ClientID FROM Client WHERE PhoneNumber = ?",
-                    [req.body.PhoneNumber],
-                    function (err, phoneResult) {
-                        if (err) {
-                            console.error(err);
-                            return res.status(500).json({ error: 'Database error', details: err.message });
-                        }
-
-                        if (phoneResult.length > 0) {
-                            return res.status(409).json({
-                                "Status": "Error",
-                                "Message": "Phone Number [" + req.body.PhoneNumber + "] already exists. Please use a unique Phone Number."
-                            });
-                        }
-
-                        db.query(
-                            "SELECT ClientID FROM Client WHERE NationalID = ?",
-                            [req.body.NationalID],
-                            function (err, nidResult) {
-                                if (err) {
-                                    console.error(err);
-                                    return res.status(500).json({ error: 'Database error', details: err.message });
-                                }
-
-                                if (nidResult.length > 0) {
-                                    return res.status(409).json({
-                                        "Status": "Error",
-                                        "Message": "National ID [" + req.body.NationalID + "] already exists. Please use a unique National ID."
-                                    });
-                                }
-
-                                const sql = `
-                                    INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?);
-                                    INSERT INTO Client (ClientID, PhoneNumber, NationalID, Address) VALUES ((SELECT UserID FROM User WHERE Email = ?),?,?,?)
-                                `;
-                                const params = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type, req.body.Email, req.body.PhoneNumber, req.body.NationalID, req.body.Address];
-                                db.query(sql, params, (err, results) => {
-                                    if (err) {
-                                        console.error(err);
-                                        return res.status(500).json({ error: 'Database error', details: err.message });
-                                    }
-                                    const userResult = Array.isArray(results) ? results[0] : results;
-                                    res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + userResult.insertId });
-                                });
-                            }
-                        );
-                    }
-                );
-
-            } else if (type === 'A') {
-
-                const sql = `
-                    INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?,?,?,?,?);
-                    INSERT INTO Admin (AdminID, LastLogin) VALUES ((SELECT UserID FROM User WHERE Email = ?), NOW())
-                `;
-                const params = [req.body.FirstName, req.body.LastName, req.body.Email, req.body.Password, req.body.Type, req.body.Email];
-                db.query(sql, params, (err, results) => {
-                    if (err) {
-                        console.error(err);
-                        return res.status(500).json({ error: 'Database error', details: err.message });
-                    }
-                    const userResult = Array.isArray(results) ? results[0] : results;
-                    res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + userResult.insertId });
-                });
-
-            } else {
-                res.status(400).json({ error: 'Invalid type. Use "C" for Client or "A" for Admin' });
-            }
-        }
-    );
-};
-
 // ── deleteUser ───────────────────────────────────────────
 export const deleteUser = (req, res) => {
     const UserID = req.query.UserID;
@@ -361,9 +265,21 @@ export const register = async (req, res, next) => {
       }
     }
 
-    const existing = await runQuery("SELECT UserID FROM User WHERE Email = ? LIMIT 1", [Email]);
-    if (existing.length) {
+    const existingEmail = await runQuery("SELECT UserID FROM User WHERE Email = ? LIMIT 1", [Email]);
+    if (existingEmail.length) {
       return res.status(409).json({ ok: false, message: "Email already exists." });
+    }
+
+    if (Type === "C") {
+      const existingPhone = await runQuery("SELECT ClientID FROM Client WHERE PhoneNumber = ? LIMIT 1", [PhoneNumber]);
+      if (existingPhone.length) {
+        return res.status(409).json({ ok: false, message: "Phone number already exists." });
+      }
+
+      const existingNID = await runQuery("SELECT ClientID FROM Client WHERE NationalID = ? LIMIT 1", [NationalID]);
+      if (existingNID.length) {
+        return res.status(409).json({ ok: false, message: "National ID already exists." });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(Password, SALT_ROUNDS);
