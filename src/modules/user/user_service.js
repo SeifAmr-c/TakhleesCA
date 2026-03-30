@@ -109,7 +109,7 @@ export const deleteUser = (req, res) => {
 };
 
 // ── updateUser ───────────────────────────────────────────
-export const updateUser = (req, res) => {
+export const updateUser = async (req, res) => {
     console.log('PUT Request Received');
     const UserID = req.query.UserID;
     if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
@@ -120,7 +120,7 @@ export const updateUser = (req, res) => {
         return res.status(400).json({ error: 'Invalid UserID' });
     }
 
-    db.query("SELECT * FROM User WHERE UserID = ?", [uid], (err, result) => {
+    db.query("SELECT * FROM User WHERE UserID = ?", [uid], async (err, result) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ error: 'Database error', details: err.message });
@@ -136,8 +136,15 @@ export const updateUser = (req, res) => {
         const FirstName = req.body.FirstName !== undefined ? req.body.FirstName : existing.FirstName;
         const LastName  = req.body.LastName  !== undefined ? req.body.LastName  : existing.LastName;
         const Email     = req.body.Email     !== undefined ? req.body.Email     : existing.Email;
-        const Password  = req.body.Password  !== undefined ? req.body.Password  : existing.Password;
         const Type      = req.body.Type      !== undefined ? req.body.Type      : existing.Type;
+
+        // ── Hash the new password if provided, otherwise keep the existing one
+        let Password;
+        if (req.body.Password !== undefined) {
+            Password = await bcrypt.hash(req.body.Password, SALT_ROUNDS);
+        } else {
+            Password = existing.Password;
+        }
 
         db.query(
             'UPDATE User SET FirstName = ?, LastName = ?, Email = ?, Password = ?, Type = ? WHERE UserID = ?',
