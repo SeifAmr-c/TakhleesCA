@@ -37,6 +37,7 @@ const runQuery = (sql, params = []) =>
       resolve(result);
     });
   });
+
 // ── getUser ──────────────────────────────────────────────
 export const getUser = (req, res) => {
     const raw = req.query.UserID;
@@ -79,37 +80,32 @@ export const deleteUser = (req, res) => {
         return res.status(400).json({ error: 'Invalid UserID' });
     }
 
-    db.query(
-        "SELECT UserID FROM User WHERE UserID = ?",
-        [uid],
-        function (err, result) {
+    db.query("SELECT UserID FROM User WHERE UserID = ?", [uid], function (err, result) {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Database error', details: err.message });
+        }
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + uid + "] does not exist or has already been deleted."
+            });
+        }
+
+        const sql = `
+            DELETE FROM Client WHERE ClientID = ?;
+            DELETE FROM Admin WHERE AdminID = ?;
+            DELETE FROM User WHERE UserID = ?
+        `;
+        db.query(sql, [uid, uid, uid], (err) => {
             if (err) {
                 console.error(err);
                 return res.status(500).json({ error: 'Database error', details: err.message });
             }
-
-            if (result.length === 0) {
-                return res.status(404).json({
-                    "Status": "Error",
-                    "Message": "Record Id [" + uid + "] does not exist or has already been deleted."
-                });
-            }
-
-            const sql = `
-                DELETE FROM Client WHERE ClientID = ?;
-                DELETE FROM Admin WHERE AdminID = ?;
-                DELETE FROM User WHERE UserID = ?
-            `;
-            db.query(sql, [uid, uid, uid], (err) => {
-                if (err) {
-                    console.error(err);
-                    return res.status(500).json({ error: 'Database error', details: err.message });
-                }
-                res.status(200).json({ "Status": "OK", "Message": "UserID [" + uid + "] deleted successfully" });
-                console.log("Delete request processed for UserID [" + uid + "]");
-            });
-        }
-    );
+            res.status(200).json({ "Status": "OK", "Message": "UserID [" + uid + "] deleted successfully" });
+            console.log("Delete request processed for UserID [" + uid + "]");
+        });
+    });
 };
 
 // ── updateUser ───────────────────────────────────────────
@@ -123,19 +119,38 @@ export const updateUser = (req, res) => {
     if (!Number.isFinite(uid) || !Number.isInteger(uid) || uid < 1) {
         return res.status(400).json({ error: 'Invalid UserID' });
     }
-    const { FirstName, LastName, Email, Password, Type } = req.body;
-    const sql =
-        'UPDATE User SET FirstName = ?, LastName = ?, Email = ?, Password = ?, Type = ? WHERE UserID = ?';
-    db.query(sql, [FirstName, LastName, Email, Password, Type, uid], (err, result) => {
+
+    db.query("SELECT * FROM User WHERE UserID = ?", [uid], (err, result) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ error: 'Database error', details: err.message });
         }
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'User not found', UserID: uid });
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + uid + "] does not exist or has already been deleted. Update aborted."
+            });
         }
-        res.json({ Status: 'OK', Message: `UserID [${uid}] updated successfully` });
-        console.log(`UserID [${uid}] updated successfully`);
+
+        const existing  = result[0];
+        const FirstName = req.body.FirstName !== undefined ? req.body.FirstName : existing.FirstName;
+        const LastName  = req.body.LastName  !== undefined ? req.body.LastName  : existing.LastName;
+        const Email     = req.body.Email     !== undefined ? req.body.Email     : existing.Email;
+        const Password  = req.body.Password  !== undefined ? req.body.Password  : existing.Password;
+        const Type      = req.body.Type      !== undefined ? req.body.Type      : existing.Type;
+
+        db.query(
+            'UPDATE User SET FirstName = ?, LastName = ?, Email = ?, Password = ?, Type = ? WHERE UserID = ?',
+            [FirstName, LastName, Email, Password, Type, uid],
+            (err, result) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({ error: 'Database error', details: err.message });
+                }
+                res.status(200).json({ Status: 'OK', Message: `UserID [${uid}] updated successfully` });
+                console.log(`UserID [${uid}] updated successfully`);
+            }
+        );
     });
 };
 
@@ -150,34 +165,50 @@ export const updateClient = (req, res) => {
         return res.status(400).json({ error: 'Invalid ClientID' });
     }
 
-    const { PhoneNumber, NationalID, Address } = req.body;
-    const phoneDigits = String(PhoneNumber ?? '').replace(/\D/g, '');
-    const nidDigits = String(NationalID ?? '').replace(/\D/g, '');
-    const phone = parseInt(phoneDigits, 10);
-    const nid = parseInt(nidDigits, 10);
-    const address = String(Address ?? '').trim();
-
-    if (!Number.isFinite(phone)) {
-        return res.status(400).json({ error: 'Invalid PhoneNumber' });
-    }
-    if (!Number.isFinite(nid)) {
-        return res.status(400).json({ error: 'Invalid NationalID' });
-    }
-    if (!address) {
-        return res.status(400).json({ error: 'Address is required' });
-    }
-
-    const sql =
-        'UPDATE Client SET PhoneNumber = ?, NationalID = ?, Address = ? WHERE ClientID = ?';
-    db.query(sql, [phone, nid, address, clientId], (err, result) => {
+    db.query("SELECT * FROM Client WHERE ClientID = ?", [clientId], (err, result) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ error: 'Database error', details: err.message });
         }
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Client not found', ClientID: clientId });
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + clientId + "] does not exist or has already been deleted. Update aborted."
+            });
         }
-        res.json({ Status: 'OK', Message: `ClientID [${clientId}] updated successfully` });
+
+        const existing = result[0];
+
+        const rawPhone = req.body.PhoneNumber !== undefined ? req.body.PhoneNumber : existing.PhoneNumber;
+        const rawNID   = req.body.NationalID  !== undefined ? req.body.NationalID  : existing.NationalID;
+        const Address  = req.body.Address     !== undefined ? String(req.body.Address).trim() : existing.Address;
+
+        const phoneDigits = String(rawPhone ?? '').replace(/\D/g, '');
+        const nidDigits   = String(rawNID ?? '').replace(/\D/g, '');
+        const phone       = parseInt(phoneDigits, 10);
+        const nid         = parseInt(nidDigits, 10);
+
+        if (!Number.isFinite(phone)) {
+            return res.status(400).json({ error: 'Invalid PhoneNumber' });
+        }
+        if (!Number.isFinite(nid)) {
+            return res.status(400).json({ error: 'Invalid NationalID' });
+        }
+        if (!Address) {
+            return res.status(400).json({ error: 'Address is required' });
+        }
+
+        db.query(
+            'UPDATE Client SET PhoneNumber = ?, NationalID = ?, Address = ? WHERE ClientID = ?',
+            [phone, nid, Address, clientId],
+            (err, result) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({ error: 'Database error', details: err.message });
+                }
+                res.status(200).json({ Status: 'OK', Message: `ClientID [${clientId}] updated successfully` });
+            }
+        );
     });
 };
 
@@ -192,21 +223,30 @@ export const updateAdmin = (req, res) => {
         return res.status(400).json({ error: 'Invalid AdminID' });
     }
 
-    const sql =
-        req.body.LastLogin != null
-            ? 'UPDATE Admin SET LastLogin = ? WHERE AdminID = ?'
-            : 'UPDATE Admin SET LastLogin = NOW() WHERE AdminID = ?';
-    const params =
-        req.body.LastLogin != null ? [req.body.LastLogin, adminId] : [adminId];
-    db.query(sql, params, (err, result) => {
+    db.query("SELECT * FROM Admin WHERE AdminID = ?", [adminId], (err, result) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ error: 'Database error', details: err.message });
         }
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Admin not found', AdminID: adminId });
+        if (result.length === 0) {
+            return res.status(404).json({
+                "Status": "Error",
+                "Message": "Record Id [" + adminId + "] does not exist or has already been deleted. Update aborted."
+            });
         }
-        res.json({ Status: 'OK', Message: `AdminID [${adminId}] updated successfully` });
+
+        const sql    = req.body.LastLogin != null
+            ? 'UPDATE Admin SET LastLogin = ? WHERE AdminID = ?'
+            : 'UPDATE Admin SET LastLogin = NOW() WHERE AdminID = ?';
+        const params = req.body.LastLogin != null ? [req.body.LastLogin, adminId] : [adminId];
+
+        db.query(sql, params, (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: 'Database error', details: err.message });
+            }
+            res.status(200).json({ Status: 'OK', Message: `AdminID [${adminId}] updated successfully` });
+        });
     });
 };
 
@@ -337,19 +377,12 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ ok: false, message: "Invalid email or password." });
     }
 
-    req.session.regenerate((err) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ ok: false, message: "Session error." });
-      }
-      req.session.userId = userRow.UserID;
-      req.session.save(() => {
-        return res.status(200).json({
-          ok: true,
-          message: "Logged in successfully.",
-          data: { user: sanitizeUser(userRow) },
-        });
-      });
+    req.session.userId = userRow.UserID;
+
+    return res.status(200).json({
+      ok: true,
+      message: "Logged in successfully.",
+      data: { user: sanitizeUser(userRow) },
     });
   } catch (err) {
     return next(err);
