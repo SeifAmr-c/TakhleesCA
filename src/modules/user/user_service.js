@@ -5,6 +5,19 @@ const SALT_ROUNDS = 10;
 
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 
+const validatePassword = (password) => {
+  if (!password || password.length < 8) {
+    return "Password must be at least 8 characters long.";
+  }
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return "Password must contain at least one letter and one number.";
+  }
+  return null;
+};
+
+const isValidEmail = (email) =>
+  typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const userSelectSql = `
   SELECT
     u.UserID, u.FirstName, u.LastName, u.Email, u.Password, u.Type,
@@ -70,7 +83,7 @@ export const getUser = (req, res) => {
 };
 
 // ── deleteUser ───────────────────────────────────────────
-export const deleteUser = (req, res) => {
+export const deleteUser = async (req, res, next) => {
     const UserID = req.query.UserID;
     if (UserID === undefined || UserID === null || String(UserID).trim() === '') {
         return res.status(400).json({ error: 'UserID is required (query)' });
@@ -80,32 +93,30 @@ export const deleteUser = (req, res) => {
         return res.status(400).json({ error: 'Invalid UserID' });
     }
 
-    db.query("SELECT UserID FROM User WHERE UserID = ?", [uid], function (err, result) {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error', details: err.message });
-        }
-        if (result.length === 0) {
-            return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + uid + "] does not exist or has already been deleted."
-            });
-        }
-
-        const sql = `
-            DELETE FROM Client WHERE ClientID = ?;
-            DELETE FROM Admin WHERE AdminID = ?;
-            DELETE FROM User WHERE UserID = ?
-        `;
-        db.query(sql, [uid, uid, uid], (err) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ error: 'Database error', details: err.message });
-            }
-            res.status(200).json({ "Status": "OK", "Message": "UserID [" + uid + "] deleted successfully" });
-            console.log("Delete request processed for UserID [" + uid + "]");
+    const existing = await runQuery("SELECT UserID FROM User WHERE UserID = ?", [uid]);
+    if (existing.length === 0) {
+        return res.status(404).json({
+            "Status": "Error",
+            "Message": "Record Id [" + uid + "] does not exist or has already been deleted."
         });
-    });
+    }
+
+    const conn = await db.pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        await conn.query("DELETE FROM Client WHERE ClientID = ?", [uid]);
+        await conn.query("DELETE FROM Admin WHERE AdminID = ?", [uid]);
+        await conn.query("DELETE FROM User WHERE UserID = ?", [uid]);
+        await conn.commit();
+    } catch (err) {
+        await conn.rollback();
+        return next(err);
+    } finally {
+        conn.release();
+    }
+
+    res.status(200).json({ "Status": "OK", "Message": "UserID [" + uid + "] deleted successfully" });
+    console.log("Delete request processed for UserID [" + uid + "]");
 };
 
 // ── updateUser ───────────────────────────────────────────
@@ -118,6 +129,24 @@ export const updateUser = async (req, res) => {
     const uid = Number(UserID);
     if (!Number.isFinite(uid) || !Number.isInteger(uid) || uid < 1) {
         return res.status(400).json({ error: 'Invalid UserID' });
+    }
+
+    if (req.body.FirstName !== undefined &&
+        (typeof req.body.FirstName !== 'string' || req.body.FirstName.trim().length < 2)) {
+        return res.status(400).json({ ok: false, message: "FirstName must be a string of at least 2 characters." });
+    }
+    if (req.body.LastName !== undefined &&
+        (typeof req.body.LastName !== 'string' || req.body.LastName.trim().length < 2)) {
+        return res.status(400).json({ ok: false, message: "LastName must be a string of at least 2 characters." });
+    }
+    if (req.body.Email !== undefined && !isValidEmail(req.body.Email)) {
+        return res.status(400).json({ ok: false, message: "Valid email is required." });
+    }
+    if (req.body.Type !== undefined) {
+        const t = typeof req.body.Type === 'string' ? req.body.Type.toUpperCase() : '';
+        if (t !== 'C' && t !== 'A') {
+            return res.status(400).json({ ok: false, message: 'Type must be "C" or "A".' });
+        }
     }
 
     db.query("SELECT * FROM User WHERE UserID = ?", [uid], async (err, result) => {
@@ -141,6 +170,10 @@ export const updateUser = async (req, res) => {
         // ── Hash the new password if provided, otherwise keep the existing one
         let Password;
         if (req.body.Password !== undefined) {
+            const passwordError = validatePassword(req.body.Password);
+            if (passwordError) {
+                return res.status(400).json({ ok: false, message: passwordError });
+            }
             Password = await bcrypt.hash(req.body.Password, SALT_ROUNDS);
         } else {
             Password = existing.Password;
@@ -272,11 +305,12 @@ export const register = async (req, res, next) => {
     if (!LastName || LastName.length < 2) {
       return res.status(400).json({ ok: false, message: "Last name is required." });
     }
-    if (!Email || !Email.includes("@")) {
+    if (!isValidEmail(Email)) {
       return res.status(400).json({ ok: false, message: "Valid email is required." });
     }
-    if (!Password || Password.length < 4) {
-      return res.status(400).json({ ok: false, message: "Password must be at least 4 characters." });
+    const passwordError = validatePassword(Password);
+    if (passwordError) {
+      return res.status(400).json({ ok: false, message: passwordError });
     }
     if (Type !== "C" && Type !== "A") {
       return res.status(400).json({ ok: false, message: 'Type must be "C" (client) or "A" (admin).' });
@@ -331,20 +365,32 @@ export const register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(Password, SALT_ROUNDS);
 
-    const insertRes = await runQuery(
-      "INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?, ?, ?, ?, ?)",
-      [FirstName, LastName, Email, hashedPassword, Type]
-    );
+    const conn = await db.pool.getConnection();
+    let userId;
+    try {
+      await conn.beginTransaction();
 
-    const userId = insertRes.insertId;
-
-    if (Type === "C") {
-      await runQuery(
-        "INSERT INTO Client (ClientID, PhoneNumber, NationalID, Address) VALUES (?, ?, ?, ?)",
-        [userId, PhoneNumber, NationalID, Address]
+      const [insertRes] = await conn.query(
+        "INSERT INTO User (FirstName, LastName, Email, Password, Type) VALUES (?, ?, ?, ?, ?)",
+        [FirstName, LastName, Email, hashedPassword, Type]
       );
-    } else {
-      await runQuery("INSERT INTO Admin (AdminID, LastLogin) VALUES (?, NOW())", [userId]);
+      userId = insertRes.insertId;
+
+      if (Type === "C") {
+        await conn.query(
+          "INSERT INTO Client (ClientID, PhoneNumber, NationalID, Address) VALUES (?, ?, ?, ?)",
+          [userId, PhoneNumber, NationalID, Address]
+        );
+      } else {
+        await conn.query("INSERT INTO Admin (AdminID, LastLogin) VALUES (?, NOW())", [userId]);
+      }
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
     }
 
     const userRows = await runQuery(`${userSelectSql} WHERE u.UserID = ? LIMIT 1`, [userId]);
@@ -385,6 +431,7 @@ export const login = async (req, res, next) => {
     }
 
     req.session.userId = userRow.UserID;
+    req.session.role = userRow.Type === "A" ? "admin" : "client";
 
     return res.status(200).json({
       ok: true,
@@ -409,26 +456,26 @@ export const logout = (req, res) => {
 };
 
 // ── me (get current session user) ───────────────────────
-export const me = async (req, res, next) => {
-  try {
-    const userId = req.session.userId;
-    if (!userId) {
-      return res.status(401).json({ ok: false, message: "Not logged in." });
-    }
+// export const me = async (req, res, next) => {
+//   try {
+//     const userId = req.session.userId;
+//     if (!userId) {
+//       return res.status(401).json({ ok: false, message: "Not logged in." });
+//     }
 
-    const rows = await runQuery(`${userSelectSql} WHERE u.UserID = ? LIMIT 1`, [userId]);
-    if (!rows.length) {
-      return res.status(404).json({ ok: false, message: "User not found." });
-    }
+//     const rows = await runQuery(`${userSelectSql} WHERE u.UserID = ? LIMIT 1`, [userId]);
+//     if (!rows.length) {
+//       return res.status(404).json({ ok: false, message: "User not found." });
+//     }
 
-    return res.status(200).json({
-      ok: true,
-      data: { user: sanitizeUser(rows[0]) },
-    });
-  } catch (err) {
-    return next(err);
-  }
-};
+//     return res.status(200).json({
+//       ok: true,
+//       data: { user: sanitizeUser(rows[0]) },
+//     });
+//   } catch (err) {
+//     return next(err);
+//   }
+// };
 
 // ── onlineUsers (list active sessions) ──────────────────
 export const onlineUsers = async (req, res, next) => {

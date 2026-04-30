@@ -2,6 +2,7 @@ import express from "express";
 import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
 
+import { errorHandler } from "./middleware/errorHandler.js";
 import userRouter from "./modules/user/user_controller.js";
 import applicationRouter from "./modules/application/application_controller.js";
 import categoryRouter from "./modules/category/category_controller.js";
@@ -23,19 +24,26 @@ export const bootstrap = () => {
 
   const MySQLStore = MySQLStoreFactory(session);
   const sessionStore = new MySQLStore({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'Takhlees',
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
     createDatabaseTable: true,
   });
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
   app.use(session({
-    secret: 'takhlees-secret-key',
+    secret: process.env.SESSION_SECRET,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 30 * 60 * 1000 },
+    cookie: {
+      maxAge: 30 * 60 * 1000,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProduction,
+    },
   }));
 
   // -----------------------------
@@ -62,13 +70,7 @@ export const bootstrap = () => {
   // -----------------------------
   // Error Handler
   // -----------------------------
-  app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(err.status || 500).json({
-      ok: false,
-      message: err.message || "Server error",
-    });
-  });
+  app.use(errorHandler);
 
   return app;
 };

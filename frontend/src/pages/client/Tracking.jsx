@@ -1,0 +1,172 @@
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import DashboardLayout from "../../components/DashboardLayout.jsx";
+import Icon from "../../components/Icon.jsx";
+import { listApplications } from "../../api/applications.js";
+
+const FALLBACK = [
+  { ApplicationID: 1001, CompanyName: "Cairo Clearance Co.", Status: "in_progress", Origin: "Shanghai", Destination: "Alexandria", CreatedAt: "2026-04-22", Amount: 1280 },
+  { ApplicationID: 1002, CompanyName: "Alex Maritime", Status: "accepted", Origin: "Hamburg", Destination: "Alexandria", CreatedAt: "2026-04-25", Amount: 1450 },
+  { ApplicationID: 1003, CompanyName: "Suez Port Solutions", Status: "completed", Origin: "Mumbai", Destination: "Suez", CreatedAt: "2026-04-10", Amount: 980 },
+  { ApplicationID: 1004, CompanyName: "Damietta Freight", Status: "pending", Origin: "Rotterdam", Destination: "Damietta", CreatedAt: "2026-04-28", Amount: 1620 },
+];
+
+const STATUS_BADGE = {
+  pending: ["badge-pending", "Pending review"],
+  in_review: ["badge-pending", "In review"],
+  accepted: ["badge-info", "Accepted"],
+  in_progress: ["badge-info", "In progress"],
+  completed: ["badge-success", "Completed"],
+  rejected: ["badge-error", "Rejected"],
+};
+
+const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
+
+function statusToStepIndex(status) {
+  switch (status) {
+    case "pending":
+    case "in_review": return 0;
+    case "accepted": return 1;
+    case "in_progress": return 2;
+    case "completed": return 3;
+    default: return 0;
+  }
+}
+
+function ShipmentRow({ a }) {
+  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
+  const stepIdx = statusToStepIndex(a.Status);
+  const initials = (a.CompanyName || "TK").split(" ").slice(0, 2).map(w => w[0]).join("");
+
+  return (
+    <div className="card card-hover">
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+          <div className="avatar avatar-lg">{initials}</div>
+          <div>
+            <div className="row-meta">
+              #{a.ApplicationID} · {a.CreatedAt || "—"}
+            </div>
+            <div className="row-title" style={{ fontSize: 16 }}>
+              {a.CompanyName || `Company #${a.CompanyID}`}
+            </div>
+            <div className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+              <Icon name="ship" size={13} />
+              {a.Origin || "—"} → {a.Destination || "—"}
+              {a.Amount && (
+                <>
+                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                  <strong style={{ color: "var(--navy)" }}>EGP {Number(a.Amount).toLocaleString()}</strong>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <span className={`badge ${badgeClass}`}>
+          <span className="dot" />
+          {label}
+        </span>
+      </div>
+
+      <hr className="divider" />
+
+      <div className="timeline">
+        {STEPS.map((s, i) => (
+          <div
+            key={s}
+            className={`timeline-step ${i < stepIdx ? "done" : i === stepIdx ? "active" : ""}`}
+          >
+            <span className="dot" />
+            {s}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Tracking() {
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await listApplications();
+        if (!active) return;
+        const list = Array.isArray(data) ? data : data?.data || [];
+        setApplications(list.length ? list : FALLBACK);
+      } catch {
+        if (!active) return;
+        setError("Couldn’t reach the server — showing sample applications.");
+        setApplications(FALLBACK);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const summary = {
+    active: applications.filter(a => ["pending", "accepted", "in_progress"].includes(a.Status)).length,
+    completed: applications.filter(a => a.Status === "completed").length,
+    total: applications.length,
+  };
+
+  return (
+    <DashboardLayout
+      title="Your shipments"
+      subtitle="Real-time status across all your applications."
+      role="Client"
+      actions={
+        <Link to="/companies" className="btn btn-primary">
+          <Icon name="package" size={16} /> New application
+        </Link>
+      }
+    >
+      {/* Summary */}
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: 24 }}>
+        <div className="stat">
+          <div className="stat-label">Active</div>
+          <div className="stat-value">{summary.active}</div>
+          <div className="stat-trend up"><Icon name="arrow_up" size={12} /> {summary.active} in motion</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Completed</div>
+          <div className="stat-value">{summary.completed}</div>
+          <div className="stat-trend up" style={{ color: "var(--gray-500)" }}>Lifetime</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Total submitted</div>
+          <div className="stat-value">{summary.total}</div>
+          <div className="spark">
+            {[3, 5, 4, 7, 6, 8, 6, 9].map((h, i) => (
+              <span key={i} style={{ height: `${h * 3}px` }} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
+
+      {loading ? (
+        <p className="muted">Loading…</p>
+      ) : applications.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: 56 }}>
+          <Icon name="package" size={32} color="var(--gray-400)" />
+          <h3 className="h3" style={{ marginTop: 12 }}>No shipments yet</h3>
+          <p className="muted">Browse companies and file your first application.</p>
+          <Link to="/companies" className="btn btn-primary" style={{ marginTop: 16 }}>Browse companies</Link>
+        </div>
+      ) : (
+        <div className="grid">
+          {applications.map((a) => <ShipmentRow key={a.ApplicationID} a={a} />)}
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}
+
+export default Tracking;

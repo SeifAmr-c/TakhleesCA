@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import db from './connection.js';
 
 import { createUserTable } from './user.model.js';
