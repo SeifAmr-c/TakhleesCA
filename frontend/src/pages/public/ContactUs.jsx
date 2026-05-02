@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { submitSupportTicket } from "../../api/payments.js";
 
 const CONTACTS = [
@@ -26,7 +28,7 @@ function ContactUs() {
     setSubmitting(true);
     try {
       await submitSupportTicket(form);
-      setSuccess("Thanks — we’ll reply within one business day.");
+      setSuccess("Thanks — we'll reply within one business day.");
       setForm({ Name: "", Email: "", Subject: "", Message: "" });
     } catch (err) {
       setError(
@@ -41,27 +43,51 @@ function ContactUs() {
 
   return (
     <PublicLayout>
-      <section className="section">
-        <div className="container" style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.8fr) minmax(0, 1.2fr)", gap: 48 }}>
+      <Reveal as="section" className="section">
+        <div
+          className="container reach-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 0.8fr) minmax(0, 1.2fr)",
+            gap: 48,
+          }}
+        >
           <div>
             <span className="eyebrow">Contact</span>
             <h1 className="h1" style={{ fontSize: 44 }}>Talk to us.</h1>
             <p className="lead">
-              Onboarding, pricing, or a shipment that needs attention — drop us
-              a line and a real human will reply.
+              Onboarding, pricing, or a shipment that needs attention &mdash; drop
+              us a line and a real human will reply.
             </p>
 
             <div className="stack" style={{ marginTop: 32 }}>
               {CONTACTS.map((c) => (
                 <div key={c.label} className="row" style={{ gap: 14 }}>
-                  <div className="card-icon" style={{ marginBottom: 0, width: 40, height: 40 }}>
+                  <div
+                    className="card-icon"
+                    style={{ marginBottom: 0, width: 40, height: 40 }}
+                  >
                     <Icon name={c.icon} />
                   </div>
                   <div>
-                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.10em",
+                        color: "var(--ink-faint)",
+                      }}
+                    >
                       {c.label}
                     </div>
-                    <div style={{ color: "var(--navy)", fontWeight: 600, marginTop: 2 }}>
+                    <div
+                      style={{
+                        color: "var(--ink)",
+                        fontWeight: 600,
+                        marginTop: 2,
+                      }}
+                    >
                       {c.value}
                     </div>
                   </div>
@@ -69,18 +95,19 @@ function ContactUs() {
               ))}
             </div>
 
-            <div className="card" style={{ marginTop: 32, background: "var(--gray-50)" }}>
+            <div className="card" style={{ marginTop: 32, background: "var(--steel-50)" }}>
               <div className="row" style={{ gap: 12, marginBottom: 8 }}>
-                <Icon name="bell" color="var(--navy)" />
-                <strong style={{ color: "var(--navy)" }}>Operating hours</strong>
+                <Icon name="bell" color="var(--ink)" />
+                <strong style={{ color: "var(--ink)" }}>Operating hours</strong>
               </div>
-              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-                Sun–Thu, 9am–6pm EET. Urgent shipment issues are answered around the clock.
+              <p style={{ margin: 0, fontSize: 14, color: "var(--ink-soft)" }}>
+                Sun&ndash;Thu, 9am&ndash;6pm EET. Urgent shipment issues are
+                answered around the clock.
               </p>
             </div>
           </div>
 
-          <div className="card-glow card-pad-lg" style={{ padding: 32 }}>
+          <div className="card card-pad-lg">
             <h2 className="h3" style={{ fontSize: 20, marginBottom: 16 }}>Send a message</h2>
             {error && <div className="banner-error"><Icon name="bell" size={18} />{error}</div>}
             {success && <div className="banner-success"><Icon name="check" size={18} />{success}</div>}
@@ -100,19 +127,37 @@ function ContactUs() {
               </div>
               <label className="field">
                 <span className="field-label">Subject</span>
-                <input className="input" value={form.Subject} onChange={update("Subject")} disabled={submitting} placeholder="What can we help with?" />
+                <input
+                  className="input"
+                  value={form.Subject}
+                  onChange={update("Subject")}
+                  disabled={submitting}
+                  placeholder="What can we help with?"
+                />
               </label>
               <label className="field">
                 <span className="field-label">Message</span>
-                <textarea className="textarea" rows={6} value={form.Message} onChange={update("Message")} disabled={submitting} required placeholder="Tell us more…" />
+                <textarea
+                  className="textarea"
+                  rows={6}
+                  value={form.Message}
+                  onChange={update("Message")}
+                  disabled={submitting}
+                  required
+                  placeholder="Tell us more…"
+                />
               </label>
               <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-                {submitting ? "Sending…" : <>Send message <Icon name="arrow_right" size={16} /></>}
+                {submitting ? (
+                  <ContainerSpinner inline size={20} label="Sending…" />
+                ) : (
+                  <>Send message <Icon name="arrow_right" size={16} /></>
+                )}
               </button>
             </form>
           </div>
         </div>
-      </section>
+      </Reveal>
     </PublicLayout>
   );
 }

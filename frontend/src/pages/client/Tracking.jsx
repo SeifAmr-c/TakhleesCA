@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listApplications } from "../../api/applications.js";
 
 const FALLBACK = [
@@ -50,13 +52,13 @@ function ShipmentRow({ a }) {
             <div className="row-title" style={{ fontSize: 16 }}>
               {a.CompanyName || `Company #${a.CompanyID}`}
             </div>
-            <div className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 13, color: "var(--ink-soft)", display: "flex", alignItems: "center", gap: 6 }}>
               <Icon name="ship" size={13} />
               {a.Origin || "—"} → {a.Destination || "—"}
               {a.Amount && (
                 <>
-                  <span style={{ color: "var(--gray-300)" }}>·</span>
-                  <strong style={{ color: "var(--navy)" }}>EGP {Number(a.Amount).toLocaleString()}</strong>
+                  <span style={{ color: "var(--line-strong)" }}>·</span>
+                  <strong className="mono tabular" style={{ color: "var(--ink)" }}>EGP {Number(a.Amount).toLocaleString()}</strong>
                 </>
               )}
             </div>
@@ -152,18 +154,22 @@ function Tracking() {
       {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
+          <ContainerSpinner size={88} label="Loading shipments" />
+        </div>
       ) : applications.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: 56 }}>
-          <Icon name="package" size={32} color="var(--gray-400)" />
+          <Icon name="package" size={32} color="var(--ink-faint)" />
           <h3 className="h3" style={{ marginTop: 12 }}>No shipments yet</h3>
-          <p className="muted">Browse companies and file your first application.</p>
+          <p style={{ color: "var(--ink-soft)" }}>Browse companies and file your first application.</p>
           <Link to="/companies" className="btn btn-primary" style={{ marginTop: 16 }}>Browse companies</Link>
         </div>
       ) : (
-        <div className="grid">
-          {applications.map((a) => <ShipmentRow key={a.ApplicationID} a={a} />)}
-        </div>
+        <Reveal as="div">
+          <div className="grid">
+            {applications.map((a) => <ShipmentRow key={a.ApplicationID} a={a} />)}
+          </div>
+        </Reveal>
       )}
     </DashboardLayout>
   );

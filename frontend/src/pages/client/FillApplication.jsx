@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
 
 const FALLBACK_CATEGORIES = [
@@ -75,7 +77,7 @@ function FillApplication() {
       subtitle="Tell the company what you're shipping and any special requirements."
       role="Client"
     >
-      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+      <Reveal as="div" style={{ maxWidth: 760, margin: "0 auto" }}>
         {/* Stepper */}
         <div className="card" style={{ padding: 20, marginBottom: 24 }}>
           <div className="timeline">
@@ -88,7 +90,7 @@ function FillApplication() {
 
         {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
 
-        <form onSubmit={handleSubmit} className="card-glow" style={{ padding: 28 }}>
+        <form onSubmit={handleSubmit} className="card card-pad-lg">
           <h3 className="card-title">Shipment details</h3>
           <p className="card-subtitle">All fields marked with * are required.</p>
 
@@ -143,7 +145,15 @@ function FillApplication() {
           <hr className="divider" />
 
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <div className="muted" style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <div
+              style={{
+                fontSize: 13,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                color: "var(--ink-faint)",
+              }}
+            >
               <Icon name="lock" size={14} /> Your application is encrypted in transit.
             </div>
             <div className="row" style={{ gap: 8 }}>
@@ -151,12 +161,16 @@ function FillApplication() {
                 Cancel
               </button>
               <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
-                {submitting ? "Submitting…" : <>Continue to payment <Icon name="arrow_right" size={16} /></>}
+                {submitting ? (
+                  <ContainerSpinner inline size={20} label="Submitting…" />
+                ) : (
+                  <>Continue to payment <Icon name="arrow_right" size={16} /></>
+                )}
               </button>
             </div>
           </div>
         </form>
-      </div>
+      </Reveal>
     </DashboardLayout>
   );
 }

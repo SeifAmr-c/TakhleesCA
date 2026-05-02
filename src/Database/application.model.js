@@ -10,10 +10,12 @@ export function createApplicationTable() {
             TrackingNumber VARCHAR(255) NOT NULL,
             Status ENUM('Pending', 'In Progress', 'Completed') NOT NULL,
             DeliveryAddress VARCHAR(255) NOT NULL,
-            CompanyEmployeeID INT NOT NULL,
+            CompanyID INT NOT NULL,
             CategoryID INT NOT NULL,
-            FOREIGN KEY (CompanyEmployeeID) REFERENCES CompanyEmployee(EmployeeID),
-            FOREIGN KEY (CategoryID) REFERENCES Category(CategoryID)
+            ClientID INT NOT NULL,
+            FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID),
+            FOREIGN KEY (CategoryID) REFERENCES Category(CategoryID),
+            FOREIGN KEY (ClientID) REFERENCES Client(ClientID)
         )
     `;
 

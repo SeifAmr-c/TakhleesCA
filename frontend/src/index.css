@@ -12,13 +12,18 @@ body,
 
 body {
   margin: 0;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family:
+    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  font-feature-settings: "ss01" 1, "cv02" 1;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #0f172a;
-  background: #f1f5f9;
+  text-rendering: optimizeLegibility;
+  color: var(--ink, oklch(15% 0.045 245));
+  background: var(--bg, oklch(98% 0.008 245));
 }
 
 a {
@@ -29,6 +34,42 @@ button {
   font-family: inherit;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+code,
+kbd,
+samp,
+pre {
+  font-family:
+    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.94em;
+}
+
+/* Selection — branded, but quiet */
+::selection {
+  background: oklch(72% 0.18 65 / 0.32);
+  color: var(--ink, oklch(15% 0.045 245));
+}
+
+/* Scrollbar — slim and tinted (WebKit only; Firefox uses scrollbar-color below) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(85% 0.008 245);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(74% 0.010 245);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+* {
+  scrollbar-color: oklch(85% 0.008 245) transparent;
+  scrollbar-width: thin;
 }

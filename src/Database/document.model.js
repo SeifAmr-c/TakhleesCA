@@ -7,9 +7,8 @@ export function createDocumentTable() {
             DocType ENUM('National ID / Passport', 'Proof Of Payment', 'Delegation', 'Other') NOT NULL,
             UploadDate DATETIME,
             VerficationStatus ENUM('Pending', 'Accepted', 'Rejected') NOT NULL,
-            ClientID INT NOT NULL,
             ApplicationID INT NOT NULL,
-            FOREIGN KEY (ClientID) REFERENCES Client(ClientID),
+            Path VARCHAR(255) NOT NULL,
             FOREIGN KEY (ApplicationID) REFERENCES Application(ApplicationID)
         )
     `;

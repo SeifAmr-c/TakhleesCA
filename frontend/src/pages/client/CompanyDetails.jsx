@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { getCompany } from "../../api/companies.js";
 
 const FALLBACK = {
@@ -50,7 +52,12 @@ function CompanyDetails() {
   if (loading) {
     return (
       <PublicLayout>
-        <div className="container section"><p className="muted">Loading…</p></div>
+        <div
+          className="container section"
+          style={{ display: "flex", justifyContent: "center" }}
+        >
+          <ContainerSpinner size={104} label="Loading company" />
+        </div>
       </PublicLayout>
     );
   }
@@ -61,9 +68,25 @@ function CompanyDetails() {
   return (
     <PublicLayout>
       {/* Banner */}
-      <section style={{ background: "var(--paper)", padding: "32px 0 24px" }}>
+      <section
+        style={{
+          background: "var(--surface)",
+          borderBottom: "1px solid var(--line)",
+          padding: "32px 0 24px",
+        }}
+      >
         <div className="container">
-          <Link to="/companies" className="muted" style={{ fontSize: 13, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Link
+            to="/companies"
+            style={{
+              fontSize: 13,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              color: "var(--ink-faint)",
+            }}
+          >
             ← Back to companies
           </Link>
           {error && <div className="banner-error" style={{ marginTop: 16 }}>{error}</div>}
@@ -73,7 +96,7 @@ function CompanyDetails() {
       <section style={{ padding: "16px 0 64px" }}>
         <div className="container" style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 32 }}>
           <div>
-            <div className="card-glow" style={{ padding: 32 }}>
+            <Reveal as="div" className="card card-pad-lg">
               <div className="row" style={{ gap: 20, alignItems: "flex-start" }}>
                 <div className="avatar avatar-lg" style={{ width: 64, height: 64, fontSize: 22 }}>{initials || "T"}</div>
                 <div style={{ flex: 1 }}>
@@ -88,7 +111,7 @@ function CompanyDetails() {
                     )}
                   </div>
                   <h1 className="h2" style={{ marginBottom: 6 }}>{c.Name}</h1>
-                  <p className="muted" style={{ margin: 0 }}>
+                  <p style={{ margin: 0, color: "var(--ink-soft)" }}>
                     <Icon name="pin" size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
                     {c.City} · {c.Services}
                   </p>
@@ -105,14 +128,35 @@ function CompanyDetails() {
                       { label: "Avg. response", value: c.Stats.responseHours },
                     ].map((s) => (
                       <div key={s.label}>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--navy)" }}>{s.value}</div>
-                        <div className="muted" style={{ fontSize: 12 }}>{s.label}</div>
+                        <div
+                          className="mono tabular"
+                          style={{
+                            fontSize: 22,
+                            fontWeight: 600,
+                            color: "var(--ink)",
+                            letterSpacing: "-0.02em",
+                          }}
+                        >
+                          {s.value}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 11,
+                            letterSpacing: "0.10em",
+                            textTransform: "uppercase",
+                            color: "var(--ink-faint)",
+                            marginTop: 4,
+                          }}
+                        >
+                          {s.label}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </>
               )}
-            </div>
+            </Reveal>
 
             <h2 className="h2" style={{ marginTop: 48, marginBottom: 14 }}>About</h2>
             <p className="lead" style={{ margin: 0 }}>
@@ -130,33 +174,33 @@ function CompanyDetails() {
 
             <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Reviews</h2>
             {(c.Reviews_list || []).length === 0 ? (
-              <p className="muted">No reviews yet.</p>
+              <p style={{ color: "var(--ink-soft)" }}>No reviews yet.</p>
             ) : (
-              <div className="grid">
+              <Reveal as="div" className="grid">
                 {(c.Reviews_list || []).map((r) => (
-                  <div key={r.id} className="card">
+                  <div key={r.id} className="card card-hover">
                     <div className="row" style={{ justifyContent: "space-between" }}>
                       <div className="row" style={{ gap: 10 }}>
                         <div className="avatar">{r.name.split(" ").map(w => w[0]).join("")}</div>
                         <div>
-                          <strong style={{ color: "var(--navy)" }}>{r.name}</strong>
+                          <strong style={{ color: "var(--ink)" }}>{r.name}</strong>
                           <div className="row" style={{ marginTop: 2 }}>
                             {[1,2,3,4,5].map((i) => (
-                              <Icon key={i} name="star" size={12} color={i <= r.rating ? "var(--accent)" : "var(--gray-300)"} />
+                              <Icon key={i} name="star" size={12} color={i <= r.rating ? "var(--safety)" : "var(--line-strong)"} />
                             ))}
                           </div>
                         </div>
                       </div>
                     </div>
-                    <p style={{ margin: "12px 0 0", color: "var(--gray-700)" }}>{r.text}</p>
+                    <p style={{ margin: "12px 0 0", color: "var(--ink-soft)" }}>{r.text}</p>
                   </div>
                 ))}
-              </div>
+              </Reveal>
             )}
           </div>
 
           <aside>
-            <div className="card-glow" style={{ position: "sticky", top: 88, padding: 24 }}>
+            <div className="card" style={{ position: "sticky", top: 88, padding: 24 }}>
               <h3 className="card-title">Ready to ship?</h3>
               <p className="card-subtitle">Submit an application and the company will pick it up.</p>
               <Link to={`/applications/new/${c.CompanyID}`} className="btn btn-primary btn-block btn-lg">
@@ -164,14 +208,14 @@ function CompanyDetails() {
               </Link>
               <hr className="divider" />
               <div className="stack" style={{ gap: 10 }}>
-                <div className="row" style={{ gap: 10, color: "var(--gray-700)", fontSize: 13 }}>
-                  <Icon name="check" size={16} color="var(--success)" /> No charge until accepted
+                <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
+                  <Icon name="check" size={16} color="var(--signal-go)" /> No charge until accepted
                 </div>
-                <div className="row" style={{ gap: 10, color: "var(--gray-700)", fontSize: 13 }}>
-                  <Icon name="check" size={16} color="var(--success)" /> Real-time milestone updates
+                <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
+                  <Icon name="check" size={16} color="var(--signal-go)" /> Real-time milestone updates
                 </div>
-                <div className="row" style={{ gap: 10, color: "var(--gray-700)", fontSize: 13 }}>
-                  <Icon name="check" size={16} color="var(--success)" /> Secure payment held until release
+                <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
+                  <Icon name="check" size={16} color="var(--signal-go)" /> Secure payment held until release
                 </div>
               </div>
             </div>

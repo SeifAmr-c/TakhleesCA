@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies, verifyCompany } from "../../api/companies.js";
 import { listApplications } from "../../api/applications.js";
 import { onlineUsers } from "../../api/admin.js";
@@ -34,44 +36,32 @@ const FALLBACK_ANALYTICS = {
 };
 
 function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData }) {
+  const iconClass =
+    accent === "accent" ? "card-icon card-icon-accent" : "card-icon";
   return (
     <div className="stat">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="stat-label">{label}</div>
         {icon && (
           <div
-            className="card-icon"
-            style={{
-              marginBottom: 0,
-              width: 32,
-              height: 32,
-              background: accent === "accent"
-                ? "linear-gradient(135deg, rgba(232,155,60,0.18), rgba(232,155,60,0.06))"
-                : accent === "success"
-                ? "linear-gradient(135deg, rgba(22,101,52,0.16), rgba(22,101,52,0.04))"
-                : accent === "info"
-                ? "linear-gradient(135deg, rgba(29,78,216,0.16), rgba(29,78,216,0.04))"
-                : "linear-gradient(135deg, rgba(10,31,61,0.08), rgba(0,181,165,0.12))",
-              color:
-                accent === "accent" ? "var(--accent-dark)"
-                  : accent === "success" ? "var(--success)"
-                  : accent === "info" ? "var(--info)"
-                  : "var(--navy)",
-            }}
+            className={iconClass}
+            style={{ marginBottom: 0, width: 32, height: 32 }}
           >
             <Icon name={icon} size={16} />
           </div>
         )}
       </div>
-      <div className="stat-value" style={{
-        background: "linear-gradient(135deg, var(--navy) 0%, var(--teal) 100%)",
-        WebkitBackgroundClip: "text",
-        backgroundClip: "text",
-        color: "transparent",
-      }}>
+      <div
+        className="stat-value mono tabular"
+        style={{ color: "var(--ink)", letterSpacing: "-0.02em" }}
+      >
         {value}
       </div>
-      {sub && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{sub}</div>}
+      {sub && (
+        <div style={{ fontSize: 12, marginTop: 4, color: "var(--ink-faint)" }}>
+          {sub}
+        </div>
+      )}
       {trend && (
         <div className={`stat-trend ${trendDir || "up"}`}>
           <Icon name={trendDir === "down" ? "arrow_down" : "arrow_up"} size={12} />
@@ -140,9 +130,9 @@ function VerificationCard({ company, onDecide, busy }) {
 
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <div className="row" style={{ gap: 6 }}>
-          <a href="#" className="btn btn-ghost btn-sm" onClick={(e) => e.preventDefault()}>
+          <button type="button" className="btn btn-ghost btn-sm">
             <Icon name="doc" size={14} /> View documents
-          </a>
+          </button>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button
@@ -168,8 +158,8 @@ function VerificationCard({ company, onDecide, busy }) {
 function AdminDashboard() {
   const [pendingCompanies, setPendingCompanies] = useState([]);
   const [analytics, setAnalytics] = useState(FALLBACK_ANALYTICS);
-  const [topCompanies, setTopCompanies] = useState(FALLBACK_TOP_COMPANIES);
-  const [activity, setActivity] = useState(FALLBACK_RECENT_ACTIVITY);
+  const [topCompanies] = useState(FALLBACK_TOP_COMPANIES);
+  const [activity] = useState(FALLBACK_RECENT_ACTIVITY);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
@@ -259,7 +249,7 @@ function AdminDashboard() {
       )}
 
       {/* System analytics */}
-      <section style={{ marginBottom: 36 }}>
+      <Reveal as="section" style={{ marginBottom: 36 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <div>
             <span className="eyebrow">System analytics</span>
@@ -305,10 +295,10 @@ function AdminDashboard() {
             accent="info"
           />
         </div>
-      </section>
+      </Reveal>
 
       {/* Verification queue */}
-      <section style={{ marginBottom: 36 }}>
+      <Reveal as="section" style={{ marginBottom: 36 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <div>
             <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
@@ -322,7 +312,9 @@ function AdminDashboard() {
         </div>
 
         {loading ? (
-          <p className="muted">Loading…</p>
+          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+            <ContainerSpinner size={80} label="Loading verifications" />
+          </div>
         ) : pendingCompanies.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: 48 }}>
             <Icon name="check" size={28} color="var(--success)" />
@@ -341,10 +333,10 @@ function AdminDashboard() {
             ))}
           </div>
         )}
-      </section>
+      </Reveal>
 
       {/* Top companies + Activity */}
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: 24, marginBottom: 24 }}>
+      <Reveal as="section" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: 24, marginBottom: 24 }}>
         {/* Top companies leaderboard */}
         <div>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
@@ -403,7 +395,7 @@ function AdminDashboard() {
                           position: "absolute",
                           inset: 0,
                           width: `${pct}%`,
-                          background: "linear-gradient(90deg, var(--navy) 0%, var(--teal) 100%)",
+                          background: "var(--brand)",
                           borderRadius: 999,
                         }}
                       />
@@ -466,7 +458,7 @@ function AdminDashboard() {
             </ul>
           </div>
         </div>
-      </section>
+      </Reveal>
     </DashboardLayout>
   );
 }

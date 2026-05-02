@@ -2,8 +2,8 @@ import db from '../../Database/connection.js';
 
 export const createDocument = (req, res) => {
     console.log("Post Request Received");
-    db.query("INSERT INTO document (`DocType`,`UploadDate`,`VerficationStatus`,`ClientID`,`ApplicationID`) VALUES (?,?,?,?,?)",
-        [req.body.DocType, req.body.UploadDate, req.body.VerficationStatus, req.body.ClientID, req.body.ApplicationID], function (err, result) {
+    db.query("INSERT INTO document (`DocType`,`UploadDate`,`VerficationStatus`,`Path`,`ApplicationID`) VALUES (?,?,?,?,?)",
+        [req.body.DocType, req.body.UploadDate, req.body.VerficationStatus, req.body.Path, req.body.ApplicationID], function (err, result) {
             if (err) throw err;
             res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
             console.log("Record Added " + result.insertId);
@@ -50,7 +50,7 @@ export const searchDocument = (req, res) => {
     const keyvalue = req.query.keyvalue;
     const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-    const allowedColumns = ['DocumentID', 'DocType', 'VerficationStatus', 'ClientID', 'ApplicationID'];
+    const allowedColumns = ['DocumentID', 'DocType', 'VerficationStatus', 'ApplicationID'];
     if (!allowedColumns.includes(keyword)) {
         return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
     }
@@ -85,12 +85,12 @@ export const updateDocument = (req, res) => {
         const DocType           = req.body.DocType           !== undefined ? req.body.DocType           : existing.DocType;
         const UploadDate        = req.body.UploadDate        !== undefined ? req.body.UploadDate        : existing.UploadDate;
         const VerficationStatus = req.body.VerficationStatus !== undefined ? req.body.VerficationStatus : existing.VerficationStatus;
-        const ClientID          = req.body.ClientID          !== undefined ? req.body.ClientID          : existing.ClientID;
+        const Path              = req.body.Path              !== undefined ? req.body.Path              : existing.Path;
         const ApplicationID     = req.body.ApplicationID     !== undefined ? req.body.ApplicationID     : existing.ApplicationID;
 
         db.query(
-            "UPDATE document SET `DocType` = ?, `UploadDate` = ?, `VerficationStatus` = ?, `ClientID` = ?, `ApplicationID` = ? WHERE DocumentID = ?",
-            [DocType, UploadDate, VerficationStatus, ClientID, ApplicationID, DocumentID],
+            "UPDATE document SET `DocType` = ?, `UploadDate` = ?, `VerficationStatus` = ?, `Path` = ?, `ApplicationID` = ? WHERE DocumentID = ?",
+            [DocType, UploadDate, VerficationStatus, Path, ApplicationID, DocumentID],
             function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + DocumentID + "] is Updated Successfully" });

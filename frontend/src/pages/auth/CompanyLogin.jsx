@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { login } from "../../api/auth.js";
-import AuthVisual from "../../components/AuthVisual.jsx";
+import { setAuth } from "../../api/authState.js";
 import Icon from "../../components/Icon.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
 
 const extractErrorMessage = (err) => {
@@ -33,7 +34,10 @@ function CompanyLogin() {
     setSubmitting(true);
     try {
       const res = await login({ email: email.trim(), password });
-      if (res?.ok) return navigate("/company/dashboard", { replace: true });
+      if (res?.ok) {
+        setAuth({ kind: "company", role: "company" });
+        return navigate("/company/dashboard", { replace: true });
+      }
       setError(res?.message || "Login failed.");
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -45,9 +49,8 @@ function CompanyLogin() {
   return (
     <div className={styles.shell}>
       <section className={styles.formSide}>
-        <Link to="/" className={styles.brandRow}>
-          <span className="logo"><Icon name="anchor" size={18} /></span>
-          Takhlees
+        <Link to="/" className={styles.brandRow} aria-label="Takhlees, home">
+          <span className={styles.brandText}>Takhlees</span>
         </Link>
 
         <div className={styles.formInner}>
@@ -98,6 +101,7 @@ function CompanyLogin() {
                     className="input"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
                     required
                     disabled={submitting}
                   />
@@ -109,7 +113,11 @@ function CompanyLogin() {
             </label>
 
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-              {submitting ? "Signing in…" : <>Sign in <Icon name="arrow_right" size={16} /></>}
+              {submitting ? (
+                <ContainerSpinner inline size={20} label="Signing in…" />
+              ) : (
+                <>Sign in <Icon name="arrow_right" size={16} /></>
+              )}
             </button>
           </form>
 
@@ -120,18 +128,9 @@ function CompanyLogin() {
 
         <div className={styles.bottom}>
           <span>&copy; {new Date().getFullYear()} Takhlees</span>
-          <Link to="/contact" style={{ color: "var(--gray-500)", textDecoration: "none" }}>Need help?</Link>
+          <Link to="/contact" style={{ color: "var(--ink-faint)", textDecoration: "none" }}>Need help?</Link>
         </div>
       </section>
-
-      <AuthVisual
-        heading="Receive verified requests and get paid faster."
-        lead="Manage every accepted shipment, update status, and watch revenue land — from one screen."
-        quote="The verification step is the difference. Our clients trust us more because Takhlees vouched for us first."
-        person="Hanan Ali"
-        meta="Founder, Alex Maritime Logistics"
-        initials="HA"
-      />
     </div>
   );
 }

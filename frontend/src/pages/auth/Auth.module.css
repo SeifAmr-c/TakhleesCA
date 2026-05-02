@@ -1,13 +1,15 @@
 .shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: center;
   background: var(--paper);
 }
 
 .formSide {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  width: 100%;
   padding: 28px 40px;
   overflow-y: auto;
 }
@@ -15,12 +17,26 @@
 .brandRow {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   margin-bottom: auto;
   text-decoration: none;
   color: var(--navy);
   font-weight: 700;
   font-size: 18px;
+}
+
+.brandText {
+  font-family: var(--font-serif, "Playfair Display", "Georgia", serif);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft, #1f4f8a) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding: 4px 0;
 }
 
 .brandRow .logo {
@@ -261,9 +277,6 @@
 }
 
 @media (max-width: 880px) {
-  .shell {
-    grid-template-columns: 1fr;
-  }
   .visualSide {
     display: none;
   }

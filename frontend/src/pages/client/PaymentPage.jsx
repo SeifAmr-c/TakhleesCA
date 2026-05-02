@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { submitPayment } from "../../api/payments.js";
 
 function PaymentPage() {
@@ -44,7 +46,7 @@ function PaymentPage() {
       subtitle={`Application #${applicationId} — funds are held until the company confirms completion.`}
       role="Client"
     >
-      <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 24 }}>
+      <Reveal as="div" style={{ maxWidth: 880, margin: "0 auto", display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 24 }}>
         <div>
           <div className="card" style={{ padding: 20, marginBottom: 16 }}>
             <div className="timeline">
@@ -58,7 +60,7 @@ function PaymentPage() {
           {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
           {success && <div className="banner-success"><Icon name="check" size={16} />{success}</div>}
 
-          <form className="card-glow" style={{ padding: 28 }} onSubmit={handleSubmit} noValidate>
+          <form className="card card-pad-lg" onSubmit={handleSubmit} noValidate>
             <h3 className="card-title">Card details</h3>
             <p className="card-subtitle">We use bank-grade encryption — your details never touch our servers.</p>
 
@@ -86,9 +88,23 @@ function PaymentPage() {
               </div>
 
               <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-                {submitting ? "Processing…" : <>Pay EGP 1,280 <Icon name="arrow_right" size={16} /></>}
+                {submitting ? (
+                  <ContainerSpinner inline size={20} label="Processing…" />
+                ) : (
+                  <>Pay EGP 1,280 <Icon name="arrow_right" size={16} /></>
+                )}
               </button>
-              <div className="muted" style={{ textAlign: "center", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              <div
+                style={{
+                  textAlign: "center",
+                  fontSize: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  justifyContent: "center",
+                  color: "var(--ink-faint)",
+                }}
+              >
                 <Icon name="shield" size={13} /> Secured by 256-bit TLS · PCI-DSS compliant
               </div>
             </div>
@@ -96,41 +112,58 @@ function PaymentPage() {
         </div>
 
         <aside>
-          <div className="card-glow" style={{ position: "sticky", top: 88, padding: 24 }}>
+          <div className="card" style={{ position: "sticky", top: 88, padding: 24 }}>
             <h3 className="card-title">Order summary</h3>
             <p className="card-subtitle">Application #{applicationId}</p>
 
             <div className="stack" style={{ gap: 10, fontSize: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted">Service fee</span>
-                <span style={{ color: "var(--gray-800)" }}>EGP 1,200.00</span>
+                <span style={{ color: "var(--ink-faint)" }}>Service fee</span>
+                <span className="mono tabular" style={{ color: "var(--ink)" }}>EGP 1,200.00</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted">Platform fee</span>
-                <span style={{ color: "var(--gray-800)" }}>EGP 80.00</span>
+                <span style={{ color: "var(--ink-faint)" }}>Platform fee</span>
+                <span className="mono tabular" style={{ color: "var(--ink)" }}>EGP 80.00</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted">VAT</span>
-                <span style={{ color: "var(--gray-800)" }}>Included</span>
+                <span style={{ color: "var(--ink-faint)" }}>VAT</span>
+                <span style={{ color: "var(--ink)" }}>Included</span>
               </div>
             </div>
 
             <hr className="divider" />
 
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 18, color: "var(--navy)" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontWeight: 600,
+                fontSize: 18,
+                color: "var(--ink)",
+                letterSpacing: "-0.01em",
+              }}
+            >
               <span>Total due</span>
-              <span>EGP 1,280.00</span>
+              <span className="mono tabular">EGP 1,280.00</span>
             </div>
 
             <hr className="divider" />
 
-            <div className="muted" style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
-              <Icon name="check" size={14} color="var(--success)" />
+            <div
+              style={{
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                color: "var(--ink-faint)",
+              }}
+            >
+              <Icon name="check" size={14} color="var(--signal-go)" />
               Held until milestone "Released"
             </div>
           </div>
         </aside>
-      </div>
+      </Reveal>
     </DashboardLayout>
   );
 }

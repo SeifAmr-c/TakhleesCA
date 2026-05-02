@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies } from "../../api/companies.js";
 
 const FALLBACK = [
@@ -35,18 +37,23 @@ function CompanyCard({ c }) {
           <div className="avatar avatar-lg">{initials || "T"}</div>
           <div>
             <div className="row" style={{ gap: 6, marginBottom: 4 }}>
-              <span className="badge badge-success"><Icon name="shield" size={11} /> Verified</span>
+              <span className="badge badge-success">
+                <Icon name="shield" size={11} /> Verified
+              </span>
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>{c.Name}</div>
-            <div className="muted" style={{ fontSize: 13 }}>{c.City || "—"}</div>
+            <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>{c.City || "—"}</div>
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div className="row" style={{ justifyContent: "flex-end", gap: 4, color: "var(--accent-dark)" }}>
-            <Icon name="star" size={14} color="var(--accent)" />
-            <strong style={{ color: "var(--navy)" }}>{c.Rating || "—"}</strong>
+          <div
+            className="row"
+            style={{ justifyContent: "flex-end", gap: 4, color: "var(--safety-700)" }}
+          >
+            <Icon name="star" size={14} color="var(--safety)" />
+            <strong style={{ color: "var(--ink)" }}>{c.Rating || "—"}</strong>
           </div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+          <div style={{ fontSize: 12, marginTop: 2, color: "var(--ink-faint)" }}>
             {c.Reviews ? `${c.Reviews} reviews` : "New"}
           </div>
         </div>
@@ -55,7 +62,9 @@ function CompanyCard({ c }) {
       <hr className="divider" />
 
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <div className="muted" style={{ fontSize: 13 }}>{c.Services || "Logistics services"}</div>
+        <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+          {c.Services || "Logistics services"}
+        </div>
         {c.Specialty && <span className="badge badge-neutral">{c.Specialty}</span>}
       </div>
     </Link>
@@ -79,7 +88,7 @@ function BrowseCompanies() {
         setCompanies(list.length ? list : FALLBACK);
       } catch {
         if (!active) return;
-        setError("Couldn’t reach the server — showing sample listings.");
+        setError("Couldn't reach the server — showing sample listings.");
         setCompanies(FALLBACK);
       } finally {
         if (active) setLoading(false);
@@ -99,13 +108,29 @@ function BrowseCompanies() {
 
   return (
     <PublicLayout>
-      <section style={{ background: "var(--paper)", padding: "48px 0 24px" }}>
+      <section
+        style={{
+          background: "var(--surface)",
+          borderBottom: "1px solid var(--line)",
+          padding: "48px 0 24px",
+        }}
+      >
         <div className="container">
           <span className="eyebrow">Marketplace</span>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+              gap: 16,
+            }}
+          >
             <div>
-              <h1 className="h2" style={{ marginBottom: 4 }}>Verified clearance companies</h1>
-              <p className="muted" style={{ margin: 0 }}>
+              <h1 className="h2" style={{ marginBottom: 4 }}>
+                Verified clearance companies
+              </h1>
+              <p style={{ margin: 0, color: "var(--ink-soft)" }}>
                 {filtered.length} {filtered.length === 1 ? "company" : "companies"} matching your filters
               </p>
             </div>
@@ -139,15 +164,30 @@ function BrowseCompanies() {
           {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
 
           {loading ? (
-            <p className="muted">Loading companies…</p>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                padding: "56px 0",
+              }}
+            >
+              <ContainerSpinner size={88} label="Loading companies" />
+            </div>
           ) : filtered.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: 48 }}>
-              <p className="muted">No matches for your filters.</p>
+              <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+                No matches for your filters.
+              </p>
             </div>
           ) : (
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
-              {filtered.map((c) => <CompanyCard key={c.CompanyID} c={c} />)}
-            </div>
+            <Reveal as="div">
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
+              >
+                {filtered.map((c) => <CompanyCard key={c.CompanyID} c={c} />)}
+              </div>
+            </Reveal>
           )}
         </div>
       </section>

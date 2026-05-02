@@ -1,7 +1,9 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { logout } from "../api/auth.js";
+import { clearAuth } from "../api/authState.js";
 import Icon from "./Icon.jsx";
+import logo from "../assets/logo.png";
 
 function DashboardLayout({ title, subtitle, role, actions, children }) {
   const navigate = useNavigate();
@@ -10,6 +12,7 @@ function DashboardLayout({ title, subtitle, role, actions, children }) {
     try {
       await logout();
     } finally {
+      clearAuth();
       navigate("/login", { replace: true });
     }
   };
@@ -18,26 +21,26 @@ function DashboardLayout({ title, subtitle, role, actions, children }) {
     <>
       <nav className="topnav">
         <div className="container topnav-inner">
-          <Link to="/" className="topnav-brand">
-            <span className="logo">
-              <Icon name="anchor" size={18} />
+          <Link to="/" className="topnav-brand" aria-label="Takhlees, home">
+            <span className="logo-mark">
+              <img src={logo} alt="" />
             </span>
             <span>Takhlees</span>
             {role && (
-              <span className="badge badge-dark" style={{ marginLeft: 6 }}>
+              <span className="badge badge-dark" style={{ marginLeft: 8 }}>
                 {role}
               </span>
             )}
           </Link>
           <div className="topnav-links">
             <Link to="/tracking" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Icon name="package" size={16} /> Shipments
+              <Icon name="package" size={14} /> Shipments
             </Link>
             <Link to="/companies" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <Icon name="building" size={16} /> Companies
+              <Icon name="building" size={14} /> Companies
             </Link>
             <button onClick={handleLogout} className="btn btn-ghost btn-sm" style={{ gap: 6 }}>
-              <Icon name="logout" size={16} /> Sign out
+              <Icon name="logout" size={14} /> Sign out
             </button>
           </div>
         </div>

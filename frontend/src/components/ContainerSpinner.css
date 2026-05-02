@@ -1,0 +1,134 @@
+/* ============================================================
+   ContainerSpinner — staggered piece-snap shipping container
+   Uses ease-out-quart only. No bounce, no elastic.
+   ============================================================ */
+
+.cs {
+  --cs-size: 88px;
+  --cs-piece-color: var(--harbor-800);
+  --cs-piece-shadow: var(--harbor-950);
+  --cs-spark-color: var(--safety);
+  --cs-label-color: var(--ink-faint);
+
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  font-family: var(--font-mono);
+}
+
+.cs--inline {
+  flex-direction: row;
+  gap: 12px;
+  padding: 0;
+}
+
+.cs--on-dark {
+  --cs-piece-color: oklch(85% 0.025 245);
+  --cs-piece-shadow: oklch(60% 0.06 245);
+  --cs-label-color: oklch(100% 0 0 / 0.62);
+}
+
+.cs__svg {
+  width: var(--cs-size);
+  height: calc(var(--cs-size) * 0.55);
+  overflow: visible;
+  display: block;
+}
+
+.cs__svg rect {
+  fill: var(--cs-piece-color);
+}
+
+.cs__body rect {
+  fill: var(--cs-piece-color);
+}
+
+.cs__body line {
+  stroke: var(--cs-piece-shadow);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.cs__cap--r line {
+  stroke: var(--cs-piece-shadow);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.cs__spark {
+  fill: var(--cs-spark-color);
+  filter: drop-shadow(0 0 4px oklch(72% 0.18 65 / 0.55));
+  transform-origin: 110px 32px;
+}
+
+.cs__label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cs-label-color);
+}
+
+.cs--inline .cs__label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+/* ----- per-piece animations, all 2s ease-out-quart loops ----- */
+
+.cs__bottom { animation: cs-bottom 2.0s var(--ease-out-quart, cubic-bezier(0.22, 1, 0.36, 1)) infinite; }
+.cs__cap--l { animation: cs-cap-l  2.0s var(--ease-out-quart, cubic-bezier(0.22, 1, 0.36, 1)) infinite; }
+.cs__cap--r { animation: cs-cap-r  2.0s var(--ease-out-quart, cubic-bezier(0.22, 1, 0.36, 1)) infinite; }
+.cs__body   { animation: cs-body   2.0s var(--ease-out-quart, cubic-bezier(0.22, 1, 0.36, 1)) infinite; }
+.cs__top    { animation: cs-top    2.0s var(--ease-out-quart, cubic-bezier(0.22, 1, 0.36, 1)) infinite; }
+.cs__spark  { animation: cs-spark  2.0s var(--ease-out-quart, cubic-bezier(0.22, 1, 0.36, 1)) infinite; }
+
+@keyframes cs-bottom {
+  0%        { transform: translateY(28px); opacity: 0; }
+  10%, 88%  { transform: translateY(0);    opacity: 1; }
+  100%      { transform: translateY(0);    opacity: 0; }
+}
+@keyframes cs-cap-l {
+  0%, 10%   { transform: translateX(-26px); opacity: 0; }
+  24%, 88%  { transform: translateX(0);     opacity: 1; }
+  100%      { transform: translateX(0);     opacity: 0; }
+}
+@keyframes cs-cap-r {
+  0%, 10%   { transform: translateX(26px); opacity: 0; }
+  24%, 88%  { transform: translateX(0);    opacity: 1; }
+  100%      { transform: translateX(0);    opacity: 0; }
+}
+@keyframes cs-body {
+  0%, 24%   { transform: translateY(-22px); opacity: 0; }
+  40%, 88%  { transform: translateY(0);     opacity: 1; }
+  100%      { transform: translateY(0);     opacity: 0; }
+}
+@keyframes cs-top {
+  0%, 40%   { transform: translateY(-30px); opacity: 0; }
+  56%, 88%  { transform: translateY(0);     opacity: 1; }
+  100%      { transform: translateY(0);     opacity: 0; }
+}
+@keyframes cs-spark {
+  0%, 56%   { opacity: 0; transform: scale(0.4); }
+  66%       { opacity: 1; transform: scale(1.5); }
+  76%, 88%  { opacity: 0.95; transform: scale(1); }
+  100%      { opacity: 0; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs__bottom,
+  .cs__cap--l,
+  .cs__cap--r,
+  .cs__body,
+  .cs__top,
+  .cs__spark {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}

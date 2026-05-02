@@ -2,11 +2,13 @@ import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { register } from "../../api/auth.js";
 import { registerCompany } from "../../api/companies.js";
-import AuthVisual from "../../components/AuthVisual.jsx";
+import { createDocumentRecord } from "../../api/documents.js";
 import Icon from "../../components/Icon.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
 const extractErrorMessage = (err) => {
   const data = err?.response?.data;
@@ -24,6 +26,7 @@ function CompanyRegister() {
     ContactFirstName: "", ContactLastName: "",
     Email: "", Password: "",
   });
+  const [document, setDocument] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -31,6 +34,23 @@ function CompanyRegister() {
   const navigate = useNavigate();
 
   const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const onPickDocument = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return setDocument(null);
+    if (file.type !== "application/pdf") {
+      setError("Commercial registration must be a PDF.");
+      e.target.value = "";
+      return setDocument(null);
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError("Document must be 5 MB or smaller.");
+      e.target.value = "";
+      return setDocument(null);
+    }
+    setError("");
+    setDocument(file);
+  };
 
   const validate = () => {
     if (form.CompanyName.trim().length < 2) return "Company name is required.";
@@ -41,6 +61,7 @@ function CompanyRegister() {
     if (form.Password.length < 8) return "Password must be at least 8 characters long.";
     if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password))
       return "Password must contain at least one letter and one number.";
+    if (!document) return "Please attach your commercial registration document (PDF).";
     return null;
   };
 
@@ -61,9 +82,11 @@ function CompanyRegister() {
       });
       if (!userRes?.ok) {
         setError(userRes?.message || "Account creation failed.");
-        setSubmitting(false);
         return;
       }
+
+      const newUserId = userRes?.data?.user?.UserID ?? null;
+
       try {
         await registerCompany({
           Name: form.CompanyName.trim(),
@@ -72,6 +95,15 @@ function CompanyRegister() {
           OwnerEmail: form.Email.trim(),
         });
       } catch { /* swallow — backend may not yet have /company POST */ }
+
+      if (document && newUserId) {
+        try {
+          await createDocumentRecord({
+            DocType: `CommercialRegistration:${document.name}`,
+            ClientID: newUserId,
+          });
+        } catch { /* document metadata is best-effort */ }
+      }
 
       setSuccess("Company submitted for verification. Sign in once approved.");
       setTimeout(() => navigate("/company/login", { replace: true }), 1500);
@@ -85,9 +117,8 @@ function CompanyRegister() {
   return (
     <div className={styles.shell}>
       <section className={styles.formSide}>
-        <Link to="/" className={styles.brandRow}>
-          <span className="logo"><Icon name="anchor" size={18} /></span>
-          Takhlees
+        <Link to="/" className={styles.brandRow} aria-label="Takhlees, home">
+          <span className={styles.brandText}>Takhlees</span>
         </Link>
 
         <div className={`${styles.formInner} ${styles.formInnerWide}`}>
@@ -172,6 +203,7 @@ function CompanyRegister() {
                     onChange={update("Password")}
                     required
                     disabled={submitting}
+                    placeholder="At least 8 characters with a number"
                   />
                 </div>
                 <button type="button" className={styles.togglePassword} onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
@@ -181,8 +213,27 @@ function CompanyRegister() {
               <span className="hint">Minimum 8 characters with at least one letter and one number.</span>
             </label>
 
+            <label className="field">
+              <span className="field-label">Commercial registration (PDF)</span>
+              <input
+                type="file"
+                accept="application/pdf"
+                className="input"
+                onChange={onPickDocument}
+                required
+                disabled={submitting}
+              />
+              <span className="hint">
+                {document ? `Selected: ${document.name}` : "PDF only, up to 5 MB."}
+              </span>
+            </label>
+
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-              {submitting ? "Submitting…" : <>Submit for verification <Icon name="arrow_right" size={16} /></>}
+              {submitting ? (
+                <ContainerSpinner inline size={20} label="Submitting…" />
+              ) : (
+                <>Submit for verification <Icon name="arrow_right" size={16} /></>
+              )}
             </button>
           </form>
 
@@ -191,15 +242,6 @@ function CompanyRegister() {
           </p>
         </div>
       </section>
-
-      <AuthVisual
-        heading="Get verified. Receive your first request in days."
-        lead="Our team reviews submissions Sun–Thu. Once approved, you’re live in the marketplace and can accept verified shipments."
-        quote="We doubled our monthly volume in our first quarter on Takhlees. The platform takes care of trust and payments — we just clear cargo."
-        person="Hanan Ali"
-        meta="Founder, Alex Maritime Logistics"
-        initials="HA"
-      />
     </div>
   );
 }

@@ -1,12 +1,15 @@
 import React from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import Icon from "./Icon.jsx";
+import logo from "../assets/logo.png";
+import { useAuth, clearAuth } from "../api/authState.js";
+import { logout as apiLogout } from "../api/auth.js";
 
 function Brand() {
   return (
-    <Link to="/" className="topnav-brand">
-      <span className="logo">
-        <Icon name="anchor" size={18} />
+    <Link to="/" className="topnav-brand" aria-label="Takhlees, home">
+      <span className="logo-mark">
+        <img src={logo} alt="" />
       </span>
       <span>Takhlees</span>
     </Link>
@@ -14,6 +17,20 @@ function Brand() {
 }
 
 function PublicLayout({ children }) {
+  const auth = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await apiLogout();
+    } catch {
+      /* server-side cookie may already be gone — keep going */
+    } finally {
+      clearAuth();
+      navigate("/", { replace: true });
+    }
+  };
+
   return (
     <>
       <nav className="topnav">
@@ -24,11 +41,25 @@ function PublicLayout({ children }) {
             <NavLink to="/about">About</NavLink>
             <NavLink to="/contact">Contact</NavLink>
             <div className="topnav-cta">
-              <Link to="/login" className="btn btn-secondary btn-sm">Sign in</Link>
-              <Link to="/register" className="btn btn-primary btn-sm">
-                Get started
-                <Icon name="arrow_right" size={16} />
-              </Link>
+              {auth ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="btn btn-secondary btn-sm"
+                  style={{ gap: 6 }}
+                >
+                  <Icon name="logout" size={14} />
+                  Sign out
+                </button>
+              ) : (
+                <>
+                  <Link to="/login" className="btn btn-secondary btn-sm">Sign in</Link>
+                  <Link to="/register" className="btn btn-secondary btn-sm">
+                    Get started
+                    <Icon name="arrow_right" size={14} />
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -46,10 +77,16 @@ function PublicLayout({ children }) {
             }}
           >
             <div>
-              <Brand />
-              <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginTop: 12, maxWidth: 280, lineHeight: 1.6 }}>
-                Port clearance and logistics, simplified. Connecting importers
-                with verified clearance specialists.
+              <p
+                style={{
+                  color: "oklch(100% 0 0 / 0.6)",
+                  fontSize: 14,
+                  maxWidth: 320,
+                  lineHeight: 1.6,
+                }}
+              >
+                Instrumented port clearance for Egyptian importers and exporters.
+                Verified agencies, escrowed payments, live status from gate-in to release.
               </p>
             </div>
             <div>
@@ -66,15 +103,31 @@ function PublicLayout({ children }) {
             </div>
             <div>
               <h4>Legal</h4>
-              <a href="#">Privacy</a>
-              <a href="#">Terms</a>
-              <a href="#">Cookies</a>
+              <Link to="/legal/privacy">Privacy</Link>
+              <Link to="/legal/terms">Terms</Link>
             </div>
           </div>
-          <hr style={{ border: 0, borderTop: "1px solid rgba(255,255,255,0.08)", margin: "32px 0 20px" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
-            <span>&copy; {new Date().getFullYear()} Takhlees. All rights reserved.</span>
-            <span>Built for the Egyptian logistics industry · Made in Cairo</span>
+          <hr
+            style={{
+              border: 0,
+              borderTop: "1px solid oklch(100% 0 0 / 0.08)",
+              margin: "40px 0 20px",
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              textAlign: "center",
+              fontSize: 12,
+              fontFamily: "var(--font-mono)",
+              letterSpacing: "0.04em",
+              color: "oklch(100% 0 0 / 0.5)",
+            }}
+          >
+            <span>
+              &copy; {new Date().getFullYear()} TAKHLEES · ALL RIGHTS RESERVED
+            </span>
           </div>
         </div>
       </footer>

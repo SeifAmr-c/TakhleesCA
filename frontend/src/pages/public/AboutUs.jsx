@@ -1,6 +1,7 @@
 import React from "react";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
+import Reveal from "../../components/Reveal.jsx";
 
 const VALUES = [
   { icon: "shield", title: "Trust", body: "Every company on the platform is verified before going live." },
@@ -9,7 +10,7 @@ const VALUES = [
 ];
 
 const STATS = [
-  { value: "2024", label: "Founded" },
+  { value: "2026", label: "Founded" },
   { value: "180+", label: "Partner companies" },
   { value: "12K+", label: "Shipments cleared" },
   { value: "Egypt-wide", label: "Coverage" },
@@ -20,74 +21,133 @@ function AboutUs() {
     <PublicLayout>
       <section className="hero hero-pad" style={{ paddingBottom: 64 }}>
         <div className="container container-narrow" style={{ textAlign: "center" }}>
-          <span className="badge badge-glass" style={{ marginBottom: 18 }}>
-            <Icon name="anchor" size={14} /> About Takhlees
+          <span
+            className="eyebrow eyebrow-accent fade-up stagger-1"
+            style={{ color: "var(--safety)", justifyContent: "center", display: "inline-flex" }}
+          >
+            About Takhlees
           </span>
-          <h1 className="h1 gradient-text" style={{ marginBottom: 16 }}>
+          <h1
+            className="h1 fade-up stagger-2"
+            style={{
+              color: "oklch(98% 0.005 245)",
+              marginBottom: 16,
+              fontSize: "clamp(36px, 4.6vw, 52px)",
+            }}
+          >
             Built so cross-border trade can finally move at internet speed.
           </h1>
-          <p className="lead" style={{ color: "rgba(255,255,255,0.82)", fontSize: 19 }}>
-            We’re a team of operators, engineers, and logistics veterans
+          <p
+            className="lead fade-up stagger-3"
+            style={{ color: "oklch(100% 0 0 / 0.74)", fontSize: 18 }}
+          >
+            We&rsquo;re a team of operators, engineers, and logistics veterans
             building the trust layer between importers, exporters, and the
             clearance specialists who move their cargo through Egyptian ports.
           </p>
         </div>
       </section>
 
-      <section style={{ padding: "0 0 64px", marginTop: -48 }}>
+      <Reveal as="section" style={{ padding: "0 0 64px", marginTop: -48 }}>
         <div className="container">
-          <div className="card-glow card-pad-lg" style={{ padding: 32 }}>
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
-              {STATS.map((s) => (
-                <div key={s.label} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: "var(--navy)", letterSpacing: "-0.02em" }}>
+          <div className="card card-pad-lg">
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 0,
+              }}
+            >
+              {STATS.map((s, i) => (
+                <div
+                  key={s.label}
+                  style={{
+                    textAlign: "center",
+                    paddingLeft: i === 0 ? 0 : 16,
+                    borderLeft: i === 0 ? "none" : "1px solid var(--line)",
+                  }}
+                >
+                  <div
+                    className="mono tabular"
+                    style={{
+                      fontSize: 26,
+                      fontWeight: 600,
+                      color: "var(--ink)",
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
                     {s.value}
                   </div>
-                  <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{s.label}</div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      color: "var(--ink-faint)",
+                      marginTop: 6,
+                    }}
+                  >
+                    {s.label}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      </section>
+      </Reveal>
 
-      <section className="section">
+      <Reveal as="section" className="section">
         <div className="container container-narrow">
           <span className="eyebrow">Our mission</span>
           <h2 className="h2">Clarity at every step of port clearance.</h2>
           <p className="lead">
-            Port clearance has historically been opaque — phone calls, lost
-            paperwork, unclear pricing. We’re building the digital
+            Port clearance has historically been opaque &mdash; phone calls, lost
+            paperwork, unclear pricing. We&rsquo;re building the digital
             infrastructure that brings it into the open: vetted partners,
-            transparent fees, and a single dashboard from “submitted” to
-            “released.”
+            transparent fees, and a single dashboard from &ldquo;submitted&rdquo;
+            to &ldquo;released.&rdquo;
           </p>
           <p className="lead" style={{ marginTop: 16 }}>
             We started Takhlees because we lived this problem ourselves.
-            Importers shouldn’t lose deals waiting on faxes. Clearance
-            specialists shouldn’t spend half their week chasing payments. And
-            no one should wonder where their cargo is.
+            Importers shouldn&rsquo;t lose deals waiting on faxes. Clearance
+            specialists shouldn&rsquo;t spend half their week chasing payments.
+            And no one should wonder where their cargo is.
           </p>
         </div>
-      </section>
+      </Reveal>
 
-      <section style={{ background: "var(--gray-50)" }} className="section">
+      <Reveal
+        as="section"
+        className="section"
+        style={{
+          background: "var(--steel-50)",
+          borderTop: "1px solid var(--line)",
+          borderBottom: "1px solid var(--line)",
+        }}
+      >
         <div className="container">
           <div style={{ textAlign: "center", maxWidth: 600, margin: "0 auto 40px" }}>
             <span className="eyebrow">What we value</span>
             <h2 className="h2">Three principles, every day</h2>
           </div>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}
+          >
             {VALUES.map((v) => (
               <div key={v.title} className="card card-hover">
                 <div className="card-icon"><Icon name={v.icon} /></div>
                 <h3 className="h3">{v.title}</h3>
-                <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>{v.body}</p>
+                <p style={{ margin: 0, lineHeight: 1.6, color: "var(--ink-soft)" }}>
+                  {v.body}
+                </p>
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </Reveal>
     </PublicLayout>
   );
 }

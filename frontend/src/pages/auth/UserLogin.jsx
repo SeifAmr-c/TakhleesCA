@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { login } from "../../api/auth.js";
-import AuthVisual from "../../components/AuthVisual.jsx";
+import { setAuth } from "../../api/authState.js";
 import Icon from "../../components/Icon.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
 
 const extractErrorMessage = (err) => {
@@ -35,6 +36,11 @@ function UserLogin() {
       const res = await login({ email: email.trim(), password });
       if (res?.ok) {
         const role = res?.data?.user?.Type;
+        setAuth({
+          kind: "user",
+          role: role === "A" ? "admin" : "client",
+          user: res?.data?.user || null,
+        });
         navigate(role === "A" ? "/admin/dashboard" : "/tracking", { replace: true });
         return;
       }
@@ -49,9 +55,8 @@ function UserLogin() {
   return (
     <div className={styles.shell}>
       <section className={styles.formSide}>
-        <Link to="/" className={styles.brandRow}>
-          <span className="logo"><Icon name="anchor" size={18} /></span>
-          Takhlees
+        <Link to="/" className={styles.brandRow} aria-label="Takhlees, home">
+          <span className={styles.brandText}>Takhlees</span>
         </Link>
 
         <div className={styles.formInner}>
@@ -119,7 +124,11 @@ function UserLogin() {
             </label>
 
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-              {submitting ? "Signing in…" : <>Sign in <Icon name="arrow_right" size={16} /></>}
+              {submitting ? (
+                <ContainerSpinner inline size={20} label="Signing in…" />
+              ) : (
+                <>Sign in <Icon name="arrow_right" size={16} /></>
+              )}
             </button>
           </form>
 
@@ -130,11 +139,9 @@ function UserLogin() {
 
         <div className={styles.bottom}>
           <span>&copy; {new Date().getFullYear()} Takhlees</span>
-          <Link to="/contact" style={{ color: "var(--gray-500)", textDecoration: "none" }}>Need help?</Link>
+          <Link to="/contact" style={{ color: "var(--ink-faint)", textDecoration: "none" }}>Need help?</Link>
         </div>
       </section>
-
-      <AuthVisual />
     </div>
   );
 }

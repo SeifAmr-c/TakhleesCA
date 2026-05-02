@@ -6,7 +6,9 @@
       "Bash(echo \"---exit:$?---\")",
       "Bash(timeout 4 node src/index.js)",
       "Bash(timeout 4 npm start)",
-      "Bash(npx skills *)"
+      "Bash(npx skills *)",
+      "Bash(BROWSER=none PORT=3001 npx react-scripts start)",
+      "Bash(npm run *)"
     ]
   }
 }

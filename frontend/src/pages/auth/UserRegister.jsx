@@ -1,11 +1,17 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { register } from "../../api/auth.js";
-import AuthVisual from "../../components/AuthVisual.jsx";
+import { createDocumentRecord } from "../../api/documents.js";
 import Icon from "../../components/Icon.jsx";
+import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const PHONE_LEN = 11;
+const NID_LEN = 14;
+const MAX_PDF_BYTES = 5 * 1024 * 1024;
+
+const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
 
 const extractErrorMessage = (err) => {
   const data = err?.response?.data;
@@ -20,8 +26,9 @@ const extractErrorMessage = (err) => {
 function UserRegister() {
   const [form, setForm] = useState({
     FirstName: "", LastName: "", Email: "", Password: "",
-    Type: "C", PhoneNumber: "", NationalID: "", Address: "",
+    PhoneNumber: "", NationalID: "", Address: "",
   });
+  const [document, setDocument] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -30,6 +37,26 @@ function UserRegister() {
 
   const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  const updateDigits = (key, max) => (e) =>
+    setForm((f) => ({ ...f, [key]: onlyDigits(e.target.value).slice(0, max) }));
+
+  const onPickDocument = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return setDocument(null);
+    if (file.type !== "application/pdf") {
+      setError("National ID document must be a PDF.");
+      e.target.value = "";
+      return setDocument(null);
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError("Document must be 5 MB or smaller.");
+      e.target.value = "";
+      return setDocument(null);
+    }
+    setError("");
+    setDocument(file);
+  };
+
   const validate = () => {
     if (form.FirstName.trim().length < 2) return "First name must be at least 2 characters.";
     if (form.LastName.trim().length < 2) return "Last name must be at least 2 characters.";
@@ -37,11 +64,12 @@ function UserRegister() {
     if (form.Password.length < 8) return "Password must be at least 8 characters long.";
     if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password))
       return "Password must contain at least one letter and one number.";
-    if (form.Type === "C") {
-      if (!form.PhoneNumber.trim()) return "Phone number is required.";
-      if (!form.NationalID.trim()) return "National ID is required.";
-      if (!form.Address.trim()) return "Address is required.";
-    }
+    if (form.PhoneNumber.length !== PHONE_LEN || !/^\d+$/.test(form.PhoneNumber))
+      return `Phone number must be exactly ${PHONE_LEN} digits.`;
+    if (form.NationalID.length !== NID_LEN || !/^\d+$/.test(form.NationalID))
+      return `National ID must be exactly ${NID_LEN} digits.`;
+    if (!form.Address.trim()) return "Address is required.";
+    if (!document) return "Please attach your National ID document (PDF).";
     return null;
   };
 
@@ -51,27 +79,37 @@ function UserRegister() {
     const v = validate();
     if (v) return setError(v);
 
-    const payload = form.Type === "C"
-      ? {
-          FirstName: form.FirstName.trim(), LastName: form.LastName.trim(),
-          Email: form.Email.trim(), Password: form.Password, Type: "C",
-          PhoneNumber: form.PhoneNumber.trim(), NationalID: form.NationalID.trim(),
-          Address: form.Address.trim(),
-        }
-      : {
-          FirstName: form.FirstName.trim(), LastName: form.LastName.trim(),
-          Email: form.Email.trim(), Password: form.Password, Type: "A",
-        };
+    const payload = {
+      FirstName: form.FirstName.trim(),
+      LastName: form.LastName.trim(),
+      Email: form.Email.trim(),
+      Password: form.Password,
+      Type: "C",
+      PhoneNumber: form.PhoneNumber,
+      NationalID: form.NationalID,
+      Address: form.Address.trim(),
+    };
 
     setSubmitting(true);
     try {
       const res = await register(payload);
-      if (res?.ok) {
-        setSuccess("Account created. Redirecting to sign in…");
-        setTimeout(() => navigate("/login", { replace: true }), 1200);
+      if (!res?.ok) {
+        setError(res?.message || "Registration failed.");
         return;
       }
-      setError(res?.message || "Registration failed.");
+
+      const newUserId = res?.data?.user?.UserID ?? null;
+      if (document && newUserId) {
+        try {
+          await createDocumentRecord({
+            DocType: `NationalID:${document.name}`,
+            ClientID: newUserId,
+          });
+        } catch { /* document metadata is best-effort */ }
+      }
+
+      setSuccess("Account created. Redirecting to sign in…");
+      setTimeout(() => navigate("/login", { replace: true }), 1200);
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -82,9 +120,8 @@ function UserRegister() {
   return (
     <div className={styles.shell}>
       <section className={styles.formSide}>
-        <Link to="/" className={styles.brandRow}>
-          <span className="logo"><Icon name="anchor" size={18} /></span>
-          Takhlees
+        <Link to="/" className={styles.brandRow} aria-label="Takhlees, home">
+          <span className={styles.brandText}>Takhlees</span>
         </Link>
 
         <div className={`${styles.formInner} ${styles.formInnerWide}`}>
@@ -104,17 +141,6 @@ function UserRegister() {
           {success && <div className="banner-success"><Icon name="check" size={16} />{success}</div>}
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
-            <div className={styles.tabs}>
-              <label className={`${styles.tab} ${form.Type === "C" ? styles.tabActive : ""}`}>
-                <input type="radio" value="C" checked={form.Type === "C"} onChange={update("Type")} style={{ display: "none" }} />
-                Client
-              </label>
-              <label className={`${styles.tab} ${form.Type === "A" ? styles.tabActive : ""}`}>
-                <input type="radio" value="A" checked={form.Type === "A"} onChange={update("Type")} style={{ display: "none" }} />
-                Admin
-              </label>
-            </div>
-
             <div className={styles.row}>
               <label className="field">
                 <span className="field-label">First name</span>
@@ -157,33 +183,71 @@ function UserRegister() {
               <span className="hint">Minimum 8 characters with at least one letter and one number.</span>
             </label>
 
-            {form.Type === "C" && (
-              <>
-                <div className={styles.row}>
-                  <label className="field">
-                    <span className="field-label">Phone</span>
-                    <div className="input-with-icon">
-                      <span className="input-icon"><Icon name="phone" size={16} /></span>
-                      <input type="tel" className="input" value={form.PhoneNumber} onChange={update("PhoneNumber")} required disabled={submitting} />
-                    </div>
-                  </label>
-                  <label className="field">
-                    <span className="field-label">National ID</span>
-                    <input className="input" inputMode="numeric" value={form.NationalID} onChange={update("NationalID")} required disabled={submitting} />
-                  </label>
+            <div className={styles.row}>
+              <label className="field">
+                <span className="field-label">Phone</span>
+                <div className="input-with-icon">
+                  <span className="input-icon"><Icon name="phone" size={16} /></span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="\d{11}"
+                    maxLength={PHONE_LEN}
+                    className="input"
+                    value={form.PhoneNumber}
+                    onChange={updateDigits("PhoneNumber", PHONE_LEN)}
+                    placeholder="11-digit phone number"
+                    required
+                    disabled={submitting}
+                  />
                 </div>
-                <label className="field">
-                  <span className="field-label">Address</span>
-                  <div className="input-with-icon">
-                    <span className="input-icon"><Icon name="pin" size={16} /></span>
-                    <input className="input" value={form.Address} onChange={update("Address")} required disabled={submitting} />
-                  </div>
-                </label>
-              </>
-            )}
+                <span className="hint">Exactly {PHONE_LEN} digits, numbers only.</span>
+              </label>
+              <label className="field">
+                <span className="field-label">National ID</span>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  pattern="\d{14}"
+                  maxLength={NID_LEN}
+                  value={form.NationalID}
+                  onChange={updateDigits("NationalID", NID_LEN)}
+                  placeholder="14-digit national ID"
+                  required
+                  disabled={submitting}
+                />
+                <span className="hint">Exactly {NID_LEN} digits, numbers only.</span>
+              </label>
+            </div>
+            <label className="field">
+              <span className="field-label">Address</span>
+              <div className="input-with-icon">
+                <span className="input-icon"><Icon name="pin" size={16} /></span>
+                <input className="input" value={form.Address} onChange={update("Address")} required disabled={submitting} />
+              </div>
+            </label>
+
+            <label className="field">
+              <span className="field-label">National ID document (PDF)</span>
+              <input
+                type="file"
+                accept="application/pdf"
+                className="input"
+                onChange={onPickDocument}
+                required
+                disabled={submitting}
+              />
+              <span className="hint">
+                {document ? `Selected: ${document.name}` : "PDF only, up to 5 MB."}
+              </span>
+            </label>
 
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-              {submitting ? "Creating account…" : <>Create account <Icon name="arrow_right" size={16} /></>}
+              {submitting ? (
+                <ContainerSpinner inline size={20} label="Creating account…" />
+              ) : (
+                <>Create account <Icon name="arrow_right" size={16} /></>
+              )}
             </button>
           </form>
 
@@ -194,18 +258,9 @@ function UserRegister() {
 
         <div className={styles.bottom}>
           <span>&copy; {new Date().getFullYear()} Takhlees</span>
-          <span style={{ color: "var(--gray-500)" }}>By continuing, you agree to our terms.</span>
+          <span style={{ color: "var(--ink-faint)" }}>By continuing, you agree to our terms.</span>
         </div>
       </section>
-
-      <AuthVisual
-        heading="Join 12,000+ shipments cleared on Takhlees."
-        lead="Verified companies, real-time milestones, transparent pricing — all from one dashboard."
-        quote="Finally, no spreadsheets. Status updates land in the dashboard before my team even asks."
-        person="Mostafa Younes"
-        meta="Procurement, Redwave Trading"
-        initials="MY"
-      />
     </div>
   );
 }
