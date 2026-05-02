@@ -13,9 +13,11 @@ export function createApplicationTable() {
             CompanyID INT NOT NULL,
             CategoryID INT NOT NULL,
             ClientID INT NOT NULL,
+            PortID INT NOT NULL,
             FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID),
             FOREIGN KEY (CategoryID) REFERENCES Category(CategoryID),
-            FOREIGN KEY (ClientID) REFERENCES Client(ClientID)
+            FOREIGN KEY (ClientID) REFERENCES Client(ClientID),
+            FOREIGN KEY (PortID) REFERENCES Port(PortID)
         )
     `;
 

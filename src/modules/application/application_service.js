@@ -14,8 +14,8 @@ export const createApplication = (req, res) => {
                 });
             }
             db.query(
-                "INSERT INTO application (`PaymentType`,`CompletionDate`,`SubmissionDate`,`TrackingNumber`,`Status`,`DeliveryAddress`,`CompanyID`,`CategoryID`,`ClientID`) VALUES (?,?,?,?,?,?,?,?,?)",
-                [req.body.PaymentType, req.body.CompletionDate, req.body.SubmissionDate, req.body.TrackingNumber, req.body.Status, req.body.DeliveryAddress, req.body.CompanyID, req.body.CategoryID, req.body.ClientID],
+                "INSERT INTO application (`PaymentType`,`CompletionDate`,`SubmissionDate`,`TrackingNumber`,`Status`,`DeliveryAddress`,`CompanyID`,`CategoryID`,`ClientID`,`PortID`) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                [req.body.PaymentType, req.body.CompletionDate, req.body.SubmissionDate, req.body.TrackingNumber, req.body.Status, req.body.DeliveryAddress, req.body.CompanyID, req.body.CategoryID, req.body.ClientID, req.body.PortID],
                 function (err, result) {
                     if (err) throw err;
                     res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
@@ -66,7 +66,7 @@ export const searchApplication = (req, res) => {
     const keyvalue = req.query.keyvalue;
     const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-    const allowedColumns = ['ApplicationID', 'PaymentType', 'TrackingNumber', 'Status', 'CompanyID', 'CategoryID', 'ClientID'];
+    const allowedColumns = ['ApplicationID', 'PaymentType', 'TrackingNumber', 'Status', 'CompanyID', 'CategoryID', 'ClientID', 'PortID'];
     if (!allowedColumns.includes(keyword)) {
         return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
     }
@@ -107,10 +107,11 @@ export const updateApplication = (req, res) => {
         const CompanyID        = req.body.CompanyID        !== undefined ? req.body.CompanyID        : existing.CompanyID;
         const ClientID         = req.body.ClientID         !== undefined ? req.body.ClientID         : existing.ClientID;
         const CategoryID       = req.body.CategoryID       !== undefined ? req.body.CategoryID       : existing.CategoryID;
+        const PortID           = req.body.PortID           !== undefined ? req.body.PortID           : existing.PortID;
 
         db.query(
-            "UPDATE application SET `PaymentType` = ?, `CompletionDate` = ?, `SubmissionDate` = ?, `TrackingNumber` = ?, `Status` = ?, `DeliveryAddress` = ?, `CompanyID` = ?, `CategoryID` = ?, `ClientID` = ? WHERE ApplicationID = ?",
-            [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompanyID, CategoryID, ClientID, ApplicationID],
+            "UPDATE application SET `PaymentType` = ?, `CompletionDate` = ?, `SubmissionDate` = ?, `TrackingNumber` = ?, `Status` = ?, `DeliveryAddress` = ?, `CompanyID` = ?, `CategoryID` = ?, `ClientID` = ?, `PortID` = ? WHERE ApplicationID = ?",
+            [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompanyID, CategoryID, ClientID, PortID, ApplicationID],
             function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] is Updated Successfully" });

@@ -38,7 +38,7 @@ Despite the names, **services are the request handlers** (controllers in the con
 
 - `src/Database/connection.js` exports a `db` object backed by a `mysql2/promise` connection pool. `db.query(sql, params, cb)` is a callback-style shim over the pool so existing callback-style services keep working unchanged; `db.pool` exposes the raw promise pool for transactions (`getConnection()` / `beginTransaction()`).
 - `src/Database/*.model.js` files each export a `create<Name>Table()` function that issues `CREATE TABLE IF NOT EXISTS` (and occasionally `ALTER TABLE` to evolve columns — see `client.model.js`). They are pure DDL helpers, not data-access objects.
-- `src/Database/setup_db.js` orchestrates table creation in FK-dependency order: `User` → `Client`/`Admin` → `Company`/`CompanyEmployee` → `Category`/`Application` → `Review`/`Document`/`Payment`/`CompanyPayment`. Preserve this order if adding new tables with FKs.
+- `src/Database/setup_db.js` orchestrates table creation in FK-dependency order: `User` → `Client`/`Admin` → `Company` → `Port`/`CompanyPort` → `Category`/`Application` → `Review`/`Document`/`Payment`/`CompanyPayment`. Preserve this order if adding new tables with FKs.
 - Multi-statement writes (`register`, `deleteUser`) use `db.pool.getConnection()` + `beginTransaction` / `commit` / `rollback`. Follow the same pattern for any new write that touches more than one table.
 
 ### User model: single-table inheritance
