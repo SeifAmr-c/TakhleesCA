@@ -35,9 +35,10 @@ function statusToStepIndex(status) {
   }
 }
 
-function ShipmentRow({ a }) {
+function ShipmentRow({ a, onLeaveReview }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
   const stepIdx = statusToStepIndex(a.Status);
+  const isCompleted = a.Status === "completed";
   const initials = (a.CompanyName || "TK").split(" ").slice(0, 2).map(w => w[0]).join("");
 
   return (
@@ -83,6 +84,21 @@ function ShipmentRow({ a }) {
           </div>
         ))}
       </div>
+
+      {isCompleted && (
+        <>
+          <hr className="divider" />
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="btn btn-accent btn-sm"
+              onClick={() => onLeaveReview?.(a)}
+            >
+              <Icon name="star" size={14} /> Leave a review
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -91,6 +107,10 @@ function Tracking() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewSent, setReviewSent] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -167,9 +187,119 @@ function Tracking() {
       ) : (
         <Reveal as="div">
           <div className="grid">
-            {applications.map((a) => <ShipmentRow key={a.ApplicationID} a={a} />)}
+            {applications.map((a) => (
+              <ShipmentRow
+                key={a.ApplicationID}
+                a={a}
+                onLeaveReview={(row) => {
+                  setReviewTarget(row);
+                  setReviewRating(5);
+                  setReviewText("");
+                  setReviewSent(false);
+                }}
+              />
+            ))}
           </div>
         </Reveal>
+      )}
+
+      {reviewTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setReviewTarget(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "oklch(15% 0.045 245 / 0.45)",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            zIndex: 100,
+          }}
+        >
+          <div
+            className="card card-pad-lg"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 480 }}
+          >
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+              <div>
+                <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
+                  Application #{reviewTarget.ApplicationID}
+                </span>
+                <h3 className="card-title">Leave a review</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setReviewTarget(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            {reviewSent ? (
+              <div className="banner-success" style={{ marginTop: 8 }}>
+                <Icon name="check" size={16} />
+                Thanks — your review for {reviewTarget.CompanyName} has been recorded.
+              </div>
+            ) : (
+              <div className="stack" style={{ marginTop: 8 }}>
+                <div className="field">
+                  <span className="field-label">Rating</span>
+                  <div className="row" style={{ gap: 4 }}>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setReviewRating(i)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: 4, height: 32, width: 32 }}
+                        aria-label={`${i} star${i > 1 ? "s" : ""}`}
+                      >
+                        <Icon
+                          name="star"
+                          size={20}
+                          color={i <= reviewRating ? "var(--accent)" : "var(--line-strong)"}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="field">
+                  <span className="field-label">Tell others how it went</span>
+                  <textarea
+                    className="textarea"
+                    rows={4}
+                    placeholder="What did the company do well? Anything they could improve?"
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                  />
+                </label>
+
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setReviewTarget(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setReviewSent(true)}
+                    disabled={!reviewText.trim()}
+                  >
+                    <Icon name="check" size={14} /> Submit review
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

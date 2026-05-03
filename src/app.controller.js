@@ -25,17 +25,17 @@ export const bootstrap = () => {
 
   const MySQLStore = MySQLStoreFactory(session);
   const sessionStore = new MySQLStore({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'Takhlees',
     createDatabaseTable: true,
   });
 
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = false;
 
   app.use(session({
-    secret: process.env.SESSION_SECRET,
+    secret: 'dev-local-session-secret-change-me',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,

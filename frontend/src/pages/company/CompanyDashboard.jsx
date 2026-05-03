@@ -6,26 +6,37 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listApplications, updateApplicationStatus } from "../../api/applications.js";
 
 const FALLBACK_PENDING = [
-  { ApplicationID: 2001, ClientName: "Ahmed Mahmoud", ClientInitials: "AM", Origin: "Shanghai", Destination: "Alexandria", CategoryName: "Imports", CreatedAt: "2026-04-29", Amount: 1280, CargoType: "Electronics" },
-  { ApplicationID: 2002, ClientName: "Sara Khaled", ClientInitials: "SK", Origin: "Hamburg", Destination: "Alexandria", CategoryName: "Re-export", CreatedAt: "2026-04-28", Amount: 980, CargoType: "Auto parts" },
-  { ApplicationID: 2003, ClientName: "Omar Said", ClientInitials: "OS", Origin: "Mumbai", Destination: "Suez", CategoryName: "Imports", CreatedAt: "2026-04-27", Amount: 1620, CargoType: "Textiles" },
+  { ApplicationID: 2001, ClientName: "Ahmed Mahmoud", ClientInitials: "AM", Origin: "Shanghai", Destination: "Alexandria", DeliveryAddress: "23 Ramses St., Cairo", CategoryName: "Imports", CreatedAt: "2026-04-29", Amount: 1280, CargoType: "Electronics", Status: "pending" },
+  { ApplicationID: 2002, ClientName: "Sara Khaled", ClientInitials: "SK", Origin: "Hamburg", Destination: "Alexandria", DeliveryAddress: "5 Corniche, Alexandria", CategoryName: "Re-export", CreatedAt: "2026-04-28", Amount: 980, CargoType: "Auto parts", Status: "pending" },
+  { ApplicationID: 2003, ClientName: "Omar Said", ClientInitials: "OS", Origin: "Mumbai", Destination: "Suez", DeliveryAddress: "Industrial Zone, Suez", CategoryName: "Imports", CreatedAt: "2026-04-27", Amount: 1620, CargoType: "Textiles", Status: "pending" },
 ];
 
 const FALLBACK_ACCEPTED = [
-  { ApplicationID: 2050, ClientName: "Mohamed Lotfy", ClientInitials: "ML", Status: "in_progress", CategoryName: "Exports", Amount: 1450, Origin: "Alexandria", Destination: "Genoa", CreatedAt: "2026-04-22" },
-  { ApplicationID: 2055, ClientName: "Layla Hassan", ClientInitials: "LH", Status: "completed", CategoryName: "Imports", Amount: 1100, Origin: "Yokohama", Destination: "Alexandria", CreatedAt: "2026-04-15" },
-  { ApplicationID: 2060, ClientName: "Yusuf Adel", ClientInitials: "YA", Status: "in_progress", CategoryName: "Personal effects", Amount: 720, Origin: "Marseille", Destination: "Alexandria", CreatedAt: "2026-04-25" },
-  { ApplicationID: 2065, ClientName: "Nour Ibrahim", ClientInitials: "NI", Status: "in_progress", CategoryName: "Imports", Amount: 2100, Origin: "Rotterdam", Destination: "Damietta", CreatedAt: "2026-04-26" },
+  { ApplicationID: 2050, ClientName: "Mohamed Lotfy", ClientInitials: "ML", Status: "in_progress", CategoryName: "Exports", Amount: 1450, Origin: "Alexandria", Destination: "Genoa", DeliveryAddress: "Genova Free Port", CreatedAt: "2026-04-22" },
+  { ApplicationID: 2055, ClientName: "Layla Hassan", ClientInitials: "LH", Status: "completed", CategoryName: "Imports", Amount: 1100, Origin: "Yokohama", Destination: "Alexandria", DeliveryAddress: "12 Smouha, Alexandria", CreatedAt: "2026-04-15" },
+  { ApplicationID: 2060, ClientName: "Yusuf Adel", ClientInitials: "YA", Status: "in_progress", CategoryName: "Personal effects", Amount: 720, Origin: "Marseille", Destination: "Alexandria", DeliveryAddress: "8 Stanley, Alexandria", CreatedAt: "2026-04-25" },
+  { ApplicationID: 2065, ClientName: "Nour Ibrahim", ClientInitials: "NI", Status: "in_progress", CategoryName: "Imports", Amount: 2100, Origin: "Rotterdam", Destination: "Damietta", DeliveryAddress: "Damietta Industrial Zone", CreatedAt: "2026-04-26" },
+  { ApplicationID: 2070, ClientName: "Hana Refaat", ClientInitials: "HR", Status: "rejected", CategoryName: "Re-export", Amount: 540, Origin: "Istanbul", Destination: "Port Said", DeliveryAddress: "—", CreatedAt: "2026-04-12" },
 ];
 
 const STATUS_BADGE = {
   pending: ["badge-pending", "Pending"],
+  accepted: ["badge-info", "Accepted"],
   in_progress: ["badge-info", "In progress"],
   completed: ["badge-success", "Completed"],
   rejected: ["badge-error", "Cancelled"],
 };
 
 const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
+
+const FILTERS = [
+  { id: "all", label: "All" },
+  { id: "pending", label: "Pending" },
+  { id: "accepted", label: "Accepted" },
+  { id: "in_progress", label: "In progress" },
+  { id: "completed", label: "Completed" },
+  { id: "rejected", label: "Cancelled" },
+];
 
 function statusToStepIndex(status) {
   switch (status) {
@@ -203,12 +214,85 @@ function AcceptedCard({ a, onStatusChange, busy }) {
   );
 }
 
+/* ---------- All received applications row ---------- */
+function ApplicationRow({ a }) {
+  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
+  const stepIdx = statusToStepIndex(a.Status);
+
+  return (
+    <div className="card">
+      <div
+        className="row"
+        style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}
+      >
+        <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+          <div className="avatar avatar-lg">{a.ClientInitials || "C"}</div>
+          <div>
+            <div className="row-meta">
+              #{a.ApplicationID} · {a.CategoryName || "Service"} · {a.CreatedAt || "—"}
+            </div>
+            <div className="row-title" style={{ fontSize: 15 }}>
+              {a.ClientName || `Client #${a.ClientID}`}
+            </div>
+            <div
+              className="muted"
+              style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+            >
+              <Icon name="ship" size={13} />
+              {a.Origin || "—"} → {a.Destination || "—"}
+              {a.DeliveryAddress && (
+                <>
+                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Icon name="pin" size={12} />
+                    {a.DeliveryAddress}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: "right", minWidth: 140 }}>
+          <span className={`badge ${badgeClass}`}>
+            <span className="dot" />
+            {label}
+          </span>
+          <div
+            className="mono tabular"
+            style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}
+          >
+            EGP {Number(a.Amount || 0).toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      <hr className="divider" />
+
+      <div className="timeline">
+        {STEPS.map((s, i) => (
+          <div
+            key={s}
+            className={`timeline-step ${i < stepIdx ? "done" : i === stepIdx ? "active" : ""}`}
+          >
+            <span className="dot" />
+            {s}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CompanyDashboard() {
   const [pending, setPending] = useState([]);
   const [accepted, setAccepted] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
+
+  // Filter + search for the all-applications monitor
+  const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -233,6 +317,40 @@ function CompanyDashboard() {
     })();
     return () => { active = false; };
   }, []);
+
+  const allApplications = useMemo(() => {
+    const pendingNormalized = pending.map((p) => ({ ...p, Status: p.Status || "pending" }));
+    return [...pendingNormalized, ...accepted];
+  }, [pending, accepted]);
+
+  const filteredApplications = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return allApplications.filter((a) => {
+      if (filter !== "all" && a.Status !== filter) return false;
+      if (!q) return true;
+      const haystack = [
+        a.ClientName,
+        a.CategoryName,
+        a.Origin,
+        a.Destination,
+        a.DeliveryAddress,
+        a.CargoType,
+        String(a.ApplicationID),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [allApplications, filter, query]);
+
+  const counts = useMemo(() => {
+    const c = { all: allApplications.length };
+    for (const f of FILTERS.slice(1)) {
+      c[f.id] = allApplications.filter((a) => a.Status === f.id).length;
+    }
+    return c;
+  }, [allApplications]);
 
   const totals = useMemo(() => {
     const acceptedSum = accepted.reduce((s, a) => s + (Number(a.Amount) || 0), 0);
@@ -300,7 +418,7 @@ function CompanyDashboard() {
   return (
     <DashboardLayout
       title="Company dashboard"
-      subtitle="Today, 30 April 2026 · Revenue, requests and active jobs at a glance."
+      subtitle="Monitor every application your company has received — pending, in progress and completed."
       role="Company"
       actions={
         <button className="btn btn-secondary btn-sm">
@@ -402,7 +520,7 @@ function CompanyDashboard() {
       </Reveal>
 
       {/* Accepted applications */}
-      <Reveal as="section" style={{ marginBottom: 24 }}>
+      <Reveal as="section" style={{ marginBottom: 36 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <div>
             <span className="eyebrow">In flight</span>
@@ -424,6 +542,100 @@ function CompanyDashboard() {
                 busy={busyId === a.ApplicationID}
                 onStatusChange={handleStatusChange}
               />
+            ))}
+          </div>
+        )}
+      </Reveal>
+
+      {/* All received applications — monitor */}
+      <Reveal as="section" style={{ marginBottom: 24 }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div>
+            <span className="eyebrow">Monitor</span>
+            <h2 className="h3" style={{ fontSize: 20 }}>All received applications</h2>
+          </div>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {filteredApplications.length} of {allApplications.length} shown
+          </span>
+        </div>
+
+        {/* Filter + search bar */}
+        <div
+          className="card"
+          style={{
+            padding: 14,
+            marginBottom: 16,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div className="row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
+            {FILTERS.map((f) => {
+              const active = filter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  className={`btn btn-sm ${active ? "btn-primary" : "btn-ghost"}`}
+                  style={{ gap: 6 }}
+                >
+                  {f.label}
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      opacity: 0.85,
+                      padding: "1px 6px",
+                      borderRadius: "var(--radius-xs)",
+                      background: active
+                        ? "oklch(100% 0 0 / 0.15)"
+                        : "var(--steel-100)",
+                      color: active ? "#fff" : "var(--ink-faint)",
+                      border: active
+                        ? "1px solid oklch(100% 0 0 / 0.20)"
+                        : "1px solid var(--line)",
+                    }}
+                  >
+                    {counts[f.id] ?? 0}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            className="input-with-icon"
+            style={{ minWidth: 260, flex: "0 1 320px" }}
+          >
+            <span className="input-icon"><Icon name="search" size={16} /></span>
+            <input
+              className="input"
+              placeholder="Search by client, ID, route, address…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+            <ContainerSpinner size={72} label="Loading applications" />
+          </div>
+        ) : filteredApplications.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: 48 }}>
+            <Icon name="package" size={28} color="var(--ink-faint)" />
+            <h3 className="h3" style={{ marginTop: 12 }}>No applications match</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Try a different filter or clear the search.
+            </p>
+          </div>
+        ) : (
+          <div className="grid">
+            {filteredApplications.map((a) => (
+              <ApplicationRow key={`row-${a.ApplicationID}`} a={a} />
             ))}
           </div>
         )}

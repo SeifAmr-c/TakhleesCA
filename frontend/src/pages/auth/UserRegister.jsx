@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { register } from "../../api/auth.js";
-import { createDocumentRecord } from "../../api/documents.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
@@ -9,7 +8,6 @@ import styles from "./Auth.module.css";
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const PHONE_LEN = 11;
 const NID_LEN = 14;
-const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
 const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
 
@@ -28,7 +26,6 @@ function UserRegister() {
     FirstName: "", LastName: "", Email: "", Password: "",
     PhoneNumber: "", NationalID: "", Address: "",
   });
-  const [document, setDocument] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -39,23 +36,6 @@ function UserRegister() {
 
   const updateDigits = (key, max) => (e) =>
     setForm((f) => ({ ...f, [key]: onlyDigits(e.target.value).slice(0, max) }));
-
-  const onPickDocument = (e) => {
-    const file = e.target.files?.[0] ?? null;
-    if (!file) return setDocument(null);
-    if (file.type !== "application/pdf") {
-      setError("National ID document must be a PDF.");
-      e.target.value = "";
-      return setDocument(null);
-    }
-    if (file.size > MAX_PDF_BYTES) {
-      setError("Document must be 5 MB or smaller.");
-      e.target.value = "";
-      return setDocument(null);
-    }
-    setError("");
-    setDocument(file);
-  };
 
   const validate = () => {
     if (form.FirstName.trim().length < 2) return "First name must be at least 2 characters.";
@@ -69,7 +49,6 @@ function UserRegister() {
     if (form.NationalID.length !== NID_LEN || !/^\d+$/.test(form.NationalID))
       return `National ID must be exactly ${NID_LEN} digits.`;
     if (!form.Address.trim()) return "Address is required.";
-    if (!document) return "Please attach your National ID document (PDF).";
     return null;
   };
 
@@ -96,16 +75,6 @@ function UserRegister() {
       if (!res?.ok) {
         setError(res?.message || "Registration failed.");
         return;
-      }
-
-      const newUserId = res?.data?.user?.UserID ?? null;
-      if (document && newUserId) {
-        try {
-          await createDocumentRecord({
-            DocType: `NationalID:${document.name}`,
-            ClientID: newUserId,
-          });
-        } catch { /* document metadata is best-effort */ }
       }
 
       setSuccess("Account created. Redirecting to sign in…");
@@ -225,21 +194,6 @@ function UserRegister() {
                 <span className="input-icon"><Icon name="pin" size={16} /></span>
                 <input className="input" value={form.Address} onChange={update("Address")} required disabled={submitting} />
               </div>
-            </label>
-
-            <label className="field">
-              <span className="field-label">National ID document (PDF)</span>
-              <input
-                type="file"
-                accept="application/pdf"
-                className="input"
-                onChange={onPickDocument}
-                required
-                disabled={submitting}
-              />
-              <span className="hint">
-                {document ? `Selected: ${document.name}` : "PDF only, up to 5 MB."}
-              </span>
             </label>
 
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
