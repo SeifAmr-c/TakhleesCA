@@ -1,33 +1,128 @@
 import db from '../../Database/connection.js';
+import bcrypt from 'bcrypt';
 
-export const createCompany = (req, res) => {
-    console.log("Post Request Received");
-    db.query("SELECT CompanyID FROM company WHERE ContactEmail = ?", [req.body.ContactEmail], function (err, emailResult) {
-        if (err) throw err;
-        if (emailResult.length > 0) {
+const SALT_ROUNDS = 10;
+
+const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
+
+const isValidEmail = (email) =>
+  typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const sanitizeCompany = (row) => {
+  if (!row) return null;
+  const { Password, ...rest } = row;
+  return rest;
+};
+
+const runQuery = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.query(sql, params, (err, result) => {
+      if (err) return reject(err);
+      resolve(result);
+    });
+  });
+
+export const createCompany = async (req, res, next) => {
+    try {
+        const Name = String(req.body.Name ?? "").trim();
+        const ContactEmail = normalizeEmail(req.body.ContactEmail);
+        const FoundingDate = req.body.FoundingDate;
+        const Password = String(req.body.Password ?? "");
+        const Comm = req.body.Comm;
+        const RegistrationDate = req.body.RegistrationDate;
+        const TaxNumber = req.body.TaxNumber;
+        const VerficationStatus = req.body.VerficationStatus ?? "Pending";
+
+        if (!Name) return res.status(400).json({ ok: false, message: "Name is required." });
+        if (!isValidEmail(ContactEmail)) return res.status(400).json({ ok: false, message: "Valid contact email is required." });
+        if (!Password || Password.length < 8) return res.status(400).json({ ok: false, message: "Password must be at least 8 characters long." });
+
+        const existingEmail = await runQuery(
+            "SELECT CompanyID FROM company WHERE ContactEmail = ? LIMIT 1",
+            [ContactEmail]
+        );
+        if (existingEmail.length > 0) {
             return res.status(409).json({
-                "Status": "Error",
-                "Message": "Contact Email [" + req.body.ContactEmail + "] already exists. Please use a unique Contact Email."
+                Status: "Error",
+                Message: `Contact Email [${ContactEmail}] already exists. Please use a unique Contact Email.`,
             });
         }
-        db.query("SELECT CompanyID FROM company WHERE TaxNumber = ?", [req.body.TaxNumber], function (err, taxResult) {
-            if (err) throw err;
-            if (taxResult.length > 0) {
-                return res.status(409).json({
-                    "Status": "Error",
-                    "Message": "Tax Number [" + req.body.TaxNumber + "] already exists. Please use a unique Tax Number."
-                });
-            }
-            db.query(
-                "INSERT INTO company (`Name`,`ContactEmail`,`FoundingDate`,`Password`,`Comm`,`RegistrationDate`,`TaxNumber`,`VerficationStatus`) VALUES (?,?,?,?,?,?,?,?)",
-                [req.body.Name, req.body.ContactEmail, req.body.FoundingDate, req.body.Password, req.body.Comm, req.body.RegistrationDate, req.body.TaxNumber, req.body.VerficationStatus],
-                function (err, result) {
-                    if (err) throw err;
-                    res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-                    console.log("Record Added " + result.insertId);
-                }
-            );
+
+        const existingTax = await runQuery(
+            "SELECT CompanyID FROM company WHERE TaxNumber = ? LIMIT 1",
+            [TaxNumber]
+        );
+        if (existingTax.length > 0) {
+            return res.status(409).json({
+                Status: "Error",
+                Message: `Tax Number [${TaxNumber}] already exists. Please use a unique Tax Number.`,
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(Password, SALT_ROUNDS);
+
+        const result = await runQuery(
+            "INSERT INTO company (`Name`,`ContactEmail`,`FoundingDate`,`Password`,`Comm`,`RegistrationDate`,`TaxNumber`,`VerficationStatus`) VALUES (?,?,?,?,?,?,?,?)",
+            [Name, ContactEmail, FoundingDate, hashedPassword, Comm, RegistrationDate, TaxNumber, VerficationStatus]
+        );
+
+        return res.status(201).json({
+            Status: "OK",
+            Message: `Record Added Successfully with Id ${result.insertId}`,
         });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const loginCompany = async (req, res, next) => {
+    try {
+        const ContactEmail = normalizeEmail(req.body.ContactEmail);
+        const Password = String(req.body.Password ?? "");
+
+        if (!ContactEmail || !ContactEmail.includes("@")) {
+            return res.status(400).json({ ok: false, message: "Valid contact email is required." });
+        }
+        if (!Password) {
+            return res.status(400).json({ ok: false, message: "Password is required." });
+        }
+
+        const rows = await runQuery(
+            "SELECT * FROM company WHERE ContactEmail = ? LIMIT 1",
+            [ContactEmail]
+        );
+        if (!rows.length) {
+            return res.status(401).json({ ok: false, message: "Invalid email or password." });
+        }
+
+        const companyRow = rows[0];
+
+        const isMatch = await bcrypt.compare(Password, companyRow.Password);
+        if (!isMatch) {
+            return res.status(401).json({ ok: false, message: "Invalid email or password." });
+        }
+
+        req.session.companyId = companyRow.CompanyID;
+        req.session.role = "company";
+
+        return res.status(200).json({
+            ok: true,
+            message: "Logged in successfully.",
+            data: { company: sanitizeCompany(companyRow) },
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const logoutCompany = (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ ok: false, message: "Logout failed." });
+        }
+        res.clearCookie('connect.sid');
+        return res.status(200).json({ ok: true, message: "Logged out successfully." });
     });
 };
 

@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import InteractiveMap from "../../components/InteractiveMap.jsx";
+import { searchCompanies } from "../../api/companies.js";
 
 /* ----------------------------------------------------------------
    Operational data shown on the landing page is illustrative — it
@@ -655,6 +656,28 @@ function Flow() {
    Verified agencies — show trust, never claim it
    ================================================================ */
 function Verified() {
+  const [verifiedCount, setVerifiedCount] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const rows = await searchCompanies({
+          keyword: "VerficationStatus",
+          keyvalue: "Verified",
+        });
+        if (!active) return;
+        setVerifiedCount(Array.isArray(rows) ? rows.length : 0);
+      } catch {
+        if (!active) return;
+        setVerifiedCount(0);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const countLabel = verifiedCount ?? "—";
+
   return (
     <section className="section">
       <div className="container">
@@ -670,7 +693,7 @@ function Verified() {
         >
           <div>
             <span className="eyebrow">Currently active on the platform</span>
-            <h2 className="h2">184 verified clearance agencies.</h2>
+            <h2 className="h2">{countLabel} verified clearance agencies.</h2>
             <p
               style={{
                 margin: 0,
@@ -685,7 +708,7 @@ function Verified() {
             </p>
           </div>
           <Link to="/companies" className="btn btn-secondary">
-            Browse all 184
+            Browse all {countLabel}
             <Icon name="arrow_right" size={14} />
           </Link>
         </div>

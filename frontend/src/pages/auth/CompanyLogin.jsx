@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { login } from "../../api/auth.js";
+import { loginCompany } from "../../api/companies.js";
 import { setAuth } from "../../api/authState.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -17,7 +17,7 @@ const extractErrorMessage = (err) => {
 };
 
 function CompanyLogin() {
-  const [email, setEmail] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -30,13 +30,18 @@ function CompanyLogin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!email.trim() || !password) return setError("Please enter both email and password.");
+    if (!contactEmail.trim() || !password) return setError("Please enter both email and password.");
     setSubmitting(true);
     try {
-      const res = await login({ email: email.trim(), password });
+      const res = await loginCompany({ contactEmail: contactEmail.trim(), password });
       if (res?.ok) {
-        setAuth({ kind: "company", role: "company" });
-        return navigate("/company/dashboard", { replace: true });
+        setAuth({
+          kind: "company",
+          role: "company",
+          company: res?.data?.company || null,
+        });
+        navigate("/company/dashboard", { replace: true });
+        return;
       }
       setError(res?.message || "Login failed.");
     } catch (err) {
@@ -54,7 +59,7 @@ function CompanyLogin() {
         </Link>
 
         <div className={styles.formInner}>
-          <div className={styles.tabs}>
+          <div className={styles.tabs} role="tablist">
             <NavLink to="/login" className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ""}`}>
               <Icon name="user" size={14} /> Personal
             </NavLink>
@@ -66,7 +71,7 @@ function CompanyLogin() {
           <h1 className={styles.title}>Company sign in</h1>
           <p className={styles.subtitle}>Manage your dashboard, requests, and revenue.</p>
 
-          {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
+          {error && <div className="banner-error" role="alert"><Icon name="bell" size={16} />{error}</div>}
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
             <label className="field">
@@ -78,8 +83,8 @@ function CompanyLogin() {
                   type="email"
                   autoComplete="email"
                   className="input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
                   placeholder="you@company.com"
                   required
                   disabled={submitting}
@@ -106,7 +111,12 @@ function CompanyLogin() {
                     disabled={submitting}
                   />
                 </div>
-                <button type="button" className={styles.togglePassword} onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
+                <button
+                  type="button"
+                  className={styles.togglePassword}
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                >
                   {showPassword ? "Hide" : "Show"}
                 </button>
               </div>

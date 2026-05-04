@@ -4,6 +4,7 @@ import Icon from "./Icon.jsx";
 import logo from "../assets/logo.png";
 import { useAuth, clearAuth } from "../api/authState.js";
 import { logout as apiLogout } from "../api/auth.js";
+import { logoutCompany as apiLogoutCompany } from "../api/companies.js";
 
 function Brand() {
   return (
@@ -22,7 +23,11 @@ function PublicLayout({ children }) {
 
   const handleLogout = async () => {
     try {
-      await apiLogout();
+      if (auth?.kind === "company") {
+        await apiLogoutCompany();
+      } else {
+        await apiLogout();
+      }
     } catch {
       /* server-side cookie may already be gone — keep going */
     } finally {
@@ -92,14 +97,33 @@ function PublicLayout({ children }) {
             <div>
               <h4>Product</h4>
               <Link to="/companies">Browse companies</Link>
-              <Link to="/register">Sign up</Link>
+              {!auth && <Link to="/register">Sign up</Link>}
               <Link to="/company/register">List your company</Link>
             </div>
             <div>
               <h4>Company</h4>
               <Link to="/about">About us</Link>
               <Link to="/contact">Contact</Link>
-              <Link to="/company/login">Company login</Link>
+              {auth ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  style={{
+                    background: "none",
+                    border: 0,
+                    padding: 0,
+                    margin: 0,
+                    cursor: "pointer",
+                    font: "inherit",
+                    color: "inherit",
+                    textAlign: "left",
+                  }}
+                >
+                  Logout
+                </button>
+              ) : (
+                <Link to="/company/login">Company login</Link>
+              )}
             </div>
             <div>
               <h4>Legal</h4>

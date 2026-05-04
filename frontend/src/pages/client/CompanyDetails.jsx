@@ -5,6 +5,7 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { getCompany } from "../../api/companies.js";
+import { useAuth } from "../../api/authState.js";
 
 const FALLBACK = {
   CompanyID: 0,
@@ -26,6 +27,8 @@ const FALLBACK = {
 
 function CompanyDetails() {
   const { companyId } = useParams();
+  const auth = useAuth();
+  const isCompany = auth?.role === "company";
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -94,7 +97,7 @@ function CompanyDetails() {
       </section>
 
       <section style={{ padding: "16px 0 64px" }}>
-        <div className="container" style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: 32 }}>
+        <div className="container" style={{ display: "grid", gridTemplateColumns: isCompany ? "minmax(0, 1fr)" : "minmax(0, 2fr) minmax(0, 1fr)", gap: 32 }}>
           <div>
             <Reveal as="div" className="card card-pad-lg">
               <div className="row" style={{ gap: 20, alignItems: "flex-start" }}>
@@ -199,27 +202,29 @@ function CompanyDetails() {
             )}
           </div>
 
-          <aside>
-            <div className="card" style={{ position: "sticky", top: 88, padding: 24 }}>
-              <h3 className="card-title">Ready to ship?</h3>
-              <p className="card-subtitle">Submit an application and the company will pick it up.</p>
-              <Link to={`/applications/new/${c.CompanyID}`} className="btn btn-primary btn-block btn-lg">
-                Apply for service <Icon name="arrow_right" size={16} />
-              </Link>
-              <hr className="divider" />
-              <div className="stack" style={{ gap: 10 }}>
-                <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
-                  <Icon name="check" size={16} color="var(--signal-go)" /> No charge until accepted
-                </div>
-                <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
-                  <Icon name="check" size={16} color="var(--signal-go)" /> Real-time milestone updates
-                </div>
-                <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
-                  <Icon name="check" size={16} color="var(--signal-go)" /> Secure payment held until release
+          {!isCompany && (
+            <aside>
+              <div className="card" style={{ position: "sticky", top: 88, padding: 24 }}>
+                <h3 className="card-title">Ready to ship?</h3>
+                <p className="card-subtitle">Submit an application and the company will pick it up.</p>
+                <Link to={`/applications/new/${c.CompanyID}`} className="btn btn-primary btn-block btn-lg">
+                  Apply for service <Icon name="arrow_right" size={16} />
+                </Link>
+                <hr className="divider" />
+                <div className="stack" style={{ gap: 10 }}>
+                  <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
+                    <Icon name="check" size={16} color="var(--signal-go)" /> No charge until accepted
+                  </div>
+                  <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
+                    <Icon name="check" size={16} color="var(--signal-go)" /> Real-time milestone updates
+                  </div>
+                  <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
+                    <Icon name="check" size={16} color="var(--signal-go)" /> Secure payment held until release
+                  </div>
                 </div>
               </div>
-            </div>
-          </aside>
+            </aside>
+          )}
         </div>
       </section>
     </PublicLayout>
