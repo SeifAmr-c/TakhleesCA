@@ -18,8 +18,9 @@ export const logoutCompany = async () => {
   return data;
 };
 
-export const listCompanies = async () => {
-  const { data } = await api.get("/company");
+export const listCompanies = async ({ status } = {}) => {
+  const params = status ? { VerficationStatus: status } : undefined;
+  const { data } = await api.get("/company", { params });
   return data;
 };
 

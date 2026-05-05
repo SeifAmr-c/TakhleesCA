@@ -276,6 +276,78 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
+.dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px 20px;
+  border: 2px dashed var(--gray-300, #d4d4d8);
+  border-radius: 12px;
+  background: var(--gray-50, #fafafa);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+
+.dropzone:hover {
+  border-color: var(--navy);
+  background: var(--white, #fff);
+}
+
+.dropzone:focus-within {
+  border-color: var(--navy);
+  background: var(--white, #fff);
+  box-shadow: 0 0 0 3px rgba(31, 79, 138, 0.15);
+}
+
+.dropzoneFilled {
+  border-style: solid;
+  border-color: var(--navy);
+  background: rgba(31, 79, 138, 0.04);
+}
+
+.dropzoneInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dropzoneIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--white, #fff);
+  color: var(--navy);
+  border: 1px solid var(--gray-200, #e5e7eb);
+  margin-bottom: 4px;
+}
+
+.dropzoneTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.dropzoneFilename {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  word-break: break-all;
+  max-width: 100%;
+}
+
+.dropzoneSubtext {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
 @media (max-width: 880px) {
   .visualSide {
     display: none;

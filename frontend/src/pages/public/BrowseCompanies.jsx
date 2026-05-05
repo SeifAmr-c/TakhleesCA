@@ -6,17 +6,6 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies } from "../../api/companies.js";
 
-const FALLBACK = [
-  { CompanyID: 1, Name: "Cairo Clearance Co.", City: "Cairo", Rating: 4.8, Reviews: 142, Services: "Customs · Documentation", Specialty: "Imports" },
-  { CompanyID: 2, Name: "Alex Maritime Logistics", City: "Alexandria", Rating: 4.6, Reviews: 98, Services: "Cargo · Customs", Specialty: "Bulk cargo" },
-  { CompanyID: 3, Name: "Suez Port Solutions", City: "Suez", Rating: 4.4, Reviews: 76, Services: "Inspection · Documentation", Specialty: "Re-export" },
-  { CompanyID: 4, Name: "Damietta Freight", City: "Damietta", Rating: 4.7, Reviews: 64, Services: "Cargo · Documentation", Specialty: "Exports" },
-  { CompanyID: 5, Name: "Nile Customs Co.", City: "Cairo", Rating: 4.5, Reviews: 53, Services: "Customs · Inspection", Specialty: "Pharma" },
-  { CompanyID: 6, Name: "Red Sea Cargo", City: "Hurghada", Rating: 4.3, Reviews: 41, Services: "Marine cargo", Specialty: "Personal effects" },
-];
-
-const FILTERS = ["All", "Cairo", "Alexandria", "Suez", "Damietta"];
-
 function CompanyCard({ c }) {
   const initials = (c.Name || "")
     .split(" ")
@@ -26,6 +15,9 @@ function CompanyCard({ c }) {
     .join("")
     .toUpperCase();
 
+  const about = c.About && c.About.trim() ? c.About.trim() : "";
+  const aboutSnippet = about.length > 120 ? `${about.slice(0, 117)}…` : about;
+
   return (
     <Link
       to={`/companies/${c.CompanyID}`}
@@ -34,7 +26,16 @@ function CompanyCard({ c }) {
     >
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div className="row" style={{ gap: 12 }}>
-          <div className="avatar avatar-lg">{initials || "T"}</div>
+          {c.Logo ? (
+            <img
+              src={c.Logo}
+              alt={`${c.Name} logo`}
+              className="avatar avatar-lg"
+              style={{ objectFit: "cover" }}
+            />
+          ) : (
+            <div className="avatar avatar-lg">{initials || "T"}</div>
+          )}
           <div>
             <div className="row" style={{ gap: 6, marginBottom: 4 }}>
               <span className="badge badge-success">
@@ -42,30 +43,17 @@ function CompanyCard({ c }) {
               </span>
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>{c.Name}</div>
-            <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>{c.City || "—"}</div>
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div
-            className="row"
-            style={{ justifyContent: "flex-end", gap: 4, color: "var(--safety-700)" }}
-          >
-            <Icon name="star" size={14} color="var(--safety)" />
-            <strong style={{ color: "var(--ink)" }}>{c.Rating || "—"}</strong>
-          </div>
-          <div style={{ fontSize: 12, marginTop: 2, color: "var(--ink-faint)" }}>
-            {c.Reviews ? `${c.Reviews} reviews` : "New"}
+            <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>
+              {c.Governorate || c.Address || "—"}
+            </div>
           </div>
         </div>
       </div>
 
       <hr className="divider" />
 
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-          {c.Services || "Logistics services"}
-        </div>
-        {c.Specialty && <span className="badge badge-neutral">{c.Specialty}</span>}
+      <div style={{ fontSize: 13, color: "var(--ink-soft)", minHeight: 38 }}>
+        {aboutSnippet || "This company hasn't added a bio yet."}
       </div>
     </Link>
   );
@@ -82,14 +70,14 @@ function BrowseCompanies() {
     let active = true;
     (async () => {
       try {
-        const data = await listCompanies();
+        const data = await listCompanies({ status: "Verified" });
         if (!active) return;
         const list = Array.isArray(data) ? data : data?.data || [];
-        setCompanies(list.length ? list : FALLBACK);
+        setCompanies(list);
       } catch {
         if (!active) return;
-        setError("Couldn't reach the server — showing sample listings.");
-        setCompanies(FALLBACK);
+        setError("Couldn't reach the server. Please try again shortly.");
+        setCompanies([]);
       } finally {
         if (active) setLoading(false);
       }
@@ -97,12 +85,19 @@ function BrowseCompanies() {
     return () => { active = false; };
   }, []);
 
+  const filters = useMemo(() => {
+    const govs = Array.from(
+      new Set(companies.map((c) => c.Governorate).filter(Boolean))
+    ).sort();
+    return ["All", ...govs];
+  }, [companies]);
+
   const filtered = useMemo(() => {
     return companies.filter((c) => {
-      const cityOk = filter === "All" || c.City === filter;
-      const text = `${c.Name} ${c.City} ${c.Services} ${c.Specialty || ""}`.toLowerCase();
+      const govOk = filter === "All" || c.Governorate === filter;
+      const text = `${c.Name || ""} ${c.Governorate || ""} ${c.Address || ""} ${c.About || ""}`.toLowerCase();
       const queryOk = !query || text.includes(query.toLowerCase());
-      return cityOk && queryOk;
+      return govOk && queryOk;
     });
   }, [companies, filter, query]);
 
@@ -138,24 +133,26 @@ function BrowseCompanies() {
               <span className="input-icon"><Icon name="search" size={16} /></span>
               <input
                 className="input"
-                placeholder="Search by name, city, service…"
+                placeholder="Search by name, governorate, bio…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="row" style={{ marginTop: 24 }}>
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-secondary"}`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
+          {filters.length > 1 && (
+            <div className="row" style={{ marginTop: 24, flexWrap: "wrap" }}>
+              {filters.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-secondary"}`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -176,7 +173,9 @@ function BrowseCompanies() {
           ) : filtered.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: 48 }}>
               <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-                No matches for your filters.
+                {companies.length === 0
+                  ? "No verified companies are listed yet."
+                  : "No matches for your filters."}
               </p>
             </div>
           ) : (

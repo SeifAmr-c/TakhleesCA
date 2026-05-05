@@ -37,7 +37,7 @@ function PublicLayout({ children }) {
   };
 
   return (
-    <>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <nav className="topnav">
         <div className="container topnav-inner">
           <Brand />
@@ -70,7 +70,7 @@ function PublicLayout({ children }) {
         </div>
       </nav>
 
-      <main>{children}</main>
+      <main style={{ flex: 1 }}>{children}</main>
 
       <footer className="site-footer">
         <div className="container">
@@ -98,7 +98,9 @@ function PublicLayout({ children }) {
               <h4>Product</h4>
               <Link to="/companies">Browse companies</Link>
               {!auth && <Link to="/register">Sign up</Link>}
-              <Link to="/company/register">List your company</Link>
+              {auth?.role !== "company" && (
+                <Link to="/company/register">List your company</Link>
+              )}
             </div>
             <div>
               <h4>Company</h4>
@@ -155,7 +157,7 @@ function PublicLayout({ children }) {
           </div>
         </div>
       </footer>
-    </>
+    </div>
   );
 }
 

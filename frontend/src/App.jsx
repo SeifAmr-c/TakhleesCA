@@ -1,5 +1,6 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "./api/authState.js";
 
 import LandingPage from "./pages/public/LandingPage.jsx";
 import AboutUs from "./pages/public/AboutUs.jsx";
@@ -19,6 +20,15 @@ import Tracking from "./pages/client/Tracking.jsx";
 import CompanyDashboard from "./pages/company/CompanyDashboard.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 
+function RequireAuth({ children }) {
+  const auth = useAuth();
+  const location = useLocation();
+  if (!auth?.user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+  return children;
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -37,8 +47,8 @@ function App() {
 
         {/* Client */}
         <Route path="/companies/:companyId" element={<CompanyDetails />} />
-        <Route path="/applications/new" element={<FillApplication />} />
-        <Route path="/applications/new/:companyId" element={<FillApplication />} />
+        <Route path="/applications/new" element={<RequireAuth><FillApplication /></RequireAuth>} />
+        <Route path="/applications/new/:companyId" element={<RequireAuth><FillApplication /></RequireAuth>} />
         <Route path="/payment/:applicationId" element={<PaymentPage />} />
         <Route path="/tracking" element={<Tracking />} />
 

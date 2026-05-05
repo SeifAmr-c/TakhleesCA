@@ -38,7 +38,7 @@ Despite the names, **services are the request handlers** (controllers in the con
 
 - `src/Database/connection.js` exports a `db` object backed by a `mysql2/promise` connection pool. `db.query(sql, params, cb)` is a callback-style shim over the pool so existing callback-style services keep working unchanged; `db.pool` exposes the raw promise pool for transactions (`getConnection()` / `beginTransaction()`).
 - `src/Database/*.model.js` files each export a `create<Name>Table()` function that issues `CREATE TABLE IF NOT EXISTS` (and occasionally `ALTER TABLE` to evolve columns — see `client.model.js`). They are pure DDL helpers, not data-access objects.
-- `src/Database/setup_db.js` orchestrates table creation in FK-dependency order: `User` → `Client`/`Admin` → `Company` → `Port`/`CompanyPort` → `Category`/`Application` → `Review`/`Document`/`Payment`/`CompanyPayment`. Preserve this order if adding new tables with FKs.
+- `src/Database/setup_db.js` orchestrates table creation in FK-dependency order: `User` → `Client`/`Admin` → `SupportTicket` → `Company` → `Port`/`CompanyPort` → `Category`/`CompanyCategory` → `Application` → `Review`/`Document`/`Payment`/`CompanyPayment`. Preserve this order if adding new tables with FKs. The script first opens a bootstrap connection without selecting a database, runs `CREATE DATABASE IF NOT EXISTS Takhlees`, then dynamically imports each `*.model.js` (so `connection.js`'s pool — which pins `database: 'Takhlees'` — only initializes after the DB exists).
 - Multi-statement writes (`register`, `deleteUser`) use `db.pool.getConnection()` + `beginTransaction` / `commit` / `rollback`. Follow the same pattern for any new write that touches more than one table.
 
 ### User model: single-table inheritance
@@ -48,6 +48,13 @@ Despite the names, **services are the request handlers** (controllers in the con
 - `register` (`user_service.js`) inserts into `User` then into either `Client` (with `PhoneNumber`, `NationalID`, `Address`) or `Admin` (with `LastLogin = NOW()`), based on `Type`. Both inserts run inside a transaction.
 - Most user reads use `userSelectSql` — a `LEFT JOIN` of `User` + `Client` + `Admin` — and pass results through `sanitizeUser()` to strip `Password`. Reuse these helpers rather than writing ad-hoc joins.
 - `deleteUser` removes the row from `Client`, `Admin`, and `User` in one transaction (Client/Admin first to satisfy the FK).
+
+### Company model and associative tables
+
+- `Company` columns: `CompanyID` (PK), `Name`, `ContactEmail`, `FoundingDate`, `Password` (bcrypt), `Comm DECIMAL(4,2)`, `RegistrationDate`, `TaxNumber`, `VerficationStatus ENUM('Pending','Verified','Rejected')`, plus the optional profile fields `ComReg VARCHAR(255)`, `Governorate VARCHAR(20)`, `Address VARCHAR(255)`, `About VARCHAR(255)` (all nullable). `createCompany` and `updateCompany` (`company_service.js`) accept these four fields; `updateCompany` follows the read-then-write pattern.
+- Two associative entities link `Company` to other tables — both use composite PKs that are also FKs and follow the same service/controller shape (`create`, `get` with one-or-both-IDs filtering, `search` with whitelisted columns, `delete`; `CompanyCategory` also has `update` for `Price`):
+  - `CompanyPort (CompanyID, PortID)` — mounted at `/companyport`.
+  - `CompanyCategory (CompanyID, CategoryID, Price DECIMAL(7,2) NOT NULL)` — mounted at `/companycategory`. Composite-key fields are not editable via `PUT`; only `Price` is.
 
 ### Auth and sessions
 

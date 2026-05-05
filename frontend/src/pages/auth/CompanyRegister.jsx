@@ -8,6 +8,15 @@ import styles from "./Auth.module.css";
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
 
+const formatTaxNumber = (value) => {
+  const digits = onlyDigits(value).slice(0, 9);
+  const parts = [];
+  if (digits.length > 0) parts.push(digits.slice(0, 3));
+  if (digits.length > 3) parts.push(digits.slice(3, 6));
+  if (digits.length > 6) parts.push(digits.slice(6, 9));
+  return parts.join("-");
+};
+
 const extractErrorMessage = (err) => {
   const data = err?.response?.data;
   if (data?.Message) return data.Message;
@@ -28,17 +37,45 @@ function CompanyRegister() {
     FoundingDate: "",
     Password: "",
     TaxNumber: "",
+    Governorate: "",
+    Address: "",
+    About: "",
   });
+  const [comRegFile, setComRegFile] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
+  const MAX_PDF_BYTES = 5 * 1024 * 1024;
+
+  const handleComRegChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setError("");
+    if (!file) {
+      setComRegFile(null);
+      return;
+    }
+    if (file.type !== "application/pdf") {
+      setError("Commercial registration must be a PDF.");
+      e.target.value = "";
+      setComRegFile(null);
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError("Commercial registration PDF must be 5MB or smaller.");
+      e.target.value = "";
+      setComRegFile(null);
+      return;
+    }
+    setComRegFile(file);
+  };
+
   const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const updateDigits = (key) => (e) =>
-    setForm((f) => ({ ...f, [key]: onlyDigits(e.target.value) }));
+  const handleTaxNumberChange = (e) =>
+    setForm((f) => ({ ...f, TaxNumber: formatTaxNumber(e.target.value) }));
 
   const validate = () => {
     if (form.Name.trim().length < 2) return "Company name is required.";
@@ -48,8 +85,12 @@ function CompanyRegister() {
     if (form.Password.length < 8) return "Password must be at least 8 characters long.";
     if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password))
       return "Password must contain at least one letter and one number.";
-    if (!/^\d+$/.test(form.TaxNumber)) return "Tax number must be digits only.";
-    if (Number(form.TaxNumber) <= 0) return "Tax number must be a positive integer.";
+    const taxDigits = form.TaxNumber.replace(/-/g, "");
+    if (!/^\d{9}$/.test(taxDigits)) return "Tax number must be 9 digits.";
+    if (Number(taxDigits) <= 0) return "Tax number must be a positive integer.";
+    if (!form.Governorate.trim()) return "Governorate is required.";
+    if (!form.Address.trim()) return "Address is required.";
+    if (!comRegFile) return "Commercial registration PDF is required.";
     return null;
   };
 
@@ -66,8 +107,12 @@ function CompanyRegister() {
       Password: form.Password,
       Comm: 10,
       RegistrationDate: todayISO(),
-      TaxNumber: Number(form.TaxNumber),
+      TaxNumber: Number(form.TaxNumber.replace(/-/g, "")),
       VerficationStatus: "Pending",
+      Governorate: form.Governorate.trim(),
+      Address: form.Address.trim(),
+      About: form.About.trim() || "Trusted clearance company on the Takhlees marketplace.",
+      ComReg: comRegFile.name,
     };
 
     setSubmitting(true);
@@ -154,14 +199,14 @@ function CompanyRegister() {
               <input
                 className="input"
                 inputMode="numeric"
-                pattern="\d+"
                 value={form.TaxNumber}
-                onChange={updateDigits("TaxNumber")}
-                placeholder="Numeric tax registration number"
+                onChange={handleTaxNumberChange}
+                maxLength={11}
+                placeholder="123-456-789"
                 required
                 disabled={submitting}
               />
-              <span className="hint">Digits only. Must be unique.</span>
+              <span className="hint">9 digits, formatted as XXX-XXX-XXX. Must be unique.</span>
             </label>
 
             <label className="field">
@@ -185,6 +230,102 @@ function CompanyRegister() {
                 </button>
               </div>
               <span className="hint">Minimum 8 characters with at least one letter and one number.</span>
+            </label>
+
+            <label className="field">
+              <span className="field-label">Governorate</span>
+              <select
+                className="input"
+                value={form.Governorate}
+                onChange={update("Governorate")}
+                required
+                disabled={submitting}
+              >
+                <option value="" disabled>Select a Governorate</option>
+                <option value="Al Daqahliyah">Al Daqahliyah</option>
+                <option value="Red Sea">Red Sea</option>
+                <option value="Al Buhayrah">Al Buhayrah</option>
+                <option value="Al Fayyum">Al Fayyum</option>
+                <option value="Al Gharbiyah">Al Gharbiyah</option>
+                <option value="Alexandria">Alexandria</option>
+                <option value="Ismailia">Ismailia</option>
+                <option value="Giza">Giza</option>
+                <option value="Al Minufiyah">Al Minufiyah</option>
+                <option value="Al Minya">Al Minya</option>
+                <option value="Cairo">Cairo</option>
+                <option value="Al Qalyubiyah">Al Qalyubiyah</option>
+                <option value="Luxor">Luxor</option>
+                <option value="New Valley">New Valley</option>
+                <option value="Suez">Suez</option>
+                <option value="Ash Sharqiyah">Ash Sharqiyah</option>
+                <option value="Aswan">Aswan</option>
+                <option value="Asyut">Asyut</option>
+                <option value="Bani Suwayf">Bani Suwayf</option>
+                <option value="Port Said">Port Said</option>
+                <option value="Damietta">Damietta</option>
+                <option value="South Sinai">South Sinai</option>
+                <option value="Kafr ash Shaykh">Kafr ash Shaykh</option>
+                <option value="Matruh">Matruh</option>
+                <option value="Qina">Qina</option>
+                <option value="North Sinai">North Sinai</option>
+                <option value="Suhaj">Suhaj</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field-label">Address</span>
+              <input
+                className="input"
+                value={form.Address}
+                onChange={update("Address")}
+                maxLength={255}
+                placeholder="Street, building, city"
+                required
+                disabled={submitting}
+              />
+            </label>
+
+            <div className="field">
+              <span className="field-label">Commercial registration (PDF)</span>
+              <label
+                className={`${styles.dropzone} ${comRegFile ? styles.dropzoneFilled : ""}`}
+              >
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className={styles.dropzoneInput}
+                  onChange={handleComRegChange}
+                  disabled={submitting}
+                />
+                <span className={styles.dropzoneIcon} aria-hidden="true">
+                  <Icon name={comRegFile ? "check" : "doc"} size={28} />
+                </span>
+                {comRegFile ? (
+                  <>
+                    <span className={styles.dropzoneFilename}>{comRegFile.name}</span>
+                    <span className={styles.dropzoneSubtext}>Click to replace</span>
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.dropzoneTitle}>Click to upload PDF</span>
+                    <span className={styles.dropzoneSubtext}>PDF only · max 5MB</span>
+                  </>
+                )}
+              </label>
+            </div>
+
+            <label className="field">
+              <span className="field-label">About</span>
+              <textarea
+                className="input"
+                rows={4}
+                maxLength={255}
+                value={form.About}
+                onChange={update("About")}
+                placeholder="A short description of your company"
+                disabled={submitting}
+              />
+              <span className="hint">If accepted, this is what the user sees like a bio for the company. If left blank, we'll use a default description.</span>
             </label>
 
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>

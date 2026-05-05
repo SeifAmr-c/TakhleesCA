@@ -10,18 +10,13 @@ import { useAuth } from "../../api/authState.js";
 const FALLBACK = {
   CompanyID: 0,
   Name: "Sample Clearance Co.",
-  City: "Cairo",
-  Rating: 4.7,
-  Reviews: 142,
-  Services: "Customs clearance · Documentation · Cargo handling",
-  Description:
+  Governorate: "Cairo",
+  Address: "—",
+  About:
     "Full-service port clearance with 12 years of experience handling commercial and personal shipments through Cairo and Alexandria ports.",
-  Reviews_list: [
-    { id: 1, name: "Ahmed M.", rating: 5, text: "Fast and professional. Cleared in 3 days." },
-    { id: 2, name: "Sara K.", rating: 4, text: "Good communication throughout." },
-    { id: 3, name: "Omar Y.", rating: 5, text: "Best experience I've had with a clearance company." },
-  ],
-  Categories: ["Imports", "Exports", "Personal effects", "Re-export"],
+  Reviews: [],
+  AverageRating: null,
+  ReviewCount: 0,
   Stats: { jobs: "1.2k", onTime: "98%", responseHours: "2h" },
 };
 
@@ -105,18 +100,18 @@ function CompanyDetails() {
                 <div style={{ flex: 1 }}>
                   <div className="row" style={{ marginBottom: 8 }}>
                     <span className="badge badge-success"><Icon name="shield" size={12} /> Verified</span>
-                    {c.Rating && (
+                    {c.AverageRating != null && (
                       <span className="badge badge-dark">
                         <Icon name="star" size={12} color="var(--accent)" />
-                        <strong>{c.Rating}</strong>
-                        <span className="muted">· {c.Reviews || 0} reviews</span>
+                        <strong>{c.AverageRating}</strong>
+                        <span className="muted">· {c.ReviewCount || 0} reviews</span>
                       </span>
                     )}
                   </div>
                   <h1 className="h2" style={{ marginBottom: 6 }}>{c.Name}</h1>
                   <p style={{ margin: 0, color: "var(--ink-soft)" }}>
                     <Icon name="pin" size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                    {c.City} · {c.Services}
+                    {[c.Governorate, c.Address].filter(Boolean).join(" · ")}
                   </p>
                 </div>
               </div>
@@ -163,41 +158,36 @@ function CompanyDetails() {
 
             <h2 className="h2" style={{ marginTop: 48, marginBottom: 14 }}>About</h2>
             <p className="lead" style={{ margin: 0 }}>
-              {c.Description || "Trusted clearance company on the Takhlees marketplace."}
+              {c.About || "Trusted clearance company on the Takhlees marketplace."}
             </p>
 
-            <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Services</h2>
-            <div className="row">
-              {(c.Categories || ["Customs clearance", "Documentation"]).map((cat) => (
-                <span key={cat} className="badge badge-neutral" style={{ padding: "8px 14px", fontSize: 13 }}>
-                  <Icon name="package" size={13} /> {cat}
-                </span>
-              ))}
-            </div>
-
             <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Reviews</h2>
-            {(c.Reviews_list || []).length === 0 ? (
+            {(c.Reviews || []).length === 0 ? (
               <p style={{ color: "var(--ink-soft)" }}>No reviews yet.</p>
             ) : (
               <Reveal as="div" className="grid">
-                {(c.Reviews_list || []).map((r) => (
-                  <div key={r.id} className="card card-hover">
-                    <div className="row" style={{ justifyContent: "space-between" }}>
-                      <div className="row" style={{ gap: 10 }}>
-                        <div className="avatar">{r.name.split(" ").map(w => w[0]).join("")}</div>
-                        <div>
-                          <strong style={{ color: "var(--ink)" }}>{r.name}</strong>
-                          <div className="row" style={{ marginTop: 2 }}>
-                            {[1,2,3,4,5].map((i) => (
-                              <Icon key={i} name="star" size={12} color={i <= r.rating ? "var(--safety)" : "var(--line-strong)"} />
-                            ))}
+                {(c.Reviews || []).map((r) => {
+                  const fullName = [r.FirstName, r.LastName].filter(Boolean).join(" ").trim() || "Anonymous";
+                  const initials = fullName.split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+                  return (
+                    <div key={r.ReviewID} className="card card-hover">
+                      <div className="row" style={{ justifyContent: "space-between" }}>
+                        <div className="row" style={{ gap: 10 }}>
+                          <div className="avatar">{initials}</div>
+                          <div>
+                            <strong style={{ color: "var(--ink)" }}>{fullName}</strong>
+                            <div className="row" style={{ marginTop: 2 }}>
+                              {[1, 2, 3, 4, 5].map((i) => (
+                                <Icon key={i} name="star" size={12} color={i <= r.Rating ? "var(--safety)" : "var(--line-strong)"} />
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
+                      <p style={{ margin: "12px 0 0", color: "var(--ink-soft)" }}>{r.Review}</p>
                     </div>
-                    <p style={{ margin: "12px 0 0", color: "var(--ink-soft)" }}>{r.text}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </Reveal>
             )}
           </div>

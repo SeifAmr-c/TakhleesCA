@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { login } from "../../api/auth.js";
 import { setAuth } from "../../api/authState.js";
 import Icon from "../../components/Icon.jsx";
@@ -24,6 +24,7 @@ function UserLogin() {
   const [error, setError] = useState("");
   const emailRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => { emailRef.current?.focus(); }, []);
 
@@ -41,7 +42,12 @@ function UserLogin() {
           role: role === "A" ? "admin" : "client",
           user: res?.data?.user || null,
         });
-        navigate(role === "A" ? "/admin/dashboard" : "/tracking", { replace: true });
+        const from = location.state?.from?.pathname;
+        if (from) {
+          navigate(from, { replace: true });
+        } else {
+          navigate(role === "A" ? "/admin/dashboard" : "/tracking", { replace: true });
+        }
         return;
       }
       setError(res?.message || "Login failed.");

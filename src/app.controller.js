@@ -9,6 +9,7 @@ import categoryRouter from "./modules/category/category_controller.js";
 import companyRouter from "./modules/company/company_controller.js";
 import portRouter from "./modules/port/port_controller.js";
 import companyPortRouter from "./modules/company_port/company_port_controller.js";
+import companyCategoryRouter from "./modules/company_category/company_category_controller.js";
 import companyPaymentRouter from "./modules/company_payment/company_payment_controller.js";
 import documentRouter from "./modules/document/document_controller.js";
 import paymentRouter from "./modules/payment/payment_controller.js";
@@ -56,6 +57,7 @@ export const bootstrap = () => {
   app.use("/company", companyRouter);
   app.use("/port", portRouter);
   app.use("/companyport", companyPortRouter);
+  app.use("/companycategory", companyCategoryRouter);
   app.use("/companypayment", companyPaymentRouter);
   app.use("/document", documentRouter);
   app.use("/payment", paymentRouter);

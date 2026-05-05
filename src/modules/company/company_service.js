@@ -32,6 +32,10 @@ export const createCompany = async (req, res, next) => {
         const RegistrationDate = req.body.RegistrationDate;
         const TaxNumber = req.body.TaxNumber;
         const VerficationStatus = req.body.VerficationStatus ?? "Pending";
+        const ComReg = req.body.ComReg ?? null;
+        const Governorate = req.body.Governorate ?? null;
+        const Address = req.body.Address ?? null;
+        const About = req.body.About ?? null;
 
         if (!Name) return res.status(400).json({ ok: false, message: "Name is required." });
         if (!isValidEmail(ContactEmail)) return res.status(400).json({ ok: false, message: "Valid contact email is required." });
@@ -62,8 +66,8 @@ export const createCompany = async (req, res, next) => {
         const hashedPassword = await bcrypt.hash(Password, SALT_ROUNDS);
 
         const result = await runQuery(
-            "INSERT INTO company (`Name`,`ContactEmail`,`FoundingDate`,`Password`,`Comm`,`RegistrationDate`,`TaxNumber`,`VerficationStatus`) VALUES (?,?,?,?,?,?,?,?)",
-            [Name, ContactEmail, FoundingDate, hashedPassword, Comm, RegistrationDate, TaxNumber, VerficationStatus]
+            "INSERT INTO company (`Name`,`ContactEmail`,`FoundingDate`,`Password`,`Comm`,`RegistrationDate`,`TaxNumber`,`VerficationStatus`,`ComReg`,`Governorate`,`Address`,`About`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            [Name, ContactEmail, FoundingDate, hashedPassword, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About]
         );
 
         return res.status(201).json({
@@ -126,19 +130,57 @@ export const logoutCompany = (req, res) => {
     });
 };
 
-export const getCompany = (req, res) => {
+export const getCompany = async (req, res, next) => {
     const CompanyID = req.query.CompanyID;
-    if (CompanyID == '%') {
-        db.query("SELECT * FROM company where CompanyID LIKE ?", [CompanyID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
-    } else {
-        db.query("SELECT * FROM company where CompanyID = ?", [CompanyID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+    const VerficationStatus = req.query.VerficationStatus;
+
+    const cols = "CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About";
+
+    if (CompanyID !== undefined && CompanyID !== '' && CompanyID !== '%') {
+        try {
+            const companies = await runQuery(
+                `SELECT ${cols} FROM company WHERE CompanyID = ?`,
+                [CompanyID]
+            );
+
+            if (!companies.length) {
+                return res.json(companies);
+            }
+
+            const reviews = await runQuery(
+                `SELECT r.ReviewID, r.Review, r.Rating, r.ApplicationID, r.CategoryID,
+                        u.FirstName, u.LastName
+                   FROM Review r
+                   JOIN Application a ON r.ApplicationID = a.ApplicationID
+                   JOIN User u        ON a.ClientID      = u.UserID
+                  WHERE a.CompanyID = ?
+                  ORDER BY r.ReviewID DESC`,
+                [CompanyID]
+            );
+
+            const ReviewCount = reviews.length;
+            const AverageRating = ReviewCount
+                ? Number((reviews.reduce((s, r) => s + Number(r.Rating || 0), 0) / ReviewCount).toFixed(2))
+                : null;
+
+            const row = { ...companies[0], Reviews: reviews, AverageRating, ReviewCount };
+            return res.json([row]);
+        } catch (err) {
+            return next(err);
+        }
     }
+
+    const params = [];
+    let where = "";
+    if (VerficationStatus && ['Pending', 'Verified', 'Rejected'].includes(VerficationStatus)) {
+        where = " WHERE VerficationStatus = ?";
+        params.push(VerficationStatus);
+    }
+
+    db.query(`SELECT ${cols} FROM company${where} ORDER BY CompanyID DESC`, params, (err, result) => {
+        if (err) return next(err);
+        res.json(result);
+    });
 };
 
 export const deleteCompany = (req, res) => {
@@ -206,10 +248,14 @@ export const updateCompany = (req, res) => {
         const RegistrationDate  = req.body.RegistrationDate  !== undefined ? req.body.RegistrationDate  : existing.RegistrationDate;
         const TaxNumber         = req.body.TaxNumber         !== undefined ? req.body.TaxNumber         : existing.TaxNumber;
         const VerficationStatus = req.body.VerficationStatus !== undefined ? req.body.VerficationStatus : existing.VerficationStatus;
+        const ComReg            = req.body.ComReg            !== undefined ? req.body.ComReg            : existing.ComReg;
+        const Governorate       = req.body.Governorate       !== undefined ? req.body.Governorate       : existing.Governorate;
+        const Address           = req.body.Address           !== undefined ? req.body.Address           : existing.Address;
+        const About             = req.body.About             !== undefined ? req.body.About             : existing.About;
 
         db.query(
-            "UPDATE company SET `Name` = ?, `ContactEmail` = ?, `FoundingDate` = ?, `Password` = ?, `Comm` = ?, `RegistrationDate` = ?, `TaxNumber` = ?, `VerficationStatus` = ? WHERE CompanyID = ?",
-            [Name, ContactEmail, FoundingDate, Password, Comm, RegistrationDate, TaxNumber, VerficationStatus, CompanyID],
+            "UPDATE company SET `Name` = ?, `ContactEmail` = ?, `FoundingDate` = ?, `Password` = ?, `Comm` = ?, `RegistrationDate` = ?, `TaxNumber` = ?, `VerficationStatus` = ?, `ComReg` = ?, `Governorate` = ?, `Address` = ?, `About` = ? WHERE CompanyID = ?",
+            [Name, ContactEmail, FoundingDate, Password, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About, CompanyID],
             function (err, result) {
                 if (err) throw err;
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] is Updated Successfully" });
