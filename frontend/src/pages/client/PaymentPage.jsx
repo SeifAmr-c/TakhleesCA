@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import DashboardLayout from "../../components/DashboardLayout.jsx";
+import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -41,7 +41,7 @@ function PaymentPage() {
   };
 
   return (
-    <DashboardLayout
+    <PublicLayout
       title="Complete your payment"
       subtitle={`Application #${applicationId} — funds are held until the company confirms completion.`}
       role="Client"
@@ -164,7 +164,7 @@ function PaymentPage() {
           </div>
         </aside>
       </Reveal>
-    </DashboardLayout>
+    </PublicLayout>
   );
 }
 

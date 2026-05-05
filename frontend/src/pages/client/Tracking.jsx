@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import DashboardLayout from "../../components/DashboardLayout.jsx";
+import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -186,7 +186,7 @@ function Tracking() {
 
   if (!clientId) {
     return (
-      <DashboardLayout
+      <PublicLayout
         title="Your shipments"
         subtitle="Real-time status across all your applications."
         role="Client"
@@ -199,12 +199,12 @@ function Tracking() {
           </p>
           <Link to="/login" className="btn btn-primary" style={{ marginTop: 16 }}>Sign in</Link>
         </div>
-      </DashboardLayout>
+      </PublicLayout>
     );
   }
 
   return (
-    <DashboardLayout
+    <PublicLayout
       title="Your shipments"
       subtitle="Real-time status across all your applications."
       role="Client"
@@ -364,7 +364,7 @@ function Tracking() {
           </div>
         </div>
       )}
-    </DashboardLayout>
+    </PublicLayout>
   );
 }
 

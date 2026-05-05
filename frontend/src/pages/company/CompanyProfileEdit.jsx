@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import DashboardLayout from "../../components/DashboardLayout.jsx";
+import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -35,8 +35,27 @@ const FieldError = ({ message }) =>
     </span>
   ) : null;
 
+/* Tiny status pill rendered right next to the Save button. Green for
+   success, red for error — the page no longer floats banners at the top. */
+const InlineStatus = ({ status }) => {
+  if (!status?.text) return null;
+  const isOk = status.kind === "success";
+  return (
+    <span
+      role={isOk ? "status" : "alert"}
+      style={{
+        color: isOk ? "var(--signal-go, #16a34a)" : "var(--signal-stop, #dc2626)",
+        fontSize: 13,
+        fontWeight: 500,
+      }}
+    >
+      {status.text}
+    </span>
+  );
+};
+
 /* ---------- Profile form ---------- */
-function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) {
+function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
   const [form, setForm] = useState(() => ({
     Governorate: initial?.Governorate || "",
     Address: initial?.Address || "",
@@ -44,6 +63,8 @@ function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) 
     About: initial?.About || "",
   }));
   const [errors, setErrors] = useState({});
+  /* Local form-level status (success/error) rendered next to the button. */
+  const [status, setStatus] = useState({ kind: "", text: "" });
 
   useEffect(() => {
     setForm({
@@ -58,6 +79,7 @@ function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) 
     const value = e.target.value;
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((m) => ({ ...m, [key]: "" }));
+    setStatus({ kind: "", text: "" });
   };
 
   const validate = () => {
@@ -71,6 +93,7 @@ function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatus({ kind: "", text: "" });
     const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -85,12 +108,15 @@ function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) 
       });
       if (res?.ok && res?.data?.company) {
         onSaved(res.data.company);
-        onNotice("Profile saved.");
+        setStatus({ kind: "success", text: "Profile saved." });
       } else {
-        onNotice(res?.message || "Couldn't save the profile.");
+        setStatus({ kind: "error", text: res?.message || "Couldn't save the profile." });
       }
     } catch (err) {
-      onNotice(err?.response?.data?.message || "Couldn't save the profile.");
+      setStatus({
+        kind: "error",
+        text: err?.response?.data?.message || "Couldn't save the profile.",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -166,7 +192,11 @@ function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) 
         </label>
       </div>
 
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 20 }}>
+      <div
+        className="row"
+        style={{ justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 20 }}
+      >
+        <InlineStatus status={status} />
         <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
           {submitting ? (
             <ContainerSpinner inline size={20} label="Saving…" />
@@ -180,13 +210,14 @@ function ProfileForm({ initial, onSaved, onNotice, submitting, setSubmitting }) 
 }
 
 /* ---------- Pricing form ---------- */
-function PricingForm({ companyId, onNotice }) {
+function PricingForm({ companyId }) {
   const [categories, setCategories] = useState([]);
   const [drafts, setDrafts] = useState({});         // { [CategoryID]: stringFromInput }
   const [savedPrices, setSavedPrices] = useState({}); // { [CategoryID]: numericPrice }
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const [status, setStatus] = useState({ kind: "", text: "" });
 
   useEffect(() => {
     let active = true;
@@ -227,6 +258,7 @@ function PricingForm({ companyId, onNotice }) {
     if (value !== "" && !/^\d*\.?\d{0,2}$/.test(value)) return;
     setDrafts((d) => ({ ...d, [categoryId]: value }));
     setErrors((m) => ({ ...m, [categoryId]: "" }));
+    setStatus({ kind: "", text: "" });
   };
 
   const dirty = categories.some((c) => {
@@ -239,6 +271,7 @@ function PricingForm({ companyId, onNotice }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatus({ kind: "", text: "" });
 
     /* Build the prices payload only from rows the company actually entered
        a positive number for. Surface inline errors for invalid entries. */
@@ -258,7 +291,7 @@ function PricingForm({ companyId, onNotice }) {
     setErrors(errs);
     if (Object.keys(errs).length) return;
     if (prices.length === 0) {
-      onNotice("Enter at least one price before saving.");
+      setStatus({ kind: "error", text: "Enter at least one price before saving." });
       return;
     }
 
@@ -269,12 +302,15 @@ function PricingForm({ companyId, onNotice }) {
         const next = { ...savedPrices };
         for (const r of prices) next[r.CategoryID] = r.Price;
         setSavedPrices(next);
-        onNotice(res.message || "Pricing saved.");
+        setStatus({ kind: "success", text: res.message || "Pricing saved." });
       } else {
-        onNotice(res?.message || "Couldn't save pricing.");
+        setStatus({ kind: "error", text: res?.message || "Couldn't save pricing." });
       }
     } catch (err) {
-      onNotice(err?.response?.data?.message || "Couldn't save pricing.");
+      setStatus({
+        kind: "error",
+        text: err?.response?.data?.message || "Couldn't save pricing.",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -344,7 +380,11 @@ function PricingForm({ companyId, onNotice }) {
         </ul>
       )}
 
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 20 }}>
+      <div
+        className="row"
+        style={{ justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 20 }}
+      >
+        <InlineStatus status={status} />
         <button
           type="submit"
           className="btn btn-primary btn-lg"
@@ -371,7 +411,6 @@ function CompanyProfileEdit() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [profileSubmitting, setProfileSubmitting] = useState(false);
-  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     if (!companyId) {
@@ -396,11 +435,6 @@ function CompanyProfileEdit() {
     return () => { active = false; };
   }, [companyId]);
 
-  const showNotice = (text) => {
-    setNotice(text);
-    setTimeout(() => setNotice(""), 3500);
-  };
-
   /* Keep the cached auth.company in sync with what the server now stores
      so the rest of the app sees the new email/governorate/etc. */
   const handleProfileSaved = (updated) => {
@@ -412,7 +446,7 @@ function CompanyProfileEdit() {
 
   if (!companyId) {
     return (
-      <DashboardLayout title="Edit profile" subtitle="Update your company info and pricing." role="Company">
+      <PublicLayout title="Edit profile" subtitle="Update your company info and pricing." role="Company">
         <div className="banner-error">
           <Icon name="bell" size={16} />
           You need to be signed in as a company.{" "}
@@ -420,12 +454,12 @@ function CompanyProfileEdit() {
             Sign in
           </Link>
         </div>
-      </DashboardLayout>
+      </PublicLayout>
     );
   }
 
   return (
-    <DashboardLayout
+    <PublicLayout
       title="Edit profile"
       subtitle="Update your basic info and per-category pricing."
       role="Company"
@@ -435,12 +469,6 @@ function CompanyProfileEdit() {
         </button>
       }
     >
-      {notice && (
-        <div className="banner-success">
-          <Icon name="check" size={16} />
-          {notice}
-        </div>
-      )}
       {loadError && (
         <div className="banner-error">
           <Icon name="bell" size={16} />
@@ -457,14 +485,13 @@ function CompanyProfileEdit() {
           <ProfileForm
             initial={company}
             onSaved={handleProfileSaved}
-            onNotice={showNotice}
             submitting={profileSubmitting}
             setSubmitting={setProfileSubmitting}
           />
-          <PricingForm companyId={companyId} onNotice={showNotice} />
+          <PricingForm companyId={companyId} />
         </Reveal>
       )}
-    </DashboardLayout>
+    </PublicLayout>
   );
 }
 

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { clearAuth } from "./authState";
 
 // In dev, CRA's `proxy` field in package.json forwards relative URLs
 // (like `/user/login`) to the Node backend on :3000, so the browser
@@ -15,3 +16,14 @@ export const api = axios.create({
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearAuth();
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);

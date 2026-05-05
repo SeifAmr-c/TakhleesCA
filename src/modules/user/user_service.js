@@ -194,6 +194,55 @@ export const updateUser = async (req, res) => {
     });
 };
 
+// ── updateProfile (session user edits FirstName / LastName / Email) ──
+export const updateProfile = async (req, res, next) => {
+  try {
+    const uid = req.session?.userId;
+    if (!uid) {
+      return res.status(401).json({ ok: false, message: "Not logged in." });
+    }
+
+    const FirstName = String(req.body.FirstName ?? "").trim();
+    const LastName = String(req.body.LastName ?? "").trim();
+    const Email = normalizeEmail(req.body.Email);
+
+    if (FirstName.length < 2) {
+      return res.status(400).json({ ok: false, message: "First name must be at least 2 characters." });
+    }
+    if (LastName.length < 2) {
+      return res.status(400).json({ ok: false, message: "Last name must be at least 2 characters." });
+    }
+    if (!isValidEmail(Email)) {
+      return res.status(400).json({ ok: false, message: "Valid email is required." });
+    }
+
+    const dupes = await runQuery(
+      "SELECT UserID FROM User WHERE Email = ? AND UserID <> ? LIMIT 1",
+      [Email, uid]
+    );
+    if (dupes.length) {
+      return res.status(409).json({ ok: false, message: "Email already in use." });
+    }
+
+    const updateRes = await runQuery(
+      "UPDATE User SET FirstName = ?, LastName = ?, Email = ? WHERE UserID = ?",
+      [FirstName, LastName, Email, uid]
+    );
+    if (!updateRes.affectedRows) {
+      return res.status(404).json({ ok: false, message: "User not found." });
+    }
+
+    const rows = await runQuery(`${userSelectSql} WHERE u.UserID = ? LIMIT 1`, [uid]);
+    return res.status(200).json({
+      ok: true,
+      message: "Profile updated.",
+      data: { user: sanitizeUser(rows[0]) },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // ── updateClient ─────────────────────────────────────────
 export const updateClient = (req, res) => {
     const raw = req.query.ClientID;

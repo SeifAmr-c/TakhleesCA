@@ -16,6 +16,7 @@ import CompanyDetails from "./pages/client/CompanyDetails.jsx";
 import FillApplication from "./pages/client/FillApplication.jsx";
 import PaymentPage from "./pages/client/PaymentPage.jsx";
 import Tracking from "./pages/client/Tracking.jsx";
+import UserProfileEdit from "./pages/client/UserProfileEdit.jsx";
 
 import CompanyDashboard from "./pages/company/CompanyDashboard.jsx";
 import CompanyProfileEdit from "./pages/company/CompanyProfileEdit.jsx";
@@ -52,6 +53,7 @@ function App() {
         <Route path="/applications/new/:companyId" element={<RequireAuth><FillApplication /></RequireAuth>} />
         <Route path="/payment/:applicationId" element={<PaymentPage />} />
         <Route path="/tracking" element={<Tracking />} />
+        <Route path="/user/profile" element={<RequireAuth><UserProfileEdit /></RequireAuth>} />
 
         {/* Company / Admin */}
         <Route path="/company/dashboard" element={<CompanyDashboard />} />

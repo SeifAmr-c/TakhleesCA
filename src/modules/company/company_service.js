@@ -343,6 +343,65 @@ export const updateCompanyPricing = async (req, res, next) => {
     }
 };
 
+/* GET /company/dashboard-stats  (requires company session)
+   Returns aggregate KPIs for the signed-in company's dashboard. Net earnings
+   subtract a flat platform fee AND the company's specific Comm percentage,
+   both pulled from the Company row. Comm is stored as DECIMAL(4,2) and
+   interpreted as a percentage of completed revenue (e.g. 8.50 -> 8.5%). */
+const PLATFORM_FEE = 1600;
+
+export const getCompanyDashboardStats = async (req, res, next) => {
+    try {
+        const companyId = req.session?.companyId;
+        console.log("Fetching stats for CompanyID:", companyId);
+        if (!companyId) {
+            return res.status(401).json({ ok: false, message: "Company sign-in required." });
+        }
+
+        const companyRows = await runQuery(
+            "SELECT CompanyID, Comm FROM company WHERE CompanyID = ? LIMIT 1",
+            [companyId]
+        );
+        console.log("Raw Company Row:", companyRows);
+        if (!companyRows.length) {
+            return res.status(404).json({ ok: false, message: "Company not found." });
+        }
+        const CompPercentageRaw = companyRows[0].Comm;
+        const CommPercentage = Number(CompPercentageRaw) || 0;
+
+        const revenueRows = await runQuery(
+            `SELECT COALESCE(SUM(p.Amount), 0) AS CompletedRevenue
+               FROM payment p
+               JOIN application a ON p.ApplicationID = a.ApplicationID
+              WHERE a.CompanyID = ? AND a.Status = 'Completed'`,
+            [companyId]
+        );
+        console.log("Raw SQL Result:", revenueRows);
+
+        /* mysql2 returns DECIMAL columns as JS strings (e.g. "20000.00").
+           Always coerce with Number() before doing arithmetic. */
+        const Revenue = Number(revenueRows[0]?.CompletedRevenue ?? 0);
+        const CommissionAmount = (Revenue * CommPercentage) / 100;
+        const PlatformFee = 1600;
+        const NetEarnings = Math.max(0, Revenue - (PlatformFee + CommissionAmount));
+        console.log("Computed:", { Revenue, CommPercentage, CommissionAmount, PlatformFee, NetEarnings });
+
+        return res.status(200).json({
+            ok: true,
+            data: {
+                CompanyID: companyId,
+                CompletedRevenue: Revenue,
+                Comm: CommPercentage,
+                CommissionAmount,
+                PlatformFee,
+                NetEarnings,
+            },
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 export const updateCompany = (req, res) => {
     console.log("PUT Request Received");
     const CompanyID = req.query.CompanyID;

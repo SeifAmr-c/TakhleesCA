@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import DashboardLayout from "../../components/DashboardLayout.jsx";
+import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -8,6 +8,7 @@ import {
   listApplications,
   updateApplicationStatus,
 } from "../../api/applications.js";
+import { getCompanyDashboardStats } from "../../api/companies.js";
 import { useAuth } from "../../api/authState.js";
 
 /* DB ENUM 'Pending' | 'In Progress' | 'Completed'  →  internal lower-case
@@ -316,6 +317,7 @@ function CompanyDashboard() {
   const companyId = auth?.kind === "company" ? auth?.company?.CompanyID : null;
 
   const [applications, setApplications] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
@@ -326,19 +328,32 @@ function CompanyDashboard() {
   const [query, setQuery] = useState("");
 
   const reloadApplications = async () => {
+    console.log("FRONTEND: reloadApplications fired. auth =", auth, "companyId =", companyId);
     if (!companyId) {
+      console.warn("FRONTEND: Bailing out — no companyId on session. Stats call will NOT fire.");
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const res = await listApplications({ CompanyID: companyId });
-      const list = Array.isArray(res) ? res : res?.data || [];
+      console.log("FRONTEND: Attempting to fetch stats...");
+      const [appsRes, statsRes] = await Promise.all([
+        listApplications({ CompanyID: companyId }),
+        getCompanyDashboardStats().catch((err) => {
+          console.error("FRONTEND: getCompanyDashboardStats failed:", err?.response?.status, err?.response?.data || err?.message);
+          return null;
+        }),
+      ]);
+      console.log("FRONTEND: Stats response", statsRes);
+      const list = Array.isArray(appsRes) ? appsRes : appsRes?.data || [];
       setApplications(list.map(shapeApplication));
+      setStats(statsRes?.data ?? null);
       setErrorBanner("");
-    } catch {
+    } catch (err) {
+      console.error("FRONTEND: reloadApplications threw", err);
       setErrorBanner("Couldn't load your applications. Please refresh.");
       setApplications([]);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -385,25 +400,27 @@ function CompanyDashboard() {
     return c;
   }, [applications]);
 
+  /* Money KPIs (revenue, platform fee, commission, net earnings) come straight
+     from GET /company/dashboard-stats so the dashboard never disagrees with
+     the backend's canonical math. Pipeline counts (pending/in progress/
+     completed jobs, pending value) are still derived from the application
+     list since the stats endpoint doesn't expose them. */
   const totals = useMemo(() => {
-    const completedSum = accepted
-      .filter((a) => a.Status === "completed")
-      .reduce((s, a) => s + a.Amount, 0);
     const pendingSum = pending.reduce((s, a) => s + a.Amount, 0);
     const completed = accepted.filter((a) => a.Status === "completed").length;
     const inProgress = accepted.filter((a) => a.Status === "in_progress").length;
-    const platformFee = Math.round(completedSum * 0.08);
     return {
-      revenue: completedSum,
-      completedRevenue: completedSum,
+      revenue: Number(stats?.CompletedRevenue ?? 0),
       pendingValue: pendingSum,
       activeJobs: accepted.length,
       completed,
       inProgress,
-      platformFee,
-      netEarnings: Math.max(0, completedSum - platformFee),
+      platformFee: Number(stats?.PlatformFee ?? 0),
+      commissionAmount: Number(stats?.CommissionAmount ?? 0),
+      commissionRate: Number(stats?.Comm ?? 0),
+      netEarnings: Number(stats?.NetEarnings ?? 0),
     };
-  }, [pending, accepted]);
+  }, [pending, accepted, stats]);
 
   const showNotice = (text) => {
     setNotice(text);
@@ -454,7 +471,7 @@ function CompanyDashboard() {
   };
 
   return (
-    <DashboardLayout
+    <PublicLayout
       title="Company dashboard"
       subtitle="Monitor every application your company has received — pending, in progress and completed."
       role="Company"
@@ -504,7 +521,7 @@ function CompanyDashboard() {
             icon="receipt"
             label="Net earnings"
             value={`EGP ${totals.netEarnings.toLocaleString()}`}
-            sub={`After EGP ${totals.platformFee.toLocaleString()} platform fee`}
+            sub={`After EGP ${totals.platformFee.toLocaleString()} platform fee + EGP ${totals.commissionAmount.toLocaleString()} commission (${totals.commissionRate}%)`}
             accent="success"
           />
           <StatCard
@@ -709,7 +726,7 @@ function CompanyDashboard() {
           </div>
         )}
       </Reveal>
-    </DashboardLayout>
+    </PublicLayout>
   );
 }
 

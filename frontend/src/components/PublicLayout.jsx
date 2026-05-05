@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import Icon from "./Icon.jsx";
 import logo from "../assets/logo.png";
 import { useAuth, clearAuth } from "../api/authState.js";
@@ -17,9 +17,18 @@ function Brand() {
   );
 }
 
-function PublicLayout({ children }) {
+function PublicLayout({ children, title, subtitle, actions, role: _role }) {
   const auth = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const hasHeader = Boolean(title || subtitle || actions);
+
+  const isCompany = auth?.role === "company";
+  const isUser = auth?.kind === "user";
+  const companyName = auth?.company?.Name;
+  const userFirstName = auth?.user?.FirstName;
+  const greetingName = isCompany ? companyName : isUser ? userFirstName : null;
+  const profileActive = location.pathname.startsWith("/user/profile");
 
   const handleLogout = async () => {
     try {
@@ -40,22 +49,73 @@ function PublicLayout({ children }) {
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <nav className="topnav">
         <div className="container topnav-inner">
-          <Brand />
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <Brand />
+            {greetingName && (
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--ink-soft)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Hello {greetingName}
+              </span>
+            )}
+          </div>
           <div className="topnav-links">
-            <NavLink to="/companies">Companies</NavLink>
-            <NavLink to="/about">About</NavLink>
-            <NavLink to="/contact">Contact</NavLink>
+            {isCompany ? (
+              <>
+                <NavLink to="/company/dashboard">Dashboard</NavLink>
+                <NavLink to="/about">About</NavLink>
+                <NavLink to="/contact">Contact</NavLink>
+              </>
+            ) : (
+              <>
+                <NavLink to="/companies">Companies</NavLink>
+                {isUser && <NavLink to="/tracking">Shipments</NavLink>}
+                <NavLink to="/about">About</NavLink>
+                <NavLink to="/contact">Contact</NavLink>
+              </>
+            )}
             <div className="topnav-cta">
               {auth ? (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="btn btn-secondary btn-sm"
-                  style={{ gap: 6 }}
-                >
-                  <Icon name="logout" size={14} />
-                  Sign out
-                </button>
+                <>
+                  {isUser && (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/user/profile")}
+                      aria-label="User profile"
+                      title="User profile"
+                      className={profileActive ? "active" : ""}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: "transparent",
+                        border: "1px solid var(--line)",
+                        color: profileActive ? "var(--ink)" : "var(--ink-soft)",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      <Icon name="user" size={16} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="btn btn-secondary btn-sm"
+                    style={{ gap: 6 }}
+                  >
+                    <Icon name="logout" size={14} />
+                    Sign out
+                  </button>
+                </>
               ) : (
                 <>
                   <Link to="/login" className="btn btn-secondary btn-sm">Sign in</Link>
@@ -70,7 +130,31 @@ function PublicLayout({ children }) {
         </div>
       </nav>
 
-      <main style={{ flex: 1 }}>{children}</main>
+      <main style={{ flex: 1 }}>
+        {hasHeader ? (
+          <div className="container" style={{ padding: "32px 24px 80px" }}>
+            <header
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                gap: 16,
+                flexWrap: "wrap",
+                marginBottom: 32,
+              }}
+            >
+              <div>
+                {title && <h1 className="h2" style={{ margin: 0 }}>{title}</h1>}
+                {subtitle && <p className="muted" style={{ margin: "6px 0 0" }}>{subtitle}</p>}
+              </div>
+              {actions && <div className="row">{actions}</div>}
+            </header>
+            {children}
+          </div>
+        ) : (
+          children
+        )}
+      </main>
 
       <footer className="site-footer">
         <div className="container">

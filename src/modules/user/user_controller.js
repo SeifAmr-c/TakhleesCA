@@ -21,6 +21,7 @@ router.post("/register", userService.register);
 router.post("/login", loginLimiter, userService.login);
 router.post("/logout", userService.logout);
 router.delete("/", userService.deleteUser);
+router.put("/profile", requireAuth, userService.updateProfile);
 router.put("/", userService.updateUser);
 router.put("/client", userService.updateClient);
 router.put("/admin", userService.updateAdmin);

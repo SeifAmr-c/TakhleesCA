@@ -191,10 +191,17 @@ export const updateApplication = (req, res) => {
 
         const existing         = result[0];
         const PaymentType      = req.body.PaymentType      !== undefined ? req.body.PaymentType      : existing.PaymentType;
-        const CompletionDate   = req.body.CompletionDate   !== undefined ? req.body.CompletionDate   : existing.CompletionDate;
         const SubmissionDate   = req.body.SubmissionDate   !== undefined ? req.body.SubmissionDate   : existing.SubmissionDate;
         const TrackingNumber   = req.body.TrackingNumber   !== undefined ? req.body.TrackingNumber   : existing.TrackingNumber;
         const Status           = req.body.Status           !== undefined ? req.body.Status           : existing.Status;
+        /* When the company flips Status to Completed, stamp CompletionDate
+           with the current time. An explicit CompletionDate in the body still
+           wins so admin tooling can backfill if needed. */
+        const isCompleting = String(Status).toLowerCase() === 'completed'
+            && String(existing.Status).toLowerCase() !== 'completed';
+        const CompletionDate   = req.body.CompletionDate !== undefined
+            ? req.body.CompletionDate
+            : (isCompleting ? new Date() : existing.CompletionDate);
         const DeliveryAddress  = req.body.DeliveryAddress  !== undefined ? req.body.DeliveryAddress  : existing.DeliveryAddress;
         const CompanyID        = req.body.CompanyID        !== undefined ? req.body.CompanyID        : existing.CompanyID;
         const ClientID         = req.body.ClientID         !== undefined ? req.body.ClientID         : existing.ClientID;

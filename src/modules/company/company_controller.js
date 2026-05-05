@@ -17,6 +17,7 @@ router.post("/", companyService.createCompany);
 router.post("/login", loginLimiter, companyService.loginCompany);
 router.post("/logout", companyService.logoutCompany);
 router.get("/", companyService.getCompany);
+router.get("/dashboard-stats", requireCompany, companyService.getCompanyDashboardStats);
 router.get("/search", companyService.searchCompany);
 router.put("/profile", requireCompany, companyService.updateCompanyProfile);
 router.put("/pricing", requireCompany, companyService.updateCompanyPricing);

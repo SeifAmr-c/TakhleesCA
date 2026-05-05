@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import DashboardLayout from "../../components/DashboardLayout.jsx";
+import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -345,6 +345,29 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
     setErrors((m) => ({ ...m, [key]: "" }));
   };
 
+  /* XXXX-XXXX-XXXX-XXXX — strip non-digits, cap at 16 digits, dash every 4. */
+  const onCardNumberChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 16);
+    const formatted = digits.match(/.{1,4}/g)?.join("-") ?? "";
+    setPayment((p) => ({ ...p, CardNumber: formatted }));
+    setErrors((m) => ({ ...m, CardNumber: "" }));
+  };
+
+  /* MM/YY — strip non-digits, cap at 4 digits, slash after the 2nd. */
+  const onExpiryChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+    const formatted = digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+    setPayment((p) => ({ ...p, Expiry: formatted }));
+    setErrors((m) => ({ ...m, Expiry: "" }));
+  };
+
+  /* CVC — digits only, exactly up to 3. */
+  const onCvcChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
+    setPayment((p) => ({ ...p, CVC: digits }));
+    setErrors((m) => ({ ...m, CVC: "" }));
+  };
+
   const setGateway = (val) => {
     setPayment((p) => ({ ...p, Gateway: val }));
     setErrors((m) => ({ ...m, Gateway: "" }));
@@ -385,7 +408,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
               tabIndex={-1}
               aria-readonly="true"
               placeholder={priceLoading ? "Loading price…" : "Select a category to view price"}
-              style={{ backgroundColor: "var(--surface-2)", cursor: "not-allowed" }}
+              style={{ backgroundColor: "var(--surface-2)", cursor: "not-allowed", textAlign: "center" }}
             />
           </div>
           <span className="hint">
@@ -467,8 +490,9 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                     className="input"
                     inputMode="numeric"
                     value={payment.CardNumber}
-                    onChange={update("CardNumber")}
-                    placeholder="1234 5678 9012 3456"
+                    onChange={onCardNumberChange}
+                    placeholder="XXXX-XXXX-XXXX-XXXX"
+                    maxLength={19}
                     disabled={submitting}
                   />
                 </div>
@@ -489,9 +513,11 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                   <span className="field-label">Expiry</span>
                   <input
                     className="input"
+                    inputMode="numeric"
                     placeholder="MM/YY"
                     value={payment.Expiry}
-                    onChange={update("Expiry")}
+                    onChange={onExpiryChange}
+                    maxLength={5}
                     disabled={submitting}
                   />
                   <FieldError message={errors.Expiry} />
@@ -502,7 +528,8 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                     className="input"
                     inputMode="numeric"
                     value={payment.CVC}
-                    onChange={update("CVC")}
+                    onChange={onCvcChange}
+                    maxLength={3}
                     disabled={submitting}
                   />
                   <FieldError message={errors.CVC} />
@@ -803,11 +830,11 @@ function FillApplication() {
     }
     if (!payment.Gateway) errs.Gateway = "Choose a payment gateway.";
     if (payment.Gateway === "Credit Card") {
-      if (payment.CardNumber.replace(/\s/g, "").length < 12)
-        errs.CardNumber = "Enter a valid card number.";
+      if (payment.CardNumber.replace(/\D/g, "").length !== 16)
+        errs.CardNumber = "Enter a valid 16-digit card number.";
       if (!payment.CardName.trim()) errs.CardName = "Cardholder name is required.";
       if (!/^\d{2}\/\d{2}$/.test(payment.Expiry)) errs.Expiry = "Expiry must be MM/YY.";
-      if (!/^\d{3,4}$/.test(payment.CVC)) errs.CVC = "CVC must be 3 or 4 digits.";
+      if (!/^\d{3}$/.test(payment.CVC)) errs.CVC = "CVC must be exactly 3 digits.";
     }
     return errs;
   };
@@ -920,7 +947,7 @@ function FillApplication() {
   }, [step]);
 
   return (
-    <DashboardLayout
+    <PublicLayout
       title="New application"
       subtitle={subtitle}
       role="Client"
@@ -1023,7 +1050,7 @@ function FillApplication() {
           </div>
         )}
       </Reveal>
-    </DashboardLayout>
+    </PublicLayout>
   );
 }
 

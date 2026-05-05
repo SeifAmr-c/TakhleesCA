@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import DashboardLayout from "../../components/DashboardLayout.jsx";
+import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -343,7 +343,7 @@ function AdminDashboard() {
   }, [analytics]);
 
   return (
-    <DashboardLayout
+    <PublicLayout
       title="Admin dashboard"
       subtitle="Marketplace activity, verifications, and revenue."
       role="Admin"
@@ -581,7 +581,7 @@ function AdminDashboard() {
           </div>
         </div>
       </Reveal>
-    </DashboardLayout>
+    </PublicLayout>
   );
 }
 

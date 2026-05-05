@@ -28,3 +28,12 @@ export const register = async (payload) => {
   const { data } = await api.post("/user/register", payload);
   return data;
 };
+
+// PUT /user/profile (requires user session)
+//   body:    { FirstName, LastName, Email }
+//   200:     { ok: true, message, data: { user } }
+//   400/401/409: { ok: false, message }
+export const updateUserProfile = async ({ FirstName, LastName, Email }) => {
+  const { data } = await api.put("/user/profile", { FirstName, LastName, Email });
+  return data;
+};
