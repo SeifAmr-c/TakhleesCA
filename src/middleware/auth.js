@@ -14,3 +14,10 @@ export const requireAdmin = (req, res, next) => {
   }
   return next();
 };
+
+export const requireCompany = (req, res, next) => {
+  if (!req.session || !req.session.companyId || req.session.role !== "company") {
+    return res.status(401).json({ ok: false, message: "Company sign-in required." });
+  }
+  return next();
+};

@@ -226,6 +226,123 @@ export const searchCompany = (req, res) => {
     });
 };
 
+/* PUT /company/profile  (requires company session)
+   Body: { Governorate?, Address?, ContactEmail?, About? }
+   Updates only the fields that are present; other columns are preserved.
+   Enforces ContactEmail uniqueness across companies. */
+export const updateCompanyProfile = async (req, res, next) => {
+    try {
+        const CompanyID = req.session.companyId;
+        const rows = await runQuery(
+            "SELECT * FROM company WHERE CompanyID = ? LIMIT 1",
+            [CompanyID]
+        );
+        if (!rows.length) {
+            return res.status(404).json({ ok: false, message: "Company not found." });
+        }
+        const existing = rows[0];
+
+        const incomingEmail = req.body.ContactEmail !== undefined ? normalizeEmail(req.body.ContactEmail) : null;
+        if (incomingEmail !== null) {
+            if (!isValidEmail(incomingEmail)) {
+                return res.status(400).json({ ok: false, message: "Valid contact email is required." });
+            }
+            if (incomingEmail !== existing.ContactEmail) {
+                const dupes = await runQuery(
+                    "SELECT CompanyID FROM company WHERE ContactEmail = ? AND CompanyID <> ? LIMIT 1",
+                    [incomingEmail, CompanyID]
+                );
+                if (dupes.length) {
+                    return res.status(409).json({ ok: false, message: "Another company already uses that email." });
+                }
+            }
+        }
+
+        const Governorate  = req.body.Governorate  !== undefined ? String(req.body.Governorate).trim()  : existing.Governorate;
+        const Address      = req.body.Address      !== undefined ? String(req.body.Address).trim()      : existing.Address;
+        const ContactEmail = incomingEmail !== null ? incomingEmail : existing.ContactEmail;
+        const About        = req.body.About        !== undefined ? String(req.body.About).trim()        : existing.About;
+
+        await runQuery(
+            "UPDATE company SET `Governorate` = ?, `Address` = ?, `ContactEmail` = ?, `About` = ? WHERE CompanyID = ?",
+            [Governorate, Address, ContactEmail, About, CompanyID]
+        );
+
+        const updated = await runQuery(
+            "SELECT CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About FROM company WHERE CompanyID = ?",
+            [CompanyID]
+        );
+
+        return res.status(200).json({
+            ok: true,
+            message: "Profile updated.",
+            data: { company: updated[0] },
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+/* PUT /company/pricing  (requires company session)
+   Body: { prices: [{ CategoryID, Price }, ...] }
+   Bulk upsert into CompanyCategory using INSERT ... ON DUPLICATE KEY UPDATE.
+   Validates that each CategoryID actually exists and that Price > 0. */
+export const updateCompanyPricing = async (req, res, next) => {
+    try {
+        const CompanyID = req.session.companyId;
+        const incoming = Array.isArray(req.body.prices) ? req.body.prices : null;
+        if (!incoming || incoming.length === 0) {
+            return res.status(400).json({ ok: false, message: "Body must contain a non-empty `prices` array." });
+        }
+
+        const cleaned = [];
+        for (const row of incoming) {
+            const CategoryID = Number(row?.CategoryID);
+            const Price      = Number(row?.Price);
+            if (!CategoryID || isNaN(Price) || Price <= 0) {
+                return res.status(400).json({
+                    ok: false,
+                    message: `Invalid pricing entry: ${JSON.stringify(row)}.`,
+                });
+            }
+            cleaned.push({ CategoryID, Price });
+        }
+
+        const existingCats = await runQuery("SELECT CategoryID FROM category");
+        const validIds = new Set(existingCats.map((r) => r.CategoryID));
+        for (const r of cleaned) {
+            if (!validIds.has(r.CategoryID)) {
+                return res.status(400).json({
+                    ok: false,
+                    message: `CategoryID ${r.CategoryID} does not exist.`,
+                });
+            }
+        }
+
+        for (const r of cleaned) {
+            await runQuery(
+                `INSERT INTO companycategory (CompanyID, CategoryID, Price)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE Price = VALUES(Price)`,
+                [CompanyID, r.CategoryID, r.Price]
+            );
+        }
+
+        const updated = await runQuery(
+            "SELECT CompanyID, CategoryID, Price FROM companycategory WHERE CompanyID = ?",
+            [CompanyID]
+        );
+
+        return res.status(200).json({
+            ok: true,
+            message: `Saved pricing for ${cleaned.length} categor${cleaned.length === 1 ? "y" : "ies"}.`,
+            data: { prices: updated },
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 export const updateCompany = (req, res) => {
     console.log("PUT Request Received");
     const CompanyID = req.query.CompanyID;

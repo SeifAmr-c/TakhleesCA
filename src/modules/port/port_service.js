@@ -32,17 +32,23 @@ export const createPort = (req, res) => {
 
 export const getPort = (req, res) => {
     const PortID = req.query.PortID;
-    if (PortID == '%') {
-        db.query("SELECT * FROM port where PortID LIKE ?", [PortID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
-    } else {
-        db.query("SELECT * FROM port where PortID = ?", [PortID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+
+    if (PortID !== undefined && PortID !== '' && PortID !== '%') {
+        db.query(
+            "SELECT * FROM port WHERE PortID = ?",
+            [PortID],
+            function (err, result) {
+                if (err) throw err;
+                res.json(result);
+            }
+        );
+        return;
     }
+
+    db.query("SELECT * FROM port ORDER BY PortID ASC", function (err, result) {
+        if (err) throw err;
+        res.json(result);
+    });
 };
 
 export const deletePort = (req, res) => {

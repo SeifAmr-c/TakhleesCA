@@ -8,21 +8,8 @@ import { createApplication, listCategories } from "../../api/applications.js";
 import { listPorts } from "../../api/ports.js";
 import { createDocumentRecord } from "../../api/documents.js";
 import { submitPayment } from "../../api/payments.js";
-
-const FALLBACK_CATEGORIES = [
-  { CategoryID: 1, Name: "Imports" },
-  { CategoryID: 2, Name: "Exports" },
-  { CategoryID: 3, Name: "Personal effects" },
-  { CategoryID: 4, Name: "Re-export" },
-];
-
-const FALLBACK_PORTS = [
-  { PortID: 1, PortName: "Alexandria", PortType: "Sea" },
-  { PortID: 2, PortName: "Damietta", PortType: "Sea" },
-  { PortID: 3, PortName: "Port Said", PortType: "Sea" },
-  { PortID: 4, PortName: "Cairo International", PortType: "Air" },
-  { PortID: 5, PortName: "Suez", PortType: "Sea" },
-];
+import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
+import dropStyles from "../auth/Auth.module.css";
 
 const DOCUMENT_TYPES = [
   "National ID / Passport",
@@ -34,6 +21,22 @@ const DOCUMENT_TYPES = [
 const MAX_DOC_BYTES = 5 * 1024 * 1024;
 
 const STEPS = ["Details", "Documents", "Payment", "Tracking"];
+
+/* Inline error renderer — red text directly under the offending input. */
+const FieldError = ({ message }) =>
+  message ? (
+    <span
+      role="alert"
+      style={{
+        color: "var(--signal-stop)",
+        fontSize: 12,
+        marginTop: 4,
+        display: "block",
+      }}
+    >
+      {message}
+    </span>
+  ) : null;
 
 /* ---------- Brand logos (inline, design-system-aligned) ---------- */
 const VisaLogo = () => (
@@ -92,7 +95,7 @@ function Stepper({ current }) {
   );
 }
 
-function DetailsStep({ form, update, categories, ports, submitting }) {
+function DetailsStep({ form, update, categories, ports, errors, submitting }) {
   return (
     <div className="card card-pad-lg">
       <h3 className="card-title">Shipment details</h3>
@@ -105,14 +108,16 @@ function DetailsStep({ form, update, categories, ports, submitting }) {
             className="select"
             value={form.CategoryID}
             onChange={update("CategoryID")}
-            disabled={submitting}
-            required
+            disabled={submitting || !categories.length}
           >
-            <option value="">Select a category…</option>
+            <option value="">
+              {categories.length ? "Select a category…" : "Loading categories…"}
+            </option>
             {categories.map((c) => (
-              <option key={c.CategoryID} value={c.CategoryID}>{c.Name}</option>
+              <option key={c.CategoryID} value={c.CategoryID}>{c.Type}</option>
             ))}
           </select>
+          <FieldError message={errors.CategoryID} />
         </label>
 
         <label className="field">
@@ -122,7 +127,6 @@ function DetailsStep({ form, update, categories, ports, submitting }) {
             value={form.PortID}
             onChange={update("PortID")}
             disabled={submitting}
-            required
           >
             <option value="">Select a port…</option>
             {ports.map((p) => (
@@ -131,6 +135,7 @@ function DetailsStep({ form, update, categories, ports, submitting }) {
               </option>
             ))}
           </select>
+          <FieldError message={errors.PortID} />
         </label>
 
         <label className="field">
@@ -141,21 +146,26 @@ function DetailsStep({ form, update, categories, ports, submitting }) {
               className="input"
               value={form.DeliveryAddress}
               onChange={update("DeliveryAddress")}
-              required
               disabled={submitting}
               placeholder="Street, district, city"
             />
           </div>
           <span className="hint">Where the shipment should be delivered after clearance.</span>
+          <FieldError message={errors.DeliveryAddress} />
         </label>
       </div>
     </div>
   );
 }
 
-function DocumentsStep({ documents, setDocuments, submitting, error, setError }) {
-  const updateType = (id, value) =>
+function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocErrors }) {
+  const setDocFieldError = (id, key, msg) =>
+    setDocErrors((m) => ({ ...m, [id]: { ...(m[id] || {}), [key]: msg } }));
+
+  const updateType = (id, value) => {
     setDocuments((list) => list.map((d) => (d.id === id ? { ...d, type: value } : d)));
+    if (value) setDocFieldError(id, "type", "");
+  };
 
   const updateFile = (id, file) =>
     setDocuments((list) => list.map((d) => (d.id === id ? { ...d, file } : d)));
@@ -166,20 +176,30 @@ function DocumentsStep({ documents, setDocuments, submitting, error, setError })
       { id: Date.now() + Math.random(), type: "", file: null },
     ]);
 
-  const removeDocument = (id) =>
+  const removeDocument = (id) => {
     setDocuments((list) =>
       list.length === 1 ? list : list.filter((d) => d.id !== id)
     );
+    setDocErrors((m) => {
+      const next = { ...m };
+      delete next[id];
+      return next;
+    });
+  };
 
   const onPickFile = (id) => (e) => {
     const file = e.target.files?.[0] ?? null;
-    if (!file) return updateFile(id, null);
-    if (file.size > MAX_DOC_BYTES) {
-      setError("Each document must be 5 MB or smaller.");
-      e.target.value = "";
-      return updateFile(id, null);
+    if (!file) {
+      updateFile(id, null);
+      return;
     }
-    setError("");
+    if (file.size > MAX_DOC_BYTES) {
+      setDocFieldError(id, "file", "File must be 5 MB or smaller.");
+      e.target.value = "";
+      updateFile(id, null);
+      return;
+    }
+    setDocFieldError(id, "file", "");
     updateFile(id, file);
   };
 
@@ -191,82 +211,99 @@ function DocumentsStep({ documents, setDocuments, submitting, error, setError })
       </p>
 
       <div className="stack">
-        {documents.map((d, i) => (
-          <div
-            key={d.id}
-            style={{
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius-md)",
-              padding: 16,
-              background: "var(--surface)",
-            }}
-          >
+        {documents.map((d, i) => {
+          const errs = docErrors[d.id] || {};
+          return (
             <div
-              className="row"
-              style={{ justifyContent: "space-between", marginBottom: 10 }}
+              key={d.id}
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-md)",
+                padding: 16,
+                background: "var(--surface)",
+              }}
             >
-              <span
-                className="mono"
-                style={{
-                  fontSize: 11,
-                  letterSpacing: "0.10em",
-                  textTransform: "uppercase",
-                  color: "var(--ink-faint)",
-                }}
+              <div
+                className="row"
+                style={{ justifyContent: "space-between", marginBottom: 10 }}
               >
-                Document #{i + 1}
-              </span>
-              {documents.length > 1 && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => removeDocument(d.id)}
-                  disabled={submitting}
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-faint)",
+                  }}
                 >
-                  Remove
-                </button>
-              )}
-            </div>
-
-            <div
-              className="grid"
-              style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 12 }}
-            >
-              <label className="field">
-                <span className="field-label">Document type *</span>
-                <select
-                  className="select"
-                  value={d.type}
-                  onChange={(e) => updateType(d.id, e.target.value)}
-                  disabled={submitting}
-                  required
-                >
-                  <option value="">Select type…</option>
-                  {DOCUMENT_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field">
-                <span className="field-label">File *</span>
-                <input
-                  type="file"
-                  className="input"
-                  accept="application/pdf,image/*"
-                  onChange={onPickFile(d.id)}
-                  disabled={submitting}
-                  required
-                />
-                <span className="hint">
-                  {d.file ? `Selected: ${d.file.name}` : "PDF or image, up to 5 MB."}
+                  Document #{i + 1}
                 </span>
-              </label>
-            </div>
-          </div>
-        ))}
+                {documents.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => removeDocument(d.id)}
+                    disabled={submitting}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
 
-        {/* (+) add another document */}
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 12 }}
+              >
+                <label className="field">
+                  <span className="field-label">Document type *</span>
+                  <select
+                    className="select"
+                    value={d.type}
+                    onChange={(e) => updateType(d.id, e.target.value)}
+                    disabled={submitting}
+                  >
+                    <option value="">Select type…</option>
+                    {DOCUMENT_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <FieldError message={errs.type} />
+                </label>
+
+                <div className="field">
+                  <span className="field-label">File *</span>
+                  <label
+                    className={`${dropStyles.dropzone} ${d.file ? dropStyles.dropzoneFilled : ""}`}
+                  >
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      className={dropStyles.dropzoneInput}
+                      onChange={onPickFile(d.id)}
+                      disabled={submitting}
+                    />
+                    <span className={dropStyles.dropzoneIcon} aria-hidden="true">
+                      <Icon name={d.file ? "check" : "doc"} size={24} />
+                    </span>
+                    {d.file ? (
+                      <>
+                        <span className={dropStyles.dropzoneFilename}>{d.file.name}</span>
+                        <span className={dropStyles.dropzoneSubtext}>Click to replace</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className={dropStyles.dropzoneTitle}>Click to upload</span>
+                        <span className={dropStyles.dropzoneSubtext}>PDF or image · max 5 MB</span>
+                      </>
+                    )}
+                  </label>
+                  <FieldError message={errs.file} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
         <button
           type="button"
           onClick={addDocument}
@@ -297,18 +334,21 @@ function DocumentsStep({ documents, setDocuments, submitting, error, setError })
           Add another document
         </button>
       </div>
-
-      {error && <div className="banner-error" style={{ marginTop: 16 }}><Icon name="bell" size={16} />{error}</div>}
     </div>
   );
 }
 
-function PaymentStep({ payment, setPayment, submitting }) {
-  const update = (key) => (e) =>
-    setPayment((p) => ({ ...p, [key]: e.target.value }));
+function PaymentStep({ payment, setPayment, errors, setErrors, submitting, priceLoading, priceUnavailable }) {
+  const update = (key) => (e) => {
+    const value = e.target.value;
+    setPayment((p) => ({ ...p, [key]: value }));
+    setErrors((m) => ({ ...m, [key]: "" }));
+  };
 
-  const setGateway = (val) => setPayment((p) => ({ ...p, Gateway: val }));
-  const setType = (val) => setPayment((p) => ({ ...p, Type: val }));
+  const setGateway = (val) => {
+    setPayment((p) => ({ ...p, Gateway: val }));
+    setErrors((m) => ({ ...m, Gateway: "" }));
+  };
 
   const optionStyle = (active) => ({
     border: `1px solid ${active ? "var(--brand)" : "var(--line-strong)"}`,
@@ -324,88 +364,40 @@ function PaymentStep({ payment, setPayment, submitting }) {
 
   const isCard = payment.Gateway === "Credit Card";
   const isBank = payment.Gateway === "Bank Transfer";
-  const isFull = payment.Type === "FULL";
-  const isPartial = payment.Type === "PARTIAL";
 
   return (
     <div className="card card-pad-lg">
       <h3 className="card-title">Payment</h3>
       <p className="card-subtitle">
-        Choose how much to pay now and your preferred payment method.
+        Pay the full amount upfront. Funds are held in escrow until release.
       </p>
 
       <div className="stack">
-        {/* Payment type */}
-        <div className="field">
-          <span className="field-label">Payment type *</span>
-          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <label style={optionStyle(isFull)}>
-              <input
-                type="radio"
-                name="payment-type"
-                value="FULL"
-                checked={isFull}
-                onChange={() => setType("FULL")}
-                disabled={submitting}
-                style={{ accentColor: "var(--brand)" }}
-              />
-              <div>
-                <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>
-                  Full payment
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Settle the entire amount upfront.
-                </div>
-              </div>
-            </label>
-
-            <label style={optionStyle(isPartial)}>
-              <input
-                type="radio"
-                name="payment-type"
-                value="PARTIAL"
-                checked={isPartial}
-                onChange={() => setType("PARTIAL")}
-                disabled={submitting}
-                style={{ accentColor: "var(--brand)" }}
-              />
-              <div>
-                <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>
-                  Partial payment
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Pay a deposit now, the balance later.
-                </div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* Amount */}
         <label className="field">
-          <span className="field-label">
-            {isPartial ? "Deposit amount (EGP) *" : "Total amount (EGP) *"}
-          </span>
+          <span className="field-label">Total amount (EGP) *</span>
           <div className="input-with-icon">
             <span className="input-icon"><Icon name="receipt" size={16} /></span>
             <input
               className="input"
               inputMode="decimal"
               value={payment.Amount}
-              onChange={update("Amount")}
-              placeholder="0.00"
-              disabled={submitting}
-              required
+              readOnly
+              tabIndex={-1}
+              aria-readonly="true"
+              placeholder={priceLoading ? "Loading price…" : "Select a category to view price"}
+              style={{ backgroundColor: "var(--surface-2)", cursor: "not-allowed" }}
             />
           </div>
           <span className="hint">
-            {isPartial
-              ? "Remaining balance is collected once the company completes clearance."
-              : "Funds are held until the milestone “Released”."}
+            {priceLoading
+              ? "Looking up this company's price for the selected category…"
+              : priceUnavailable
+              ? "This company hasn't published a price for the selected category."
+              : "Auto-calculated from the company's price list. Funds are held until the milestone “Released”."}
           </span>
+          <FieldError message={errors.Amount} />
         </label>
 
-        {/* Gateway */}
         <div className="field">
           <span className="field-label">Payment gateway *</span>
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -454,9 +446,9 @@ function PaymentStep({ payment, setPayment, submitting }) {
               <BankLogo />
             </label>
           </div>
+          <FieldError message={errors.Gateway} />
         </div>
 
-        {/* Card details (only when Credit Card chosen) */}
         {isCard && (
           <div
             style={{
@@ -480,6 +472,7 @@ function PaymentStep({ payment, setPayment, submitting }) {
                     disabled={submitting}
                   />
                 </div>
+                <FieldError message={errors.CardNumber} />
               </label>
               <label className="field">
                 <span className="field-label">Cardholder name</span>
@@ -489,6 +482,7 @@ function PaymentStep({ payment, setPayment, submitting }) {
                   onChange={update("CardName")}
                   disabled={submitting}
                 />
+                <FieldError message={errors.CardName} />
               </label>
               <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label className="field">
@@ -500,6 +494,7 @@ function PaymentStep({ payment, setPayment, submitting }) {
                     onChange={update("Expiry")}
                     disabled={submitting}
                   />
+                  <FieldError message={errors.Expiry} />
                 </label>
                 <label className="field">
                   <span className="field-label">CVC</span>
@@ -510,13 +505,13 @@ function PaymentStep({ payment, setPayment, submitting }) {
                     onChange={update("CVC")}
                     disabled={submitting}
                   />
+                  <FieldError message={errors.CVC} />
                 </label>
               </div>
             </div>
           </div>
         )}
 
-        {/* Bank transfer instructions (only when Bank Transfer) */}
         {isBank && (
           <div
             style={{
@@ -657,12 +652,18 @@ function FillApplication() {
   const { companyId } = useParams();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState(0); // 0..3 (Details, Documents, Payment, Tracking)
-  const [categories, setCategories] = useState([]);
+  const [step, setStep] = useState(0);
   const [ports, setPorts] = useState([]);
-  const [error, setError] = useState("");
-  const [docError, setDocError] = useState("");
+  const [categories, setCategories] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  /* Company-specific pricing: { [CategoryID]: Price }. Fetched once per
+     companyId on mount and consulted whenever the user changes the
+     selected category to auto-fill the Total Amount input. */
+  const [companyPricing, setCompanyPricing] = useState({});
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceUnavailable, setPriceUnavailable] = useState(false);
 
   const [form, setForm] = useState({
     CategoryID: "",
@@ -684,117 +685,213 @@ function FillApplication() {
     CVC: "",
   });
 
-  const [submitted, setSubmitted] = useState(null);
-  // submitted = { applicationId, status }
+  /* Per-field error maps. Empty string / missing key = no error. */
+  const [detailsErrors, setDetailsErrors] = useState({});
+  const [docErrors, setDocErrors] = useState({});
+  const [paymentErrors, setPaymentErrors] = useState({});
 
+  const [submitted, setSubmitted] = useState(null);
+
+  /* Reference data: categories + ports come straight from the DB. No
+     hardcoded fallback list — if the server is unreachable, the dropdowns
+     stay disabled with a "Loading…" placeholder. */
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        const [catData, portData] = await Promise.all([
-          listCategories().catch(() => null),
-          listPorts().catch(() => null),
-        ]);
-        if (!active) return;
-        const cats = Array.isArray(catData) ? catData : catData?.data || [];
-        const prts = Array.isArray(portData) ? portData : portData?.data || [];
-        setCategories(cats.length ? cats : FALLBACK_CATEGORIES);
-        setPorts(prts.length ? prts : FALLBACK_PORTS);
-      } catch {
-        if (!active) return;
-        setCategories(FALLBACK_CATEGORIES);
-        setPorts(FALLBACK_PORTS);
-      }
+      const [portData, catData] = await Promise.all([
+        listPorts().catch(() => null),
+        listCategories().catch(() => null),
+      ]);
+      if (!active) return;
+
+      const prts = Array.isArray(portData) ? portData : portData?.data || [];
+      const cats = Array.isArray(catData) ? catData : catData?.data || [];
+      setPorts(prts);
+      setCategories(cats);
     })();
     return () => { active = false; };
   }, []);
 
-  const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  /* Fetch this company's per-category pricing once the companyId is
+     known. Build a { CategoryID: Price } map for instant lookups when
+     the user toggles between categories. */
+  useEffect(() => {
+    if (!companyId) {
+      setCompanyPricing({});
+      return;
+    }
+    let active = true;
+    setPriceLoading(true);
+    (async () => {
+      try {
+        const rows = await listCompanyCategoryPricing(companyId);
+        if (!active) return;
+        const map = {};
+        for (const r of rows) {
+          if (r?.CategoryID != null && r?.Price != null) {
+            map[Number(r.CategoryID)] = Number(r.Price);
+          }
+        }
+        setCompanyPricing(map);
+      } catch {
+        if (!active) return;
+        setCompanyPricing({});
+      } finally {
+        if (active) setPriceLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [companyId]);
 
-  const validateStep = (idx) => {
-    if (idx === 0) {
-      if (!form.CategoryID) return "Please select a service category.";
-      if (!form.PortID) return "Please select a port.";
-      if (!form.DeliveryAddress.trim()) return "Delivery address is required.";
-      return null;
+  /* Whenever the chosen category (or the pricing map) changes, push the
+     matching price into the payment state. If the company doesn't price
+     this category, blank the field and surface that to the user. */
+  useEffect(() => {
+    if (!form.CategoryID) {
+      setPayment((p) => ({ ...p, Amount: "" }));
+      setPriceUnavailable(false);
+      return;
     }
-    if (idx === 1) {
-      if (!documents.length) return "Add at least one document.";
-      for (const d of documents) {
-        if (!d.type) return "Choose a type for every document.";
-        if (!d.file) return "Attach a file for every document.";
-      }
-      return null;
+    const price = companyPricing[Number(form.CategoryID)];
+    if (price == null) {
+      setPayment((p) => ({ ...p, Amount: "" }));
+      setPriceUnavailable(!priceLoading);
+      return;
     }
-    if (idx === 2) {
-      if (!payment.Type) return "Choose a payment type.";
-      const amt = Number(payment.Amount);
-      if (!amt || amt <= 0) return "Enter a valid amount.";
-      if (!payment.Gateway) return "Choose a payment gateway.";
-      if (payment.Gateway === "Credit Card") {
-        if (payment.CardNumber.replace(/\s/g, "").length < 12)
-          return "Enter a valid card number.";
-        if (!payment.CardName.trim()) return "Cardholder name is required.";
-        if (!/^\d{2}\/\d{2}$/.test(payment.Expiry)) return "Expiry must be MM/YY.";
-        if (!/^\d{3,4}$/.test(payment.CVC)) return "CVC must be 3 or 4 digits.";
-      }
-      return null;
+    setPayment((p) => ({ ...p, Amount: String(price) }));
+    setPriceUnavailable(false);
+    setPaymentErrors((m) => ({ ...m, Amount: "" }));
+  }, [form.CategoryID, companyPricing, priceLoading]);
+
+  const update = (key) => (e) => {
+    const value = e.target.value;
+    setForm((f) => ({ ...f, [key]: value }));
+    if (value) setDetailsErrors((m) => ({ ...m, [key]: "" }));
+  };
+
+  const validateDetails = () => {
+    const errs = {};
+    if (!form.CategoryID) errs.CategoryID = "Please select a service category.";
+    if (!form.PortID) errs.PortID = "Please select a port.";
+    if (!form.DeliveryAddress.trim()) errs.DeliveryAddress = "Delivery address is required.";
+    return errs;
+  };
+
+  const validateDocuments = () => {
+    const errs = {};
+    if (!documents.length) {
+      return { __global: "Add at least one document." };
     }
-    return null;
+    for (const d of documents) {
+      const e = {};
+      if (!d.type) e.type = "Choose a document type.";
+      if (!d.file) e.file = "Attach a file.";
+      if (Object.keys(e).length) errs[d.id] = e;
+    }
+    return errs;
+  };
+
+  const validatePayment = () => {
+    const errs = {};
+    const amt = Number(payment.Amount);
+    if (!amt || amt <= 0) {
+      errs.Amount = priceUnavailable
+        ? "This company has not published a price for the selected category. Please choose a different category."
+        : priceLoading
+        ? "Still loading the company's price — please wait a moment."
+        : "Select a service category to load the price.";
+    }
+    if (!payment.Gateway) errs.Gateway = "Choose a payment gateway.";
+    if (payment.Gateway === "Credit Card") {
+      if (payment.CardNumber.replace(/\s/g, "").length < 12)
+        errs.CardNumber = "Enter a valid card number.";
+      if (!payment.CardName.trim()) errs.CardName = "Cardholder name is required.";
+      if (!/^\d{2}\/\d{2}$/.test(payment.Expiry)) errs.Expiry = "Expiry must be MM/YY.";
+      if (!/^\d{3,4}$/.test(payment.CVC)) errs.CVC = "CVC must be 3 or 4 digits.";
+    }
+    return errs;
   };
 
   const goNext = async () => {
-    const v = validateStep(step);
-    if (v) return setError(v);
-    setError("");
+    setSubmitError("");
 
-    // Final submission happens at end of step 2 (Payment)
+    if (step === 0) {
+      const errs = validateDetails();
+      setDetailsErrors(errs);
+      if (Object.keys(errs).length) return;
+      setStep(1);
+      return;
+    }
+
+    if (step === 1) {
+      const errs = validateDocuments();
+      setDocErrors(errs);
+      if (Object.keys(errs).length) return;
+      setStep(2);
+      return;
+    }
+
     if (step === 2) {
+      const errs = validatePayment();
+      setPaymentErrors(errs);
+      if (Object.keys(errs).length) return;
       await handleFinalSubmit();
       return;
     }
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
   const goBack = () => {
-    setError("");
+    setSubmitError("");
     setStep((s) => Math.max(s - 1, 0));
   };
 
   const handleFinalSubmit = async () => {
     setSubmitting(true);
+    setSubmitError("");
     try {
       const res = await createApplication({
         CategoryID: Number(form.CategoryID),
         PortID: Number(form.PortID),
         DeliveryAddress: form.DeliveryAddress.trim(),
-        PaymentType: payment.Type, // 'FULL' | 'PARTIAL'
+        PaymentType: "FULL",
         CompanyID: companyId ? Number(companyId) : undefined,
       });
 
       const applicationId =
         res?.data?.ApplicationID || res?.ApplicationID || res?.data?.insertId || null;
 
-      // Best-effort attach document records & payment
-      try {
-        await Promise.all(
-          documents.map((d) =>
-            createDocumentRecord({
-              DocType: `${d.type}:${d.file?.name || ""}`,
-              ApplicationID: applicationId || null,
-            })
-          )
-        );
-      } catch { /* document metadata best-effort */ }
+      /* Document metadata: send ENUM-valid `DocType` and the file name as `Path`.
+         The backend stamps UploadDate / VerficationStatus, so we don't send those.
+         Best-effort — a failure here doesn't undo the application. */
+      if (applicationId) {
+        try {
+          await Promise.all(
+            documents.map((d) =>
+              createDocumentRecord({
+                DocType: d.type,
+                Path: d.file?.name || "unsaved",
+                ApplicationID: applicationId,
+              })
+            )
+          );
+        } catch { /* document metadata best-effort */ }
+      }
 
-      try {
-        await submitPayment({
-          ApplicationID: applicationId,
-          Amount: Number(payment.Amount),
-          Method: payment.Gateway,
-          Type: payment.Type,
-        });
-      } catch { /* payment best-effort */ }
+      /* Payment: backend expects `PaymentGateway` (not `Method`) and stamps
+         the date itself. Best-effort — surfacing a payment failure is more
+         useful than silently swallowing it, but we still don't roll back the
+         application if the payment row fails. */
+      if (applicationId) {
+        try {
+          await submitPayment({
+            ApplicationID: applicationId,
+            Amount: Number(payment.Amount),
+            PaymentGateway: payment.Gateway,
+          });
+        } catch (paymentErr) {
+          console.warn("Payment record failed:", paymentErr);
+        }
+      }
 
       setSubmitted({
         applicationId: applicationId || "—",
@@ -802,7 +899,7 @@ function FillApplication() {
       });
       setStep(3);
     } catch (err) {
-      setError(
+      setSubmitError(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
           "Could not submit the application. Please try again."
@@ -831,14 +928,13 @@ function FillApplication() {
       <Reveal as="div" style={{ maxWidth: 820, margin: "0 auto" }}>
         <Stepper current={step} />
 
-        {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
-
         {step === 0 && (
           <DetailsStep
             form={form}
             update={update}
             categories={categories}
             ports={ports}
+            errors={detailsErrors}
             submitting={submitting}
           />
         )}
@@ -848,8 +944,8 @@ function FillApplication() {
             documents={documents}
             setDocuments={setDocuments}
             submitting={submitting}
-            error={docError}
-            setError={setDocError}
+            docErrors={docErrors}
+            setDocErrors={setDocErrors}
           />
         )}
 
@@ -857,7 +953,11 @@ function FillApplication() {
           <PaymentStep
             payment={payment}
             setPayment={setPayment}
+            errors={paymentErrors}
+            setErrors={setPaymentErrors}
             submitting={submitting}
+            priceLoading={priceLoading}
+            priceUnavailable={priceUnavailable}
           />
         )}
 
@@ -870,6 +970,13 @@ function FillApplication() {
               navigate(`/tracking?review=${submitted?.applicationId}`)
             }
           />
+        )}
+
+        {/* Submission-level error: shown only after the final Submit click fails. */}
+        {submitError && step === 2 && (
+          <div className="banner-error" style={{ marginTop: 16 }}>
+            <Icon name="bell" size={16} />{submitError}
+          </div>
         )}
 
         {step < 3 && (

@@ -12,17 +12,23 @@ export const createCategory = (req, res) => {
 
 export const getCategory = (req, res) => {
     const CategoryID = req.query.CategoryID;
-    if (CategoryID == '%') {
-        db.query("SELECT * FROM category where CategoryID LIKE ?", [CategoryID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
-    } else {
-        db.query("SELECT * FROM category where CategoryID = ?", [CategoryID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+
+    if (CategoryID !== undefined && CategoryID !== '' && CategoryID !== '%') {
+        db.query(
+            "SELECT * FROM category WHERE CategoryID = ?",
+            [CategoryID],
+            function (err, result) {
+                if (err) throw err;
+                res.json(result);
+            }
+        );
+        return;
     }
+
+    db.query("SELECT * FROM category ORDER BY CategoryID ASC", function (err, result) {
+        if (err) throw err;
+        res.json(result);
+    });
 };
 
 export const deleteCategory = (req, res) => {

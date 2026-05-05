@@ -1,30 +1,37 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
-import { listApplications, updateApplicationStatus } from "../../api/applications.js";
+import {
+  listApplications,
+  updateApplicationStatus,
+} from "../../api/applications.js";
+import { useAuth } from "../../api/authState.js";
 
-const FALLBACK_PENDING = [
-  { ApplicationID: 2001, ClientName: "Ahmed Mahmoud", ClientInitials: "AM", Origin: "Shanghai", Destination: "Alexandria", DeliveryAddress: "23 Ramses St., Cairo", CategoryName: "Imports", CreatedAt: "2026-04-29", Amount: 1280, CargoType: "Electronics", Status: "pending" },
-  { ApplicationID: 2002, ClientName: "Sara Khaled", ClientInitials: "SK", Origin: "Hamburg", Destination: "Alexandria", DeliveryAddress: "5 Corniche, Alexandria", CategoryName: "Re-export", CreatedAt: "2026-04-28", Amount: 980, CargoType: "Auto parts", Status: "pending" },
-  { ApplicationID: 2003, ClientName: "Omar Said", ClientInitials: "OS", Origin: "Mumbai", Destination: "Suez", DeliveryAddress: "Industrial Zone, Suez", CategoryName: "Imports", CreatedAt: "2026-04-27", Amount: 1620, CargoType: "Textiles", Status: "pending" },
-];
-
-const FALLBACK_ACCEPTED = [
-  { ApplicationID: 2050, ClientName: "Mohamed Lotfy", ClientInitials: "ML", Status: "in_progress", CategoryName: "Exports", Amount: 1450, Origin: "Alexandria", Destination: "Genoa", DeliveryAddress: "Genova Free Port", CreatedAt: "2026-04-22" },
-  { ApplicationID: 2055, ClientName: "Layla Hassan", ClientInitials: "LH", Status: "completed", CategoryName: "Imports", Amount: 1100, Origin: "Yokohama", Destination: "Alexandria", DeliveryAddress: "12 Smouha, Alexandria", CreatedAt: "2026-04-15" },
-  { ApplicationID: 2060, ClientName: "Yusuf Adel", ClientInitials: "YA", Status: "in_progress", CategoryName: "Personal effects", Amount: 720, Origin: "Marseille", Destination: "Alexandria", DeliveryAddress: "8 Stanley, Alexandria", CreatedAt: "2026-04-25" },
-  { ApplicationID: 2065, ClientName: "Nour Ibrahim", ClientInitials: "NI", Status: "in_progress", CategoryName: "Imports", Amount: 2100, Origin: "Rotterdam", Destination: "Damietta", DeliveryAddress: "Damietta Industrial Zone", CreatedAt: "2026-04-26" },
-  { ApplicationID: 2070, ClientName: "Hana Refaat", ClientInitials: "HR", Status: "rejected", CategoryName: "Re-export", Amount: 540, Origin: "Istanbul", Destination: "Port Said", DeliveryAddress: "—", CreatedAt: "2026-04-12" },
-];
+/* DB ENUM 'Pending' | 'In Progress' | 'Completed'  →  internal lower-case
+   sentinels the dashboard uses everywhere ('pending', 'in_progress',
+   'completed'). Anything unexpected is treated as 'pending'. */
+const normalizeStatus = (raw) => {
+  switch (String(raw || "").toLowerCase()) {
+    case "pending":
+      return "pending";
+    case "in progress":
+    case "in_progress":
+    case "accepted":
+      return "in_progress";
+    case "completed":
+      return "completed";
+    default:
+      return "pending";
+  }
+};
 
 const STATUS_BADGE = {
   pending: ["badge-pending", "Pending"],
-  accepted: ["badge-info", "Accepted"],
   in_progress: ["badge-info", "In progress"],
   completed: ["badge-success", "Completed"],
-  rejected: ["badge-error", "Cancelled"],
 };
 
 const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
@@ -32,34 +39,59 @@ const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
 const FILTERS = [
   { id: "all", label: "All" },
   { id: "pending", label: "Pending" },
-  { id: "accepted", label: "Accepted" },
   { id: "in_progress", label: "In progress" },
   { id: "completed", label: "Completed" },
-  { id: "rejected", label: "Cancelled" },
 ];
 
 function statusToStepIndex(status) {
   switch (status) {
     case "pending": return 0;
-    case "accepted": return 1;
     case "in_progress": return 2;
     case "completed": return 3;
     default: return 0;
   }
 }
 
-function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData }) {
-  const iconClass =
-    accent === "accent" ? "card-icon card-icon-accent" : "card-icon";
+const initialsOf = (name) =>
+  String(name || "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "?";
+
+const formatDate = (input) => {
+  if (!input) return "";
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+};
+
+/* Map a raw application row from the backend into the shape the cards render. */
+const shapeApplication = (a) => ({
+  ApplicationID: a.ApplicationID,
+  Status: normalizeStatus(a.Status),
+  ClientID: a.ClientID,
+  ClientName: (a.ClientName || "").trim() || `Client #${a.ClientID}`,
+  ClientInitials: initialsOf(a.ClientName),
+  CategoryName: a.CategoryName || "Service",
+  PortName: a.PortName || "",
+  PortType: a.PortType || "",
+  DeliveryAddress: a.DeliveryAddress || "",
+  Amount: Number(a.Amount || 0),
+  CreatedAt: formatDate(a.SubmissionDate),
+  TrackingNumber: a.TrackingNumber || "",
+});
+
+function StatCard({ icon, label, value, sub, accent }) {
+  const iconClass = accent === "accent" ? "card-icon card-icon-accent" : "card-icon";
   return (
     <div className="stat">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="stat-label">{label}</div>
         {icon && (
-          <div
-            className={iconClass}
-            style={{ marginBottom: 0, width: 32, height: 32 }}
-          >
+          <div className={iconClass} style={{ marginBottom: 0, width: 32, height: 32 }}>
             <Icon name={icon} size={16} />
           </div>
         )}
@@ -75,19 +107,6 @@ function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData 
           {sub}
         </div>
       )}
-      {trend && (
-        <div className={`stat-trend ${trendDir || "up"}`}>
-          <Icon name={trendDir === "down" ? "arrow_down" : "arrow_up"} size={12} />
-          {trend}
-        </div>
-      )}
-      {sparkData && (
-        <div className="spark">
-          {sparkData.map((h, i) => (
-            <span key={i} style={{ height: `${h}px` }} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -97,27 +116,32 @@ function PendingCard({ a, onDecision, busy }) {
     <div className="card card-hover">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div className="row" style={{ gap: 14, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{a.ClientInitials || "C"}</div>
+          <div className="avatar avatar-lg">{a.ClientInitials}</div>
           <div>
             <div className="row-meta">
               #{a.ApplicationID} · Submitted {a.CreatedAt || "—"}
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>
-              {a.ClientName || `Client #${a.ClientID}`}
+              {a.ClientName}
             </div>
             <div className="muted" style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <Icon name="ship" size={13} />
-                {a.Origin || "—"} → {a.Destination || "—"}
-              </span>
+              {a.PortName && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <Icon name="ship" size={13} />
+                  {a.PortName}{a.PortType ? ` (${a.PortType})` : ""}
+                </span>
+              )}
               <span style={{ color: "var(--gray-300)" }}>·</span>
               <span className="badge badge-neutral" style={{ padding: "2px 8px" }}>
-                {a.CategoryName || "Service"}
+                {a.CategoryName}
               </span>
-              {a.CargoType && (
+              {a.DeliveryAddress && (
                 <>
                   <span style={{ color: "var(--gray-300)" }}>·</span>
-                  <span>{a.CargoType}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Icon name="pin" size={12} />
+                    {a.DeliveryAddress}
+                  </span>
                 </>
               )}
             </div>
@@ -125,7 +149,7 @@ function PendingCard({ a, onDecision, busy }) {
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)" }}>
-            EGP {Number(a.Amount || 0).toLocaleString()}
+            EGP {a.Amount.toLocaleString()}
           </div>
           <div className="muted" style={{ fontSize: 11 }}>quoted</div>
         </div>
@@ -160,21 +184,25 @@ function PendingCard({ a, onDecision, busy }) {
 
 function AcceptedCard({ a, onStatusChange, busy }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status];
-  const stepIdx = statusToStepIndex(a.Status === "accepted" ? "accepted" : a.Status);
+  const stepIdx = statusToStepIndex(a.Status);
 
   return (
     <div className="card card-hover">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div className="row" style={{ gap: 14, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{a.ClientInitials || "C"}</div>
+          <div className="avatar avatar-lg">{a.ClientInitials}</div>
           <div>
-            <div className="row-meta">#{a.ApplicationID} · {a.CategoryName || "Service"} · {a.CreatedAt || "—"}</div>
-            <div className="row-title" style={{ fontSize: 16 }}>{a.ClientName || `Client #${a.ClientID}`}</div>
+            <div className="row-meta">#{a.ApplicationID} · {a.CategoryName} · {a.CreatedAt || "—"}</div>
+            <div className="row-title" style={{ fontSize: 16 }}>{a.ClientName}</div>
             <div className="muted" style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-              <Icon name="ship" size={13} />
-              {a.Origin || "—"} → {a.Destination || "—"}
-              <span style={{ color: "var(--gray-300)" }}>·</span>
-              <strong style={{ color: "var(--navy)" }}>EGP {Number(a.Amount || 0).toLocaleString()}</strong>
+              {a.PortName && (
+                <>
+                  <Icon name="ship" size={13} />
+                  {a.PortName}{a.PortType ? ` (${a.PortType})` : ""}
+                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                </>
+              )}
+              <strong style={{ color: "var(--navy)" }}>EGP {a.Amount.toLocaleString()}</strong>
             </div>
           </div>
         </div>
@@ -192,7 +220,6 @@ function AcceptedCard({ a, onStatusChange, busy }) {
           >
             <option value="in_progress">In progress</option>
             <option value="completed">Completed</option>
-            <option value="rejected">Cancelled</option>
           </select>
         </div>
       </div>
@@ -214,32 +241,32 @@ function AcceptedCard({ a, onStatusChange, busy }) {
   );
 }
 
-/* ---------- All received applications row ---------- */
 function ApplicationRow({ a }) {
-  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
+  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status];
   const stepIdx = statusToStepIndex(a.Status);
 
   return (
     <div className="card">
-      <div
-        className="row"
-        style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}
-      >
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{a.ClientInitials || "C"}</div>
+          <div className="avatar avatar-lg">{a.ClientInitials}</div>
           <div>
             <div className="row-meta">
-              #{a.ApplicationID} · {a.CategoryName || "Service"} · {a.CreatedAt || "—"}
+              #{a.ApplicationID} · {a.CategoryName} · {a.CreatedAt || "—"}
             </div>
             <div className="row-title" style={{ fontSize: 15 }}>
-              {a.ClientName || `Client #${a.ClientID}`}
+              {a.ClientName}
             </div>
             <div
               className="muted"
               style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
             >
-              <Icon name="ship" size={13} />
-              {a.Origin || "—"} → {a.Destination || "—"}
+              {a.PortName && (
+                <>
+                  <Icon name="ship" size={13} />
+                  {a.PortName}{a.PortType ? ` (${a.PortType})` : ""}
+                </>
+              )}
               {a.DeliveryAddress && (
                 <>
                   <span style={{ color: "var(--gray-300)" }}>·</span>
@@ -261,7 +288,7 @@ function ApplicationRow({ a }) {
             className="mono tabular"
             style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}
           >
-            EGP {Number(a.Amount || 0).toLocaleString()}
+            EGP {a.Amount.toLocaleString()}
           </div>
         </div>
       </div>
@@ -283,58 +310,64 @@ function ApplicationRow({ a }) {
   );
 }
 
+/* ---------- Main page ---------- */
 function CompanyDashboard() {
-  const [pending, setPending] = useState([]);
-  const [accepted, setAccepted] = useState([]);
+  const auth = useAuth();
+  const companyId = auth?.kind === "company" ? auth?.company?.CompanyID : null;
+
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
+  const [errorBanner, setErrorBanner] = useState("");
 
   // Filter + search for the all-applications monitor
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const [pendingRes, acceptedRes] = await Promise.all([
-          listApplications({ Status: "pending" }).catch(() => null),
-          listApplications({ Status: "accepted" }).catch(() => null),
-        ]);
-        if (!active) return;
-        const p = Array.isArray(pendingRes) ? pendingRes : pendingRes?.data || [];
-        const a = Array.isArray(acceptedRes) ? acceptedRes : acceptedRes?.data || [];
-        setPending(p.length ? p : FALLBACK_PENDING);
-        setAccepted(a.length ? a : FALLBACK_ACCEPTED);
-      } catch {
-        if (!active) return;
-        setPending(FALLBACK_PENDING);
-        setAccepted(FALLBACK_ACCEPTED);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+  const reloadApplications = async () => {
+    if (!companyId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await listApplications({ CompanyID: companyId });
+      const list = Array.isArray(res) ? res : res?.data || [];
+      setApplications(list.map(shapeApplication));
+      setErrorBanner("");
+    } catch {
+      setErrorBanner("Couldn't load your applications. Please refresh.");
+      setApplications([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const allApplications = useMemo(() => {
-    const pendingNormalized = pending.map((p) => ({ ...p, Status: p.Status || "pending" }));
-    return [...pendingNormalized, ...accepted];
-  }, [pending, accepted]);
+  useEffect(() => {
+    reloadApplications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  const pending = useMemo(
+    () => applications.filter((a) => a.Status === "pending"),
+    [applications]
+  );
+  const accepted = useMemo(
+    () => applications.filter((a) => a.Status === "in_progress" || a.Status === "completed"),
+    [applications]
+  );
 
   const filteredApplications = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return allApplications.filter((a) => {
+    return applications.filter((a) => {
       if (filter !== "all" && a.Status !== filter) return false;
       if (!q) return true;
       const haystack = [
         a.ClientName,
         a.CategoryName,
-        a.Origin,
-        a.Destination,
+        a.PortName,
         a.DeliveryAddress,
-        a.CargoType,
         String(a.ApplicationID),
       ]
         .filter(Boolean)
@@ -342,34 +375,33 @@ function CompanyDashboard() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [allApplications, filter, query]);
+  }, [applications, filter, query]);
 
   const counts = useMemo(() => {
-    const c = { all: allApplications.length };
+    const c = { all: applications.length };
     for (const f of FILTERS.slice(1)) {
-      c[f.id] = allApplications.filter((a) => a.Status === f.id).length;
+      c[f.id] = applications.filter((a) => a.Status === f.id).length;
     }
     return c;
-  }, [allApplications]);
+  }, [applications]);
 
   const totals = useMemo(() => {
-    const acceptedSum = accepted.reduce((s, a) => s + (Number(a.Amount) || 0), 0);
     const completedSum = accepted
       .filter((a) => a.Status === "completed")
-      .reduce((s, a) => s + (Number(a.Amount) || 0), 0);
-    const pendingSum = pending.reduce((s, a) => s + (Number(a.Amount) || 0), 0);
+      .reduce((s, a) => s + a.Amount, 0);
+    const pendingSum = pending.reduce((s, a) => s + a.Amount, 0);
     const completed = accepted.filter((a) => a.Status === "completed").length;
     const inProgress = accepted.filter((a) => a.Status === "in_progress").length;
     const platformFee = Math.round(completedSum * 0.08);
     return {
-      revenue: acceptedSum,
+      revenue: completedSum,
       completedRevenue: completedSum,
       pendingValue: pendingSum,
       activeJobs: accepted.length,
       completed,
       inProgress,
       platformFee,
-      netEarnings: completedSum - platformFee,
+      netEarnings: Math.max(0, completedSum - platformFee),
     };
   }, [pending, accepted]);
 
@@ -378,22 +410,27 @@ function CompanyDashboard() {
     setTimeout(() => setNotice(""), 3500);
   };
 
-  const handleDecision = async (applicationId, status) => {
+  const handleDecision = async (applicationId, decision) => {
     setBusyId(applicationId);
     try {
-      await updateApplicationStatus(applicationId, status);
-    } catch { /* still update UI */ }
-    finally {
-      setBusyId(null);
-      const item = pending.find((a) => a.ApplicationID === applicationId);
-      if (status === "accepted" && item) {
-        setPending((p) => p.filter((a) => a.ApplicationID !== applicationId));
-        setAccepted((a) => [{ ...item, Status: "in_progress" }, ...a]);
+      if (decision === "accepted") {
+        await updateApplicationStatus(applicationId, "accepted");
+        setApplications((list) =>
+          list.map((a) =>
+            a.ApplicationID === applicationId ? { ...a, Status: "in_progress" } : a
+          )
+        );
         showNotice(`Accepted application #${applicationId} — moved to In progress.`);
       } else {
-        setPending((p) => p.filter((a) => a.ApplicationID !== applicationId));
-        showNotice(`Rejected application #${applicationId}. Client has been notified.`);
+        // 'Rejected' isn't a DB enum value yet; remove from view only and
+        // surface a toast so the company knows persistence is pending.
+        setApplications((list) => list.filter((a) => a.ApplicationID !== applicationId));
+        showNotice(`Hidden application #${applicationId}. Persistent rejection isn't supported yet.`);
       }
+    } catch {
+      showNotice(`Couldn't update application #${applicationId}.`);
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -401,17 +438,18 @@ function CompanyDashboard() {
     setBusyId(applicationId);
     try {
       await updateApplicationStatus(applicationId, status);
-    } catch { /* noop */ }
-    finally {
-      setBusyId(null);
-      setAccepted((list) =>
-        list.map((row) =>
-          row.ApplicationID === applicationId ? { ...row, Status: status } : row
+      setApplications((list) =>
+        list.map((a) =>
+          a.ApplicationID === applicationId ? { ...a, Status: status } : a
         )
       );
       if (status === "completed") {
         showNotice(`Application #${applicationId} marked as completed. Payment will be released.`);
       }
+    } catch {
+      showNotice(`Couldn't update application #${applicationId}.`);
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -421,8 +459,8 @@ function CompanyDashboard() {
       subtitle="Monitor every application your company has received — pending, in progress and completed."
       role="Company"
       actions={
-        <button className="btn btn-secondary btn-sm">
-          <Icon name="bell" size={14} /> Notifications
+        <button className="btn btn-secondary btn-sm" onClick={reloadApplications}>
+          <Icon name="bell" size={14} /> Refresh
         </button>
       }
     >
@@ -430,6 +468,18 @@ function CompanyDashboard() {
         <div className="banner-success">
           <Icon name="check" size={16} />
           {notice}
+        </div>
+      )}
+      {errorBanner && (
+        <div className="banner-error">
+          <Icon name="bell" size={16} />
+          {errorBanner}
+        </div>
+      )}
+      {!companyId && (
+        <div className="banner-error">
+          <Icon name="bell" size={16} />
+          You're not signed in as a company. Sign in to see real applications and pricing.
         </div>
       )}
 
@@ -440,36 +490,28 @@ function CompanyDashboard() {
             <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>Overview</span>
             <h2 className="h3" style={{ fontSize: 20 }}>Revenue and pipeline</h2>
           </div>
-          <span className="muted" style={{ fontSize: 13 }}>Last 30 days</span>
+          <span className="muted" style={{ fontSize: 13 }}>All-time</span>
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <StatCard
             icon="trending"
-            label="Gross revenue"
+            label="Completed revenue"
             value={`EGP ${totals.revenue.toLocaleString()}`}
-            sub="Across active and completed jobs"
-            trend="+12.4% vs last month"
-            trendDir="up"
-            sparkData={[6, 9, 7, 12, 10, 14, 11, 18]}
+            sub={`${totals.completed} completed jobs`}
           />
           <StatCard
             icon="receipt"
             label="Net earnings"
             value={`EGP ${totals.netEarnings.toLocaleString()}`}
             sub={`After EGP ${totals.platformFee.toLocaleString()} platform fee`}
-            trend="+8.1%"
-            trendDir="up"
             accent="success"
-            sparkData={[4, 6, 5, 9, 8, 11, 9, 14]}
           />
           <StatCard
             icon="package"
             label="Pending value"
             value={`EGP ${totals.pendingValue.toLocaleString()}`}
-            sub={`${pending.length} requests waiting`}
-            trend={`${pending.length} new`}
-            trendDir="up"
+            sub={`${pending.length} request${pending.length === 1 ? "" : "s"} waiting`}
             accent="accent"
           />
           <StatCard
@@ -478,6 +520,31 @@ function CompanyDashboard() {
             value={totals.activeJobs}
             sub={`${totals.inProgress} in progress · ${totals.completed} completed`}
           />
+        </div>
+      </Reveal>
+
+      {/* Profile & pricing CTA */}
+      <Reveal as="section" style={{ marginBottom: 36 }}>
+        <div
+          className="card card-pad-lg"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>Profile & pricing</span>
+            <h2 className="h3" style={{ fontSize: 20, marginTop: 4 }}>Edit profile and category prices</h2>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+              Update your governorate, address, contact email, about-us copy, and the price clients pay per category.
+            </p>
+          </div>
+          <Link to="/company/profile" className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
+            Open editor <Icon name="arrow_right" size={14} />
+          </Link>
         </div>
       </Reveal>
 
@@ -503,7 +570,7 @@ function CompanyDashboard() {
           <div className="card" style={{ textAlign: "center", padding: 48 }}>
             <Icon name="check" size={28} color="var(--success)" />
             <h3 className="h3" style={{ marginTop: 12 }}>All caught up</h3>
-            <p className="muted" style={{ margin: 0 }}>No pending requests right now. Nice work.</p>
+            <p className="muted" style={{ margin: 0 }}>No pending requests right now.</p>
           </div>
         ) : (
           <div className="grid">
@@ -529,7 +596,7 @@ function CompanyDashboard() {
           <span className="muted" style={{ fontSize: 13 }}>Update status as you progress</span>
         </div>
 
-        {accepted.length === 0 ? (
+        {loading ? null : accepted.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: 48 }}>
             <p className="muted" style={{ margin: 0 }}>Nothing in progress.</p>
           </div>
@@ -555,7 +622,7 @@ function CompanyDashboard() {
             <h2 className="h3" style={{ fontSize: 20 }}>All received applications</h2>
           </div>
           <span className="muted" style={{ fontSize: 13 }}>
-            {filteredApplications.length} of {allApplications.length} shown
+            {filteredApplications.length} of {applications.length} shown
           </span>
         </div>
 
@@ -613,7 +680,7 @@ function CompanyDashboard() {
             <span className="input-icon"><Icon name="search" size={16} /></span>
             <input
               className="input"
-              placeholder="Search by client, ID, route, address…"
+              placeholder="Search by client, ID, port, address…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -629,7 +696,9 @@ function CompanyDashboard() {
             <Icon name="package" size={28} color="var(--ink-faint)" />
             <h3 className="h3" style={{ marginTop: 12 }}>No applications match</h3>
             <p className="muted" style={{ margin: 0 }}>
-              Try a different filter or clear the search.
+              {applications.length === 0
+                ? "You haven't received any applications yet."
+                : "Try a different filter or clear the search."}
             </p>
           </div>
         ) : (

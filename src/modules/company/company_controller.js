@@ -1,6 +1,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import * as companyService from "./company_service.js";
+import { requireCompany } from "../../middleware/auth.js";
 
 const router = Router();
 
@@ -17,6 +18,8 @@ router.post("/login", loginLimiter, companyService.loginCompany);
 router.post("/logout", companyService.logoutCompany);
 router.get("/", companyService.getCompany);
 router.get("/search", companyService.searchCompany);
+router.put("/profile", requireCompany, companyService.updateCompanyProfile);
+router.put("/pricing", requireCompany, companyService.updateCompanyPricing);
 router.delete("/", companyService.deleteCompany);
 router.put("/", companyService.updateCompany);
 

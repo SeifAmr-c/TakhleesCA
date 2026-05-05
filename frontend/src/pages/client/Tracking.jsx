@@ -1,45 +1,71 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listApplications } from "../../api/applications.js";
-
-const FALLBACK = [
-  { ApplicationID: 1001, CompanyName: "Cairo Clearance Co.", Status: "in_progress", Origin: "Shanghai", Destination: "Alexandria", CreatedAt: "2026-04-22", Amount: 1280 },
-  { ApplicationID: 1002, CompanyName: "Alex Maritime", Status: "accepted", Origin: "Hamburg", Destination: "Alexandria", CreatedAt: "2026-04-25", Amount: 1450 },
-  { ApplicationID: 1003, CompanyName: "Suez Port Solutions", Status: "completed", Origin: "Mumbai", Destination: "Suez", CreatedAt: "2026-04-10", Amount: 980 },
-  { ApplicationID: 1004, CompanyName: "Damietta Freight", Status: "pending", Origin: "Rotterdam", Destination: "Damietta", CreatedAt: "2026-04-28", Amount: 1620 },
-];
+import { useAuth } from "../../api/authState.js";
 
 const STATUS_BADGE = {
   pending: ["badge-pending", "Pending review"],
-  in_review: ["badge-pending", "In review"],
-  accepted: ["badge-info", "Accepted"],
   in_progress: ["badge-info", "In progress"],
   completed: ["badge-success", "Completed"],
-  rejected: ["badge-error", "Rejected"],
 };
 
 const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
 
+/* DB ENUM ('Pending' | 'In Progress' | 'Completed')  →  internal sentinels
+   used by the rest of the UI ('pending' | 'in_progress' | 'completed').
+   Anything unexpected falls back to 'pending'. */
+function normalizeStatus(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "pending") return "pending";
+  if (s === "in progress" || s === "in_progress" || s === "accepted") return "in_progress";
+  if (s === "completed") return "completed";
+  return "pending";
+}
+
 function statusToStepIndex(status) {
   switch (status) {
-    case "pending":
-    case "in_review": return 0;
-    case "accepted": return 1;
+    case "pending": return 0;
     case "in_progress": return 2;
     case "completed": return 3;
     default: return 0;
   }
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/* Map a raw row from /application into the shape the row component expects.
+   Origin/destination are derived from the joined Port + DeliveryAddress
+   (backend join provides PortName, PortType, CategoryName, CompanyName, Amount). */
+function shapeApplication(raw) {
+  const status = normalizeStatus(raw.Status);
+  return {
+    ApplicationID: raw.ApplicationID,
+    CompanyID: raw.CompanyID,
+    CompanyName: raw.CompanyName || (raw.CompanyID ? `Company #${raw.CompanyID}` : "—"),
+    Status: status,
+    Origin: raw.PortName ? `${raw.PortName}${raw.PortType ? ` (${raw.PortType})` : ""}` : "Origin port",
+    Destination: raw.DeliveryAddress || "Delivery address",
+    CreatedAt: formatDate(raw.SubmissionDate),
+    Amount: raw.Amount != null ? Number(raw.Amount) : null,
+    TrackingNumber: raw.TrackingNumber || null,
+    CategoryName: raw.CategoryName || null,
+  };
+}
+
 function ShipmentRow({ a, onLeaveReview }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
   const stepIdx = statusToStepIndex(a.Status);
   const isCompleted = a.Status === "completed";
-  const initials = (a.CompanyName || "TK").split(" ").slice(0, 2).map(w => w[0]).join("");
+  const initials = (a.CompanyName || "TK").split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
 
   return (
     <div className="card card-hover">
@@ -48,18 +74,25 @@ function ShipmentRow({ a, onLeaveReview }) {
           <div className="avatar avatar-lg">{initials}</div>
           <div>
             <div className="row-meta">
-              #{a.ApplicationID} · {a.CreatedAt || "—"}
+              #{a.ApplicationID} · {a.CreatedAt}
+              {a.TrackingNumber && <> · <span className="mono">{a.TrackingNumber}</span></>}
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>
-              {a.CompanyName || `Company #${a.CompanyID}`}
+              {a.CompanyName}
             </div>
-            <div style={{ fontSize: 13, color: "var(--ink-soft)", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 13, color: "var(--ink-soft)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Icon name="ship" size={13} />
-              {a.Origin || "—"} → {a.Destination || "—"}
-              {a.Amount && (
+              {a.Origin} → {a.Destination}
+              {a.CategoryName && (
                 <>
                   <span style={{ color: "var(--line-strong)" }}>·</span>
-                  <strong className="mono tabular" style={{ color: "var(--ink)" }}>EGP {Number(a.Amount).toLocaleString()}</strong>
+                  {a.CategoryName}
+                </>
+              )}
+              {a.Amount != null && a.Amount > 0 && (
+                <>
+                  <span style={{ color: "var(--line-strong)" }}>·</span>
+                  <strong className="mono tabular" style={{ color: "var(--ink)" }}>EGP {a.Amount.toLocaleString()}</strong>
                 </>
               )}
             </div>
@@ -104,38 +137,71 @@ function ShipmentRow({ a, onLeaveReview }) {
 }
 
 function Tracking() {
+  const auth = useAuth();
+  /* User and Client share the same primary key (single-table inheritance),
+     so the ClientID we filter by is just the signed-in user's UserID. */
+  const clientId = auth?.kind === "user" && auth?.role === "client"
+    ? auth?.user?.UserID
+    : null;
+
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [reviewTarget, setReviewTarget] = useState(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [reviewSent, setReviewSent] = useState(false);
 
   useEffect(() => {
+    if (!clientId) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     (async () => {
+      setLoading(true);
       try {
-        const data = await listApplications();
+        const data = await listApplications({ ClientID: clientId });
         if (!active) return;
         const list = Array.isArray(data) ? data : data?.data || [];
-        setApplications(list.length ? list : FALLBACK);
+        setApplications(list.map(shapeApplication));
+        setError("");
       } catch {
         if (!active) return;
-        setError("Couldn’t reach the server — showing sample applications.");
-        setApplications(FALLBACK);
+        setError("Couldn't load your shipments. Please try again.");
+        setApplications([]);
       } finally {
         if (active) setLoading(false);
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [clientId]);
 
-  const summary = {
-    active: applications.filter(a => ["pending", "accepted", "in_progress"].includes(a.Status)).length,
+  const summary = useMemo(() => ({
+    active: applications.filter(a => a.Status === "pending" || a.Status === "in_progress").length,
     completed: applications.filter(a => a.Status === "completed").length,
     total: applications.length,
-  };
+  }), [applications]);
+
+  if (!clientId) {
+    return (
+      <DashboardLayout
+        title="Your shipments"
+        subtitle="Real-time status across all your applications."
+        role="Client"
+      >
+        <div className="card card-pad-lg" style={{ textAlign: "center" }}>
+          <Icon name="lock" size={32} color="var(--ink-faint)" />
+          <h3 className="h3" style={{ marginTop: 12 }}>Sign in to see your shipments</h3>
+          <p style={{ color: "var(--ink-soft)" }}>
+            Only signed-in clients can view their applications.
+          </p>
+          <Link to="/login" className="btn btn-primary" style={{ marginTop: 16 }}>Sign in</Link>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -153,7 +219,9 @@ function Tracking() {
         <div className="stat">
           <div className="stat-label">Active</div>
           <div className="stat-value">{summary.active}</div>
-          <div className="stat-trend up"><Icon name="arrow_up" size={12} /> {summary.active} in motion</div>
+          <div className="stat-trend up" style={{ color: "var(--gray-500)" }}>
+            Pending or in progress
+          </div>
         </div>
         <div className="stat">
           <div className="stat-label">Completed</div>
@@ -163,11 +231,6 @@ function Tracking() {
         <div className="stat">
           <div className="stat-label">Total submitted</div>
           <div className="stat-value">{summary.total}</div>
-          <div className="spark">
-            {[3, 5, 4, 7, 6, 8, 6, 9].map((h, i) => (
-              <span key={i} style={{ height: `${h * 3}px` }} />
-            ))}
-          </div>
         </div>
       </div>
 

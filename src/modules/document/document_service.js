@@ -1,13 +1,63 @@
 import db from '../../Database/connection.js';
 
-export const createDocument = (req, res) => {
-    console.log("Post Request Received");
-    db.query("INSERT INTO document (`DocType`,`UploadDate`,`VerficationStatus`,`Path`,`ApplicationID`) VALUES (?,?,?,?,?)",
-        [req.body.DocType, req.body.UploadDate, req.body.VerficationStatus, req.body.Path, req.body.ApplicationID], function (err, result) {
-            if (err) throw err;
-            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added " + result.insertId);
+const runQuery = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.query(sql, params, (err, result) => {
+            if (err) return reject(err);
+            resolve(result);
         });
+    });
+
+const DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Other'];
+const VERIFICATION_STATUSES = ['Pending', 'Accepted', 'Rejected'];
+
+export const createDocument = async (req, res, next) => {
+    try {
+        const DocType = String(req.body.DocType ?? '').trim();
+        const ApplicationID = Number(req.body.ApplicationID);
+        const Path = String(req.body.Path ?? '').trim() || 'unsaved';
+
+        /* VerficationStatus is NOT NULL in the schema; we default new docs
+           to 'Pending' so the form doesn't have to know about review state. */
+        const VerficationStatus = req.body.VerficationStatus ?? 'Pending';
+
+        if (!ApplicationID) {
+            return res.status(400).json({ ok: false, message: 'ApplicationID is required.' });
+        }
+        if (!DOC_TYPES.includes(DocType)) {
+            return res.status(400).json({
+                ok: false,
+                message: `DocType must be one of: ${DOC_TYPES.join(', ')}.`,
+            });
+        }
+        if (!VERIFICATION_STATUSES.includes(VerficationStatus)) {
+            return res.status(400).json({
+                ok: false,
+                message: `VerficationStatus must be one of: ${VERIFICATION_STATUSES.join(', ')}.`,
+            });
+        }
+
+        const exists = await runQuery(
+            'SELECT 1 FROM application WHERE ApplicationID = ? LIMIT 1',
+            [ApplicationID]
+        );
+        if (!exists.length) {
+            return res.status(404).json({ ok: false, message: `Application ${ApplicationID} not found.` });
+        }
+
+        const result = await runQuery(
+            'INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), ?, ?, ?)',
+            [DocType, VerficationStatus, Path, ApplicationID]
+        );
+
+        return res.status(201).json({
+            ok: true,
+            message: 'Document metadata recorded.',
+            data: { DocumentID: result.insertId, DocType, ApplicationID, Path },
+        });
+    } catch (err) {
+        return next(err);
+    }
 };
 
 export const getDocument = (req, res) => {

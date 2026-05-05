@@ -34,8 +34,30 @@ export const registerCompany = async (payload) => {
   return data;
 };
 
+// Backend contract: PUT /company?CompanyID=<id>  body: { VerficationStatus }
+//   `status` must be one of: 'Pending' | 'Verified' | 'Rejected'  (DB ENUM, capitalized)
 export const verifyCompany = async (companyId, status) => {
-  const { data } = await api.put(`/company`, { CompanyID: companyId, Status: status });
+  const { data } = await api.put(
+    `/company`,
+    { VerficationStatus: status },
+    { params: { CompanyID: companyId } }
+  );
+  return data;
+};
+
+// Backend contract (PUT /company/profile, requires company session):
+//   body: { Governorate?, Address?, ContactEmail?, About? }
+//   200:  { ok: true, data: { company: {...} } }
+export const updateCompanyProfile = async (payload) => {
+  const { data } = await api.put("/company/profile", payload);
+  return data;
+};
+
+// Backend contract (PUT /company/pricing, requires company session):
+//   body: { prices: [{ CategoryID, Price }, ...] }
+//   200:  { ok: true, data: { prices: [...] } }
+export const updateCompanyPricing = async (prices) => {
+  const { data } = await api.put("/company/pricing", { prices });
   return data;
 };
 

@@ -1,13 +1,61 @@
 import db from '../../Database/connection.js';
 
-export const createPayment = (req, res) => {
-    console.log("Post Request Received");
-    db.query("INSERT INTO payment (`PaymentDate`,`Amount`,`PaymentGateway`,`ApplicationID`) VALUES (?,?,?,?)",
-        [req.body.PaymentDate, req.body.Amount, req.body.PaymentGateway, req.body.ApplicationID], function (err, result) {
-            if (err) throw err;
-            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added " + result.insertId);
+const runQuery = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.query(sql, params, (err, result) => {
+            if (err) return reject(err);
+            resolve(result);
         });
+    });
+
+const PAYMENT_GATEWAYS = ['Credit Card', 'Bank Transfer'];
+
+export const createPayment = async (req, res, next) => {
+    try {
+        /* Frontend has historically sent the gateway under either `Method` or
+           `PaymentGateway`; accept both so we don't break the existing form. */
+        const Gateway = req.body.PaymentGateway ?? req.body.Method;
+        const Amount = Number(req.body.Amount);
+        const ApplicationID = Number(req.body.ApplicationID);
+
+        if (!ApplicationID) {
+            return res.status(400).json({ ok: false, message: 'ApplicationID is required.' });
+        }
+        if (isNaN(Amount) || Amount <= 0) {
+            return res.status(400).json({ ok: false, message: 'Amount must be a positive number.' });
+        }
+        if (!PAYMENT_GATEWAYS.includes(Gateway)) {
+            return res.status(400).json({
+                ok: false,
+                message: `PaymentGateway must be one of: ${PAYMENT_GATEWAYS.join(', ')}.`,
+            });
+        }
+
+        /* Make sure the application actually exists — otherwise the FK insert
+           would fail with a less helpful error mid-transaction. */
+        const exists = await runQuery(
+            'SELECT 1 FROM application WHERE ApplicationID = ? LIMIT 1',
+            [ApplicationID]
+        );
+        if (!exists.length) {
+            return res.status(404).json({ ok: false, message: `Application ${ApplicationID} not found.` });
+        }
+
+        /* PaymentDate is NOT NULL in the schema. The form doesn't send one,
+           so we stamp it server-side. */
+        const result = await runQuery(
+            'INSERT INTO payment (PaymentDate, Amount, PaymentGateway, ApplicationID) VALUES (NOW(), ?, ?, ?)',
+            [Amount, Gateway, ApplicationID]
+        );
+
+        return res.status(201).json({
+            ok: true,
+            message: 'Payment recorded.',
+            data: { PaymentID: result.insertId, Amount, PaymentGateway: Gateway, ApplicationID },
+        });
+    } catch (err) {
+        return next(err);
+    }
 };
 
 export const getPayment = (req, res) => {

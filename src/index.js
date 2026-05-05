@@ -1,6 +1,18 @@
 import 'dotenv/config';
 import { bootstrap } from "./app.controller.js";
 
+/* Several legacy handlers still use the `db.query(..., (err, rows) => { if (err) throw err })`
+   pattern. A throw inside that callback fires after Express's request lifecycle, so the
+   central error middleware never sees it and Node would otherwise terminate the whole
+   process — taking every unrelated request with it (including /user/logout). Log loudly
+   instead of crashing so the server stays up while we migrate handlers. */
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
 const app = bootstrap();
 
 const PORT = process.env.PORT || 3000;

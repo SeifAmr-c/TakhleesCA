@@ -18,6 +18,7 @@ import PaymentPage from "./pages/client/PaymentPage.jsx";
 import Tracking from "./pages/client/Tracking.jsx";
 
 import CompanyDashboard from "./pages/company/CompanyDashboard.jsx";
+import CompanyProfileEdit from "./pages/company/CompanyProfileEdit.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 
 function RequireAuth({ children }) {
@@ -54,6 +55,7 @@ function App() {
 
         {/* Company / Admin */}
         <Route path="/company/dashboard" element={<CompanyDashboard />} />
+        <Route path="/company/profile" element={<CompanyProfileEdit />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
