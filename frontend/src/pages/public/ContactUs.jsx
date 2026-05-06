@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { submitSupportTicket } from "../../api/payments.js";
+import { useAuth } from "../../api/authState.js";
 
 const CONTACTS = [
   { icon: "email", label: "Email", value: "support@takhlees.com" },
@@ -12,24 +14,55 @@ const CONTACTS = [
 ];
 
 function ContactUs() {
-  const [form, setForm] = useState({ Name: "", Email: "", Subject: "", Message: "" });
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isLoggedIn = auth?.kind === "user";
+  const fullName = isLoggedIn
+    ? [auth.user?.FirstName, auth.user?.LastName].filter(Boolean).join(" ")
+    : "";
+
+  const [form, setForm] = useState({ Name: "", Email: "", Message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      setForm((f) => ({
+        ...f,
+        ...(fullName ? { Name: fullName } : {}),
+        ...(auth.user?.Email ? { Email: auth.user.Email } : {}),
+      }));
+    }
+  }, [isLoggedIn, fullName, auth]);
 
   const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(""); setSuccess("");
-    if (!form.Name.trim() || !form.Email.trim() || !form.Message.trim()) {
-      return setError("Please fill in your name, email, and message.");
+    setError("");
+
+    if (!isLoggedIn) {
+      navigate("/login", { state: { from: location.pathname } });
+      return;
     }
+
+    if (!form.Message.trim()) {
+      return setError("Please describe your issue before submitting.");
+    }
+
     setSubmitting(true);
     try {
-      await submitSupportTicket(form);
-      setSuccess("Thanks — we'll reply within one business day.");
-      setForm({ Name: "", Email: "", Subject: "", Message: "" });
+      await submitSupportTicket({
+        Issue: form.Message.trim(),
+        ClientID: auth.user?.UserID,
+        Resolved: 0,
+        AdminID: null,
+      });
+      setSuccess(true);
+      setTimeout(() => navigate("/"), 1500);
     } catch (err) {
       setError(
         err?.response?.data?.message ||
@@ -110,31 +143,41 @@ function ContactUs() {
           <div className="card card-pad-lg">
             <h2 className="h3" style={{ fontSize: 20, marginBottom: 16 }}>Send a message</h2>
             {error && <div className="banner-error"><Icon name="bell" size={18} />{error}</div>}
-            {success && <div className="banner-success"><Icon name="check" size={18} />{success}</div>}
+            {success && (
+              <div className="banner-success">
+                <Icon name="check" size={18} />
+                Your ticket has been submitted successfully!
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="stack" noValidate>
               <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label className="field">
                   <span className="field-label">Your name</span>
-                  <input className="input" value={form.Name} onChange={update("Name")} disabled={submitting} required />
+                  <input
+                    className="input"
+                    value={form.Name}
+                    onChange={update("Name")}
+                    disabled={submitting}
+                    readOnly={isLoggedIn}
+                    required
+                  />
                 </label>
                 <label className="field">
                   <span className="field-label">Email</span>
                   <div className="input-with-icon">
                     <span className="input-icon"><Icon name="email" size={16} /></span>
-                    <input type="email" className="input" value={form.Email} onChange={update("Email")} disabled={submitting} required />
+                    <input
+                      type="email"
+                      className="input"
+                      value={form.Email}
+                      onChange={update("Email")}
+                      disabled={submitting}
+                      readOnly={isLoggedIn}
+                      required
+                    />
                   </div>
                 </label>
               </div>
-              <label className="field">
-                <span className="field-label">Subject</span>
-                <input
-                  className="input"
-                  value={form.Subject}
-                  onChange={update("Subject")}
-                  disabled={submitting}
-                  placeholder="What can we help with?"
-                />
-              </label>
               <label className="field">
                 <span className="field-label">Message</span>
                 <textarea
@@ -147,7 +190,11 @@ function ContactUs() {
                   placeholder="Tell us more…"
                 />
               </label>
-              <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block btn-lg"
+                disabled={submitting || success}
+              >
                 {submitting ? (
                   <ContainerSpinner inline size={20} label="Sending…" />
                 ) : (

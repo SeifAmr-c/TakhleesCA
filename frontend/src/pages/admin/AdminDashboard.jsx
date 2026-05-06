@@ -5,7 +5,7 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies, verifyCompany } from "../../api/companies.js";
 import { listApplications } from "../../api/applications.js";
-import { onlineUsers } from "../../api/admin.js";
+import { onlineUsers, listUsers, listSupportTickets, resolveSupportTicket } from "../../api/admin.js";
 
 const EMPTY_ANALYTICS = {
   totalRequests: 0,
@@ -168,15 +168,20 @@ function AdminDashboard() {
   const [loadError, setLoadError] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
+  const [tickets, setTickets] = useState([]);
+  const [ticketBusyId, setTicketBusyId] = useState(null);
+  const [userEmailMap, setUserEmailMap] = useState({});
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [companiesRes, applicationsRes, onlineRes] = await Promise.all([
+        const [companiesRes, applicationsRes, onlineRes, ticketsRes, usersRes] = await Promise.all([
           listCompanies().catch(() => null),
           listApplications().catch(() => null),
           onlineUsers().catch(() => null),
+          listSupportTickets().catch(() => []),
+          listUsers().catch(() => []),
         ]);
         if (!active) return;
 
@@ -206,6 +211,16 @@ function AdminDashboard() {
         setPendingCompanies(pending);
         setVerifiedCompanies(allCompanies.filter((c) => c.VerficationStatus === "Verified"));
         setApplications(apps);
+
+        const allTickets = Array.isArray(ticketsRes) ? ticketsRes : [];
+        setTickets(allTickets.filter((t) => !t.Resolved));
+
+        const allUsers = Array.isArray(usersRes) ? usersRes : usersRes?.data || [];
+        const emailMap = {};
+        for (const u of allUsers) {
+          if (u?.UserID != null) emailMap[Number(u.UserID)] = u.Email || "";
+        }
+        setUserEmailMap(emailMap);
 
         const totalRequests = apps.length;
         const transactions = apps.filter((a) => a.Status === "Completed").length;
@@ -335,6 +350,19 @@ function AdminDashboard() {
     }
   };
 
+  const handleResolve = async (ticketId) => {
+    setTicketBusyId(ticketId);
+    try {
+      await resolveSupportTicket(ticketId);
+      setTickets((list) => list.filter((t) => t.TicketID !== ticketId));
+      showNotice("Ticket marked as resolved.");
+    } catch {
+      showNotice("Couldn't resolve the ticket. Please try again.");
+    } finally {
+      setTicketBusyId(null);
+    }
+  };
+
   const conversionRate = useMemo(() => {
     const ratio = analytics.totalRequests
       ? (analytics.transactions / analytics.totalRequests) * 100
@@ -441,6 +469,92 @@ function AdminDashboard() {
                 onDecide={handleDecide}
               />
             ))}
+          </div>
+        )}
+      </Reveal>
+
+      {/* Support tickets */}
+      <Reveal as="section" style={{ marginBottom: 36 }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div>
+            <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
+              <Icon name="bell" size={12} /> Support
+            </span>
+            <h2 className="h3" style={{ fontSize: 20 }}>Open support tickets</h2>
+          </div>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} unresolved
+          </span>
+        </div>
+
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+            <ContainerSpinner size={80} label="Loading tickets" />
+          </div>
+        ) : tickets.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: 48 }}>
+            <Icon name="check" size={28} color="var(--success)" />
+            <h3 className="h3" style={{ marginTop: 12 }}>No open tickets</h3>
+            <p className="muted" style={{ margin: 0 }}>All support tickets have been resolved.</p>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {tickets.map((t, i) => (
+                <li
+                  key={t.TicketID}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 16,
+                    padding: "18px 20px",
+                    borderBottom: i < tickets.length - 1 ? "1px solid var(--gray-100)" : "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "var(--gray-50)",
+                      color: "var(--accent-dark)",
+                      flexShrink: 0,
+                      marginTop: 2,
+                    }}
+                  >
+                    <Icon name="bell" size={15} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
+                        Ticket #{t.TicketID}
+                        {" · "}
+                        {userEmailMap[Number(t.ClientID)]
+                          ? userEmailMap[Number(t.ClientID)]
+                          : `Client #${t.ClientID}`}
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
+                      {t.Issue}
+                    </p>
+                  </div>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ flexShrink: 0 }}
+                    disabled={ticketBusyId === t.TicketID}
+                    onClick={() => handleResolve(t.TicketID)}
+                  >
+                    {ticketBusyId === t.TicketID ? (
+                      <ContainerSpinner inline size={14} label="Resolving…" />
+                    ) : (
+                      <><Icon name="check" size={14} /> Mark resolved</>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </Reveal>

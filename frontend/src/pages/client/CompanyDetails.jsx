@@ -5,6 +5,8 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { getCompany } from "../../api/companies.js";
+import { listCompanyPorts } from "../../api/ports.js";
+import { listCompanyReviews } from "../../api/reviews.js";
 import { useAuth } from "../../api/authState.js";
 
 const FALLBACK = {
@@ -25,6 +27,8 @@ function CompanyDetails() {
   const auth = useAuth();
   const isCompany = auth?.role === "company";
   const [company, setCompany] = useState(null);
+  const [companyPorts, setCompanyPorts] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -32,10 +36,16 @@ function CompanyDetails() {
     let active = true;
     (async () => {
       try {
-        const data = await getCompany(companyId);
+        const [data, portsData, reviewsData] = await Promise.all([
+          getCompany(companyId),
+          listCompanyPorts(companyId).catch(() => []),
+          listCompanyReviews(companyId).catch(() => []),
+        ]);
         if (!active) return;
         const row = Array.isArray(data) ? data[0] : data?.data || data;
         setCompany(row || { ...FALLBACK, CompanyID: companyId });
+        setCompanyPorts(Array.isArray(portsData) ? portsData : portsData?.data || []);
+        setReviews(Array.isArray(reviewsData) ? reviewsData : reviewsData?.data || []);
       } catch {
         if (!active) return;
         setError("Couldn’t load company — showing sample data.");
@@ -46,6 +56,10 @@ function CompanyDetails() {
     })();
     return () => { active = false; };
   }, [companyId]);
+
+  const avgRating = reviews.length
+    ? Math.round((reviews.reduce((sum, r) => sum + Number(r.Rating), 0) / reviews.length) * 10) / 10
+    : null;
 
   if (loading) {
     return (
@@ -100,11 +114,11 @@ function CompanyDetails() {
                 <div style={{ flex: 1 }}>
                   <div className="row" style={{ marginBottom: 8 }}>
                     <span className="badge badge-success"><Icon name="shield" size={12} /> Verified</span>
-                    {c.AverageRating != null && (
+                    {avgRating != null && (
                       <span className="badge badge-dark">
                         <Icon name="star" size={12} color="var(--accent)" />
-                        <strong>{c.AverageRating}</strong>
-                        <span className="muted">· {c.ReviewCount || 0} reviews</span>
+                        <strong>{avgRating}</strong>
+                        <span className="muted">· {reviews.length} {reviews.length === 1 ? "review" : "reviews"}</span>
                       </span>
                     )}
                   </div>
@@ -161,12 +175,45 @@ function CompanyDetails() {
               {c.About || "Trusted clearance company on the Takhlees marketplace."}
             </p>
 
+            {companyPorts.length > 0 && (
+              <>
+                <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Ports of operation</h2>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {companyPorts.map((p) => (
+                    <span
+                      key={p.PortID}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "7px 14px",
+                        borderRadius: 999,
+                        border: "1.5px solid var(--brand)",
+                        background: "var(--harbor-100)",
+                        color: "var(--brand)",
+                        fontWeight: 600,
+                        fontSize: 13,
+                      }}
+                    >
+                      <Icon name="pin" size={12} />
+                      {p.PortName}
+                      {p.PortType && (
+                        <span style={{ fontSize: 11, opacity: 0.65, fontWeight: 400 }}>
+                          ({p.PortType})
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+
             <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Reviews</h2>
-            {(c.Reviews || []).length === 0 ? (
+            {reviews.length === 0 ? (
               <p style={{ color: "var(--ink-soft)" }}>No reviews yet.</p>
             ) : (
               <Reveal as="div" className="grid">
-                {(c.Reviews || []).map((r) => {
+                {reviews.map((r) => {
                   const fullName = [r.FirstName, r.LastName].filter(Boolean).join(" ").trim() || "Anonymous";
                   const initials = fullName.split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
                   return (

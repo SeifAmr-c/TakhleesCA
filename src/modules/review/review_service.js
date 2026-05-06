@@ -1,5 +1,59 @@
 import db from '../../Database/connection.js';
 
+export const getReviewAverages = (req, res) => {
+    db.query(
+        `SELECT a.CompanyID,
+                ROUND(AVG(r.Rating), 1) AS AverageRating,
+                COUNT(r.ReviewID) AS ReviewCount
+         FROM review r
+         JOIN application a ON r.ApplicationID = a.ApplicationID
+         GROUP BY a.CompanyID`,
+        function (err, result) {
+            if (err) throw err;
+            res.json(result);
+        }
+    );
+};
+
+export const getClientReviewedApplications = (req, res) => {
+    const { ClientID } = req.query;
+    if (!ClientID) {
+        return res.status(400).json({ error: 'ClientID is required' });
+    }
+    db.query(
+        `SELECT r.ApplicationID
+         FROM review r
+         JOIN application a ON r.ApplicationID = a.ApplicationID
+         WHERE a.ClientID = ?`,
+        [ClientID],
+        function (err, result) {
+            if (err) throw err;
+            res.json(result);
+        }
+    );
+};
+
+export const getCompanyReviews = (req, res) => {
+    const { CompanyID } = req.query;
+    if (!CompanyID) {
+        return res.status(400).json({ error: 'CompanyID is required' });
+    }
+    db.query(
+        'SELECT r.ReviewID, r.Review, r.Rating, r.ApplicationID, r.CategoryID,' +
+        ' u.FirstName, u.LastName' +
+        ' FROM review r' +
+        ' JOIN application a ON r.ApplicationID = a.ApplicationID' +
+        ' JOIN `user` u ON a.ClientID = u.UserID' +
+        ' WHERE a.CompanyID = ?' +
+        ' ORDER BY r.ReviewID DESC',
+        [CompanyID],
+        function (err, result) {
+            if (err) throw err;
+            res.json(result);
+        }
+    );
+};
+
 export const createReview = (req, res) => {
     console.log("Post Request Received");
     db.query("INSERT INTO review (`Review`,`Rating`,`ApplicationID`,`CategoryID`) VALUES (?,?,?,?)",

@@ -3,6 +3,9 @@ import * as reviewService from "./review_service.js";
 
 const router = Router();
 
+router.get("/averages", reviewService.getReviewAverages);
+router.get("/by-client", reviewService.getClientReviewedApplications);
+router.get("/company", reviewService.getCompanyReviews);
 router.post("/", reviewService.createReview);
 router.get("/", reviewService.getReview);
 router.get("/search", reviewService.searchReview);

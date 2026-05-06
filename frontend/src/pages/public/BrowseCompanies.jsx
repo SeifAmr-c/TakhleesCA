@@ -5,8 +5,23 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies } from "../../api/companies.js";
+import { listReviewAverages } from "../../api/reviews.js";
 
-function CompanyCard({ c }) {
+function StarRating({ avg, count }) {
+  const filled = Math.round(avg);
+  return (
+    <div className="row" style={{ gap: 3, marginTop: 6, alignItems: "center" }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Icon key={i} name="star" size={12} color={i <= filled ? "var(--safety)" : "var(--line-strong)"} />
+      ))}
+      <span style={{ fontSize: 12, color: "var(--ink-soft)", marginLeft: 4 }}>
+        {avg} &nbsp;·&nbsp; {count} {count === 1 ? "review" : "reviews"}
+      </span>
+    </div>
+  );
+}
+
+function CompanyCard({ c, rating }) {
   const initials = (c.Name || "")
     .split(" ")
     .filter(Boolean)
@@ -46,6 +61,7 @@ function CompanyCard({ c }) {
             <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>
               {c.Governorate || c.Address || "—"}
             </div>
+            {rating && <StarRating avg={rating.avg} count={rating.count} />}
           </div>
         </div>
       </div>
@@ -61,6 +77,7 @@ function CompanyCard({ c }) {
 
 function BrowseCompanies() {
   const [companies, setCompanies] = useState([]);
+  const [ratingMap, setRatingMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -70,10 +87,24 @@ function BrowseCompanies() {
     let active = true;
     (async () => {
       try {
-        const data = await listCompanies({ status: "Verified" });
+        const [data, averages] = await Promise.all([
+          listCompanies({ status: "Verified" }),
+          listReviewAverages().catch(() => []),
+        ]);
         if (!active) return;
         const list = Array.isArray(data) ? data : data?.data || [];
         setCompanies(list);
+        const avgs = Array.isArray(averages) ? averages : [];
+        const map = {};
+        for (const row of avgs) {
+          if (row?.CompanyID != null) {
+            map[Number(row.CompanyID)] = {
+              avg: Number(row.AverageRating),
+              count: Number(row.ReviewCount),
+            };
+          }
+        }
+        setRatingMap(map);
       } catch {
         if (!active) return;
         setError("Couldn't reach the server. Please try again shortly.");
@@ -184,7 +215,9 @@ function BrowseCompanies() {
                 className="grid"
                 style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
               >
-                {filtered.map((c) => <CompanyCard key={c.CompanyID} c={c} />)}
+                {filtered.map((c) => (
+                  <CompanyCard key={c.CompanyID} c={c} rating={ratingMap[Number(c.CompanyID)] || null} />
+                ))}
               </div>
             </Reveal>
           )}

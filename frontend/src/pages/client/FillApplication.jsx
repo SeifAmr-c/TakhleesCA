@@ -5,7 +5,7 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
-import { listPorts } from "../../api/ports.js";
+import { listCompanyPorts } from "../../api/ports.js";
 import { createDocumentRecord } from "../../api/documents.js";
 import { submitPayment } from "../../api/payments.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
@@ -126,9 +126,11 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
             className="select"
             value={form.PortID}
             onChange={update("PortID")}
-            disabled={submitting}
+            disabled={submitting || !ports.length}
           >
-            <option value="">Select a port…</option>
+            <option value="">
+              {ports.length ? "Select a port…" : "No ports available for this company"}
+            </option>
             {ports.map((p) => (
               <option key={p.PortID} value={p.PortID}>
                 {p.PortName}{p.PortType ? ` (${p.PortType})` : ""}
@@ -726,7 +728,7 @@ function FillApplication() {
     let active = true;
     (async () => {
       const [portData, catData] = await Promise.all([
-        listPorts().catch(() => null),
+        companyId ? listCompanyPorts(companyId).catch(() => null) : Promise.resolve(null),
         listCategories().catch(() => null),
       ]);
       if (!active) return;
@@ -737,7 +739,7 @@ function FillApplication() {
       setCategories(cats);
     })();
     return () => { active = false; };
-  }, []);
+  }, [companyId]);
 
   /* Fetch this company's per-category pricing once the companyId is
      known. Build a { CategoryID: Price } map for instant lookups when

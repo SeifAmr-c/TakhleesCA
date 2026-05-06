@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listApplications } from "../../api/applications.js";
+import { submitReview, checkApplicationReviewed } from "../../api/reviews.js";
 import { useAuth } from "../../api/authState.js";
 
 const STATUS_BADGE = {
@@ -58,10 +59,11 @@ function shapeApplication(raw) {
     Amount: raw.Amount != null ? Number(raw.Amount) : null,
     TrackingNumber: raw.TrackingNumber || null,
     CategoryName: raw.CategoryName || null,
+    CategoryID: raw.CategoryID || null,
   };
 }
 
-function ShipmentRow({ a, onLeaveReview }) {
+function ShipmentRow({ a, onLeaveReview, isReviewed }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
   const stepIdx = statusToStepIndex(a.Status);
   const isCompleted = a.Status === "completed";
@@ -124,10 +126,13 @@ function ShipmentRow({ a, onLeaveReview }) {
           <div className="row" style={{ justifyContent: "flex-end" }}>
             <button
               type="button"
-              className="btn btn-accent btn-sm"
-              onClick={() => onLeaveReview?.(a)}
+              className={`btn btn-sm ${isReviewed ? "btn-secondary" : "btn-accent"}`}
+              onClick={() => !isReviewed && onLeaveReview?.(a)}
+              disabled={isReviewed}
+              title={isReviewed ? "You've already reviewed this shipment" : undefined}
             >
-              <Icon name="star" size={14} /> Leave a review
+              <Icon name="star" size={14} />
+              {isReviewed ? "Reviewed" : "Leave a review"}
             </button>
           </div>
         </>
@@ -138,6 +143,7 @@ function ShipmentRow({ a, onLeaveReview }) {
 
 function Tracking() {
   const auth = useAuth();
+  const location = useLocation();
   /* User and Client share the same primary key (single-table inheritance),
      so the ClientID we filter by is just the signed-in user's UserID. */
   const clientId = auth?.kind === "user" && auth?.role === "client"
@@ -152,6 +158,9 @@ function Tracking() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [reviewSent, setReviewSent] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewedIds, setReviewedIds] = useState(new Set());
 
   useEffect(() => {
     if (!clientId) {
@@ -165,8 +174,34 @@ function Tracking() {
         const data = await listApplications({ ClientID: clientId });
         if (!active) return;
         const list = Array.isArray(data) ? data : data?.data || [];
-        setApplications(list.map(shapeApplication));
+        const shaped = list.map(shapeApplication);
+        setApplications(shaped);
+
+        const completedApps = shaped.filter(a => a.Status === "completed");
+        const reviewedFlags = await Promise.all(
+          completedApps.map(a => checkApplicationReviewed(a.ApplicationID).catch(() => false))
+        );
+        if (!active) return;
+        const reviewedSet = new Set(
+          completedApps.filter((_, i) => reviewedFlags[i]).map(a => Number(a.ApplicationID))
+        );
+        setReviewedIds(reviewedSet);
         setError("");
+
+        const params = new URLSearchParams(location.search);
+        const reviewId = params.get("review");
+        if (reviewId) {
+          const target = shaped.find(
+            (a) => String(a.ApplicationID) === String(reviewId) && a.Status === "completed"
+          );
+          if (target) {
+            setReviewTarget(target);
+            setReviewRating(5);
+            setReviewText("");
+            setReviewSent(false);
+            setReviewError("");
+          }
+        }
       } catch {
         if (!active) return;
         setError("Couldn't load your shipments. Please try again.");
@@ -177,6 +212,38 @@ function Tracking() {
     })();
     return () => { active = false; };
   }, [clientId]);
+
+  const openReviewModal = (row) => {
+    setReviewTarget(row);
+    setReviewRating(5);
+    setReviewText("");
+    setReviewSent(false);
+    setReviewError("");
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewText.trim() || !reviewTarget) return;
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      await submitReview({
+        Review: reviewText.trim(),
+        Rating: reviewRating,
+        ApplicationID: reviewTarget.ApplicationID,
+        CategoryID: reviewTarget.CategoryID,
+      });
+      setReviewedIds((prev) => new Set([...prev, Number(reviewTarget.ApplicationID)]));
+      setReviewSent(true);
+    } catch (err) {
+      setReviewError(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Couldn't submit your review. Please try again."
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   const summary = useMemo(() => ({
     active: applications.filter(a => a.Status === "pending" || a.Status === "in_progress").length,
@@ -254,12 +321,8 @@ function Tracking() {
               <ShipmentRow
                 key={a.ApplicationID}
                 a={a}
-                onLeaveReview={(row) => {
-                  setReviewTarget(row);
-                  setReviewRating(5);
-                  setReviewText("");
-                  setReviewSent(false);
-                }}
+                onLeaveReview={openReviewModal}
+                isReviewed={reviewedIds.has(Number(a.ApplicationID))}
               />
             ))}
           </div>
@@ -320,6 +383,7 @@ function Tracking() {
                         className="btn btn-ghost btn-sm"
                         style={{ padding: 4, height: 32, width: 32 }}
                         aria-label={`${i} star${i > 1 ? "s" : ""}`}
+                        disabled={reviewSubmitting}
                       >
                         <Icon
                           name="star"
@@ -328,6 +392,9 @@ function Tracking() {
                         />
                       </button>
                     ))}
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)", marginLeft: 6, alignSelf: "center" }}>
+                      {reviewRating} / 5
+                    </span>
                   </div>
                 </div>
 
@@ -339,24 +406,36 @@ function Tracking() {
                     placeholder="What did the company do well? Anything they could improve?"
                     value={reviewText}
                     onChange={(e) => setReviewText(e.target.value)}
+                    disabled={reviewSubmitting}
                   />
                 </label>
+
+                {reviewError && (
+                  <div className="banner-error">
+                    <Icon name="bell" size={14} />{reviewError}
+                  </div>
+                )}
 
                 <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
                   <button
                     type="button"
                     className="btn btn-secondary"
                     onClick={() => setReviewTarget(null)}
+                    disabled={reviewSubmitting}
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={() => setReviewSent(true)}
-                    disabled={!reviewText.trim()}
+                    onClick={handleSubmitReview}
+                    disabled={!reviewText.trim() || reviewSubmitting}
                   >
-                    <Icon name="check" size={14} /> Submit review
+                    {reviewSubmitting ? (
+                      <ContainerSpinner inline size={16} label="Submitting…" />
+                    ) : (
+                      <><Icon name="check" size={14} /> Submit review</>
+                    )}
                   </button>
                 </div>
               </div>

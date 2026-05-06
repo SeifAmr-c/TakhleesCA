@@ -11,6 +11,7 @@ import {
 } from "../../api/companies.js";
 import { listCategories } from "../../api/applications.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
+import { listPorts, listCompanyPorts, addCompanyPort, removeCompanyPort } from "../../api/ports.js";
 import { useAuth, setAuth } from "../../api/authState.js";
 
 /* Mirror the governorate list used during company registration (CompanyRegister.jsx). */
@@ -194,7 +195,7 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
 
       <div
         className="row"
-        style={{ justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 20 }}
+        style={{ justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}
       >
         <InlineStatus status={status} />
         <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
@@ -382,7 +383,7 @@ function PricingForm({ companyId }) {
 
       <div
         className="row"
-        style={{ justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 20 }}
+        style={{ justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}
       >
         <InlineStatus status={status} />
         <button
@@ -394,6 +395,142 @@ function PricingForm({ companyId }) {
             <ContainerSpinner inline size={20} label="Saving…" />
           ) : (
             <>Save pricing <Icon name="check" size={16} /></>
+          )}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------- Ports form ---------- */
+function PortsForm({ companyId }) {
+  const [allPorts, setAllPorts] = useState([]);
+  const [savedPortIds, setSavedPortIds] = useState(new Set());
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState({ kind: "", text: "" });
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const [ports, companyPorts] = await Promise.all([
+          listPorts().catch(() => []),
+          listCompanyPorts(companyId).catch(() => []),
+        ]);
+        if (!active) return;
+        const portList = Array.isArray(ports) ? ports : ports?.data || [];
+        const cpList = Array.isArray(companyPorts) ? companyPorts : companyPorts?.data || [];
+        const saved = new Set(cpList.map((cp) => Number(cp.PortID)));
+        setAllPorts(portList);
+        setSavedPortIds(saved);
+        setSelectedIds(new Set(saved));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [companyId]);
+
+  const toggle = (portId) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(portId) ? next.delete(portId) : next.add(portId);
+      return next;
+    });
+    setStatus({ kind: "", text: "" });
+  };
+
+  const dirty = allPorts.some((p) => {
+    const id = Number(p.PortID);
+    return selectedIds.has(id) !== savedPortIds.has(id);
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setStatus({ kind: "", text: "" });
+    setSubmitting(true);
+    try {
+      const toAdd = [...selectedIds].filter((id) => !savedPortIds.has(id));
+      const toRemove = [...savedPortIds].filter((id) => !selectedIds.has(id));
+      await Promise.all([
+        ...toAdd.map((portId) => addCompanyPort({ CompanyID: companyId, PortID: portId })),
+        ...toRemove.map((portId) => removeCompanyPort(companyId, portId)),
+      ]);
+      setSavedPortIds(new Set(selectedIds));
+      setStatus({ kind: "success", text: "Ports saved." });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        text: err?.response?.data?.Message || "Couldn't save ports.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="card card-pad-lg" noValidate>
+      <h3 className="card-title">Ports of operation</h3>
+      <p className="card-subtitle">Select all ports where you provide clearance services.</p>
+
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
+          <ContainerSpinner size={64} label="Loading ports" />
+        </div>
+      ) : allPorts.length === 0 ? (
+        <div style={{ padding: 24, textAlign: "center", color: "var(--ink-soft)" }}>
+          No ports available.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "12px 0" }}>
+          {allPorts.map((p) => {
+            const id = Number(p.PortID);
+            const selected = selectedIds.has(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => toggle(id)}
+                disabled={submitting}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 16px",
+                  borderRadius: 999,
+                  border: `1.5px solid ${selected ? "var(--brand)" : "var(--line-strong)"}`,
+                  background: selected ? "var(--harbor-100)" : "var(--surface)",
+                  color: selected ? "var(--brand)" : "var(--ink-soft)",
+                  fontWeight: selected ? 600 : 400,
+                  fontSize: 14,
+                  cursor: submitting ? "not-allowed" : "pointer",
+                  transition: "border-color 150ms ease, background 150ms ease, color 150ms ease",
+                }}
+              >
+                {selected && <Icon name="check" size={13} />}
+                {p.PortName}
+                {p.PortType && (
+                  <span style={{ fontSize: 11, opacity: 0.65 }}>({p.PortType})</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="row" style={{ justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}>
+        <InlineStatus status={status} />
+        <button
+          type="submit"
+          className="btn btn-primary btn-lg"
+          disabled={!dirty || submitting || loading}
+        >
+          {submitting ? (
+            <ContainerSpinner inline size={20} label="Saving…" />
+          ) : (
+            <>Save ports <Icon name="check" size={16} /></>
           )}
         </button>
       </div>
@@ -459,38 +596,48 @@ function CompanyProfileEdit() {
   }
 
   return (
-    <PublicLayout
-      title="Edit profile"
-      subtitle="Update your basic info and per-category pricing."
-      role="Company"
-      actions={
-        <button className="btn btn-secondary btn-sm" onClick={() => navigate("/company/dashboard")}>
-          <span aria-hidden="true">←</span> Back to dashboard
-        </button>
-      }
-    >
-      {loadError && (
-        <div className="banner-error">
-          <Icon name="bell" size={16} />
-          {loadError}
-        </div>
-      )}
+    <PublicLayout role="Company">
+      <div className="container" style={{ padding: "32px 24px 80px" }}>
+        <header style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ flex: 1 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigate("/company/dashboard")}
+            >
+              <span aria-hidden="true">←</span> Back to dashboard
+            </button>
+          </div>
+          <h1 className="h2" style={{ margin: 0 }}>Edit Profile</h1>
+          <div style={{ flex: 1 }} />
+        </header>
+        <p className="muted" style={{ textAlign: "center", margin: "6px 0 32px" }}>
+          Update your basic info and per-category pricing.
+        </p>
 
-      {loading ? (
-        <div style={{ display: "flex", justifyContent: "center", padding: "64px 0" }}>
-          <ContainerSpinner size={88} label="Loading profile" />
-        </div>
-      ) : (
-        <Reveal as="div" style={{ display: "grid", gap: 24, maxWidth: 820, margin: "0 auto" }}>
-          <ProfileForm
-            initial={company}
-            onSaved={handleProfileSaved}
-            submitting={profileSubmitting}
-            setSubmitting={setProfileSubmitting}
-          />
-          <PricingForm companyId={companyId} />
-        </Reveal>
-      )}
+        {loadError && (
+          <div className="banner-error">
+            <Icon name="bell" size={16} />
+            {loadError}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "64px 0" }}>
+            <ContainerSpinner size={88} label="Loading profile" />
+          </div>
+        ) : (
+          <Reveal as="div" style={{ display: "grid", gap: 24, maxWidth: 820, margin: "0 auto" }}>
+            <ProfileForm
+              initial={company}
+              onSaved={handleProfileSaved}
+              submitting={profileSubmitting}
+              setSubmitting={setProfileSubmitting}
+            />
+            <PricingForm companyId={companyId} />
+            <PortsForm companyId={companyId} />
+          </Reveal>
+        )}
+      </div>
     </PublicLayout>
   );
 }
