@@ -106,6 +106,30 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                       <Icon name="user" size={16} />
                     </button>
                   )}
+                  {isCompany && (
+                    <NavLink
+                      to="/company/profile"
+                      aria-label="Company profile"
+                      title="Company profile"
+                      className={({ isActive }) => isActive ? "active" : ""}
+                      style={({ isActive }) => ({
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: "transparent",
+                        border: "1px solid var(--line)",
+                        color: isActive ? "var(--ink)" : "var(--ink-soft)",
+                        cursor: "pointer",
+                        padding: 0,
+                        textDecoration: "none",
+                      })}
+                    >
+                      <Icon name="user" size={16} />
+                    </NavLink>
+                  )}
                   <button
                     type="button"
                     onClick={handleLogout}
@@ -180,7 +204,9 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
             </div>
             <div>
               <h4>Product</h4>
-              <Link to="/companies">Browse companies</Link>
+              {auth?.role !== "company" && (
+                <Link to="/companies">Browse companies</Link>
+              )}
               {!auth && <Link to="/register">Sign up</Link>}
               {auth?.role !== "company" && (
                 <Link to="/company/register">List your company</Link>
