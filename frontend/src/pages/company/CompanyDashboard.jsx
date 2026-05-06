@@ -114,12 +114,14 @@ function StatCard({ icon, label, value, sub, accent }) {
   );
 }
 
-function DocumentsDrawer({ applicationId }) {
+function DocumentsDrawer({ applicationId, applicationStatus }) {
   const [open, setOpen] = React.useState(false);
   const [docs, setDocs] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [viewerUrl, setViewerUrl] = React.useState(null);
   const [viewerTitle, setViewerTitle] = React.useState("");
+
+  const isCompleted = applicationStatus === "completed";
 
   const toggle = async () => {
     if (!open && docs === null) {
@@ -160,7 +162,16 @@ function DocumentsDrawer({ applicationId }) {
                   >
                     {d.DocType}
                   </button>
-                  <span className="muted" style={{ fontSize: 12 }}>· {d.VerficationStatus}</span>
+                  <span
+                    className="muted"
+                    style={{
+                      fontSize: 12,
+                      color: isCompleted ? "var(--success)" : undefined,
+                      fontWeight: isCompleted ? 600 : undefined,
+                    }}
+                  >
+                    · {isCompleted ? "Completed" : d.VerficationStatus}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -174,148 +185,13 @@ function DocumentsDrawer({ applicationId }) {
   );
 }
 
-function PendingCard({ a, onDecision, busy }) {
-  return (
-    <div className="card card-hover">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-        <div className="row" style={{ gap: 14, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{a.ClientInitials}</div>
-          <div>
-            <div className="row-meta">
-              #{a.ApplicationID} · Submitted {a.CreatedAt || "—"}
-            </div>
-            <div className="row-title" style={{ fontSize: 16 }}>
-              {a.ClientName}
-            </div>
-            <div className="muted" style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              {a.PortName && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <Icon name="ship" size={13} />
-                  {a.PortName}{a.PortType ? ` (${a.PortType})` : ""}
-                </span>
-              )}
-              <span style={{ color: "var(--gray-300)" }}>·</span>
-              <span className="badge badge-neutral" style={{ padding: "2px 8px" }}>
-                {a.CategoryName}
-              </span>
-              {a.DeliveryAddress && (
-                <>
-                  <span style={{ color: "var(--gray-300)" }}>·</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    <Icon name="pin" size={12} />
-                    {a.DeliveryAddress}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)" }}>
-            EGP {a.Amount.toLocaleString()}
-          </div>
-          <div className="muted" style={{ fontSize: 11 }}>quoted</div>
-        </div>
-      </div>
-
-      <hr className="divider" />
-
-      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div className="row" style={{ gap: 10 }}>
-          <div className="muted" style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="bell" size={14} color="var(--warning)" /> Awaiting your review
-          </div>
-          <DocumentsDrawer applicationId={a.ApplicationID} />
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            disabled={busy}
-            onClick={() => onDecision(a.ApplicationID, "rejected")}
-          >
-            Reject
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            disabled={busy}
-            onClick={() => onDecision(a.ApplicationID, "accepted")}
-          >
-            <Icon name="check" size={14} /> Accept
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AcceptedCard({ a, onStatusChange, busy }) {
+function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status];
   const stepIdx = statusToStepIndex(a.Status);
+  const isPending = a.Status === "pending";
 
   return (
     <div className="card card-hover">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-        <div className="row" style={{ gap: 14, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{a.ClientInitials}</div>
-          <div>
-            <div className="row-meta">#{a.ApplicationID} · {a.CategoryName} · {a.CreatedAt || "—"}</div>
-            <div className="row-title" style={{ fontSize: 16 }}>{a.ClientName}</div>
-            <div className="muted" style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-              {a.PortName && (
-                <>
-                  <Icon name="ship" size={13} />
-                  {a.PortName}{a.PortType ? ` (${a.PortType})` : ""}
-                  <span style={{ color: "var(--gray-300)" }}>·</span>
-                </>
-              )}
-              <strong style={{ color: "var(--navy)" }}>EGP {a.Amount.toLocaleString()}</strong>
-            </div>
-          </div>
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <span className={`badge ${badgeClass}`}>
-            <span className="dot" />
-            {label}
-          </span>
-          <select
-            className="select"
-            style={{ width: 160, height: 36, fontSize: 13 }}
-            value={a.Status}
-            onChange={(e) => onStatusChange(a.ApplicationID, e.target.value)}
-            disabled={busy}
-          >
-            <option value="in_progress">In progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-      </div>
-
-      <hr className="divider" />
-
-      <div className="timeline">
-        {STEPS.map((s, i) => (
-          <div
-            key={s}
-            className={`timeline-step ${i < stepIdx ? "done" : i === stepIdx ? "active" : ""}`}
-          >
-            <span className="dot" />
-            {s}
-          </div>
-        ))}
-      </div>
-
-      <hr className="divider" />
-      <DocumentsDrawer applicationId={a.ApplicationID} />
-    </div>
-  );
-}
-
-function ApplicationRow({ a }) {
-  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status];
-  const stepIdx = statusToStepIndex(a.Status);
-
-  return (
-    <div className="card">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
           <div className="avatar avatar-lg">{a.ClientInitials}</div>
@@ -374,6 +250,41 @@ function ApplicationRow({ a }) {
             {s}
           </div>
         ))}
+      </div>
+
+      <hr className="divider" />
+
+      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+        <DocumentsDrawer applicationId={a.ApplicationID} applicationStatus={a.Status} />
+        {isPending ? (
+          <div className="row" style={{ gap: 8 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              disabled={busy}
+              onClick={() => onDecision(a.ApplicationID, "rejected")}
+            >
+              Reject
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={busy}
+              onClick={() => onDecision(a.ApplicationID, "accepted")}
+            >
+              <Icon name="check" size={14} /> Accept
+            </button>
+          </div>
+        ) : (
+          <select
+            className="select"
+            style={{ width: 160, height: 36, fontSize: 13 }}
+            value={a.Status}
+            onChange={(e) => onStatusChange(a.ApplicationID, e.target.value)}
+            disabled={busy}
+          >
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        )}
       </div>
     </div>
   );
@@ -633,72 +544,6 @@ function CompanyDashboard() {
         </div>
       </Reveal>
 
-      {/* Pending requests */}
-      <Reveal as="section" style={{ marginBottom: 36 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <div>
-            <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
-              <Icon name="bell" size={12} /> Action needed
-            </span>
-            <h2 className="h3" style={{ fontSize: 20 }}>Pending client requests</h2>
-          </div>
-          <span className="muted" style={{ fontSize: 13 }}>
-            {pending.length} {pending.length === 1 ? "request" : "requests"}
-          </span>
-        </div>
-
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
-            <ContainerSpinner size={80} label="Loading requests" />
-          </div>
-        ) : pending.length === 0 ? (
-          <div className="card" style={{ textAlign: "center", padding: 48 }}>
-            <Icon name="check" size={28} color="var(--success)" />
-            <h3 className="h3" style={{ marginTop: 12 }}>All caught up</h3>
-            <p className="muted" style={{ margin: 0 }}>No pending requests right now.</p>
-          </div>
-        ) : (
-          <div className="grid">
-            {pending.map((a) => (
-              <PendingCard
-                key={a.ApplicationID}
-                a={a}
-                busy={busyId === a.ApplicationID}
-                onDecision={handleDecision}
-              />
-            ))}
-          </div>
-        )}
-      </Reveal>
-
-      {/* Accepted applications */}
-      <Reveal as="section" style={{ marginBottom: 36 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <div>
-            <span className="eyebrow">In flight</span>
-            <h2 className="h3" style={{ fontSize: 20 }}>Accepted applications</h2>
-          </div>
-          <span className="muted" style={{ fontSize: 13 }}>Update status as you progress</span>
-        </div>
-
-        {loading ? null : accepted.length === 0 ? (
-          <div className="card" style={{ textAlign: "center", padding: 48 }}>
-            <p className="muted" style={{ margin: 0 }}>Nothing in progress.</p>
-          </div>
-        ) : (
-          <div className="grid">
-            {accepted.map((a) => (
-              <AcceptedCard
-                key={a.ApplicationID}
-                a={a}
-                busy={busyId === a.ApplicationID}
-                onStatusChange={handleStatusChange}
-              />
-            ))}
-          </div>
-        )}
-      </Reveal>
-
       {/* All received applications — monitor */}
       <Reveal as="section" style={{ marginBottom: 24 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
@@ -789,7 +634,13 @@ function CompanyDashboard() {
         ) : (
           <div className="grid">
             {filteredApplications.map((a) => (
-              <ApplicationRow key={`row-${a.ApplicationID}`} a={a} />
+              <ApplicationRow
+                key={`row-${a.ApplicationID}`}
+                a={a}
+                busy={busyId === a.ApplicationID}
+                onDecision={handleDecision}
+                onStatusChange={handleStatusChange}
+              />
             ))}
           </div>
         )}

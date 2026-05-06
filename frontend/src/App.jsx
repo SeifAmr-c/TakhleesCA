@@ -21,6 +21,7 @@ import UserProfileEdit from "./pages/client/UserProfileEdit.jsx";
 import CompanyDashboard from "./pages/company/CompanyDashboard.jsx";
 import CompanyProfileEdit from "./pages/company/CompanyProfileEdit.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminProfileEdit from "./pages/admin/AdminProfileEdit.jsx";
 
 function RequireAuth({ children }) {
   const auth = useAuth();
@@ -59,6 +60,7 @@ function App() {
         <Route path="/company/dashboard" element={<CompanyDashboard />} />
         <Route path="/company/profile" element={<CompanyProfileEdit />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/profile" element={<RequireAuth><AdminProfileEdit /></RequireAuth>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

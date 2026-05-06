@@ -46,7 +46,7 @@ function UserLogin() {
         if (from) {
           navigate(from, { replace: true });
         } else {
-          navigate(role === "A" ? "/admin/dashboard" : "/tracking", { replace: true });
+          navigate(role === "A" ? "/admin/dashboard" : "/", { replace: true });
         }
         return;
       }

@@ -24,11 +24,31 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
   const hasHeader = Boolean(title || subtitle || actions);
 
   const isCompany = auth?.role === "company";
-  const isUser = auth?.kind === "user";
+  const isAdmin = auth?.role === "admin";
+  const isUser = auth?.kind === "user" && !isAdmin;
   const companyName = auth?.company?.Name;
   const userFirstName = auth?.user?.FirstName;
-  const greetingName = isCompany ? companyName : isUser ? userFirstName : null;
+  const greetingName = isCompany
+    ? companyName
+    : isAdmin
+      ? userFirstName
+      : isUser
+        ? userFirstName
+        : null;
   const profileActive = location.pathname.startsWith("/user/profile");
+  const adminProfileActive = location.pathname.startsWith("/admin/profile");
+
+  const scrollToSection = (id) => (e) => {
+    e.preventDefault();
+    const target = document.getElementById(id);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth" });
+    } else {
+      // Section lives on /admin/dashboard — navigate there with a hash and let
+      // the dashboard scroll on mount via the location.hash.
+      navigate(`/admin/dashboard#${id}`);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -65,7 +85,16 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
             )}
           </div>
           <div className="topnav-links">
-            {isCompany ? (
+            {isAdmin ? (
+              <>
+                <a href="#companies-section" onClick={scrollToSection("companies-section")}>
+                  Companies
+                </a>
+                <a href="#support-section" onClick={scrollToSection("support-section")}>
+                  Support
+                </a>
+              </>
+            ) : isCompany ? (
               <>
                 <NavLink to="/company/dashboard">Dashboard</NavLink>
                 <NavLink to="/about">About</NavLink>
@@ -105,6 +134,30 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                     >
                       <Icon name="user" size={16} />
                     </button>
+                  )}
+                  {isAdmin && (
+                    <NavLink
+                      to="/admin/profile"
+                      aria-label="Admin profile"
+                      title="Admin profile"
+                      className={({ isActive }) => isActive ? "active" : ""}
+                      style={({ isActive }) => ({
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: "transparent",
+                        border: "1px solid var(--line)",
+                        color: isActive || adminProfileActive ? "var(--ink)" : "var(--ink-soft)",
+                        cursor: "pointer",
+                        padding: 0,
+                        textDecoration: "none",
+                      })}
+                    >
+                      <Icon name="user" size={16} />
+                    </NavLink>
                   )}
                   {isCompany && (
                     <NavLink
@@ -182,74 +235,78 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
 
       <footer className="site-footer">
         <div className="container">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.4fr 1fr 1fr 1fr",
-              gap: 32,
-            }}
-          >
-            <div>
-              <p
+          {!isAdmin && (
+            <>
+              <div
                 style={{
-                  color: "oklch(100% 0 0 / 0.6)",
-                  fontSize: 14,
-                  maxWidth: 320,
-                  lineHeight: 1.6,
+                  display: "grid",
+                  gridTemplateColumns: isCompany
+                    ? "1.4fr 1fr 1fr"
+                    : "1.4fr 1fr 1fr 1fr",
+                  gap: 32,
                 }}
               >
-                Instrumented port clearance for Egyptian importers and exporters.
-                Verified agencies, escrowed payments, live status from gate-in to release.
-              </p>
-            </div>
-            <div>
-              <h4>Product</h4>
-              {auth?.role !== "company" && (
-                <Link to="/companies">Browse companies</Link>
-              )}
-              {!auth && <Link to="/register">Sign up</Link>}
-              {auth?.role !== "company" && (
-                <Link to="/company/register">List your company</Link>
-              )}
-            </div>
-            <div>
-              <h4>Company</h4>
-              <Link to="/about">About us</Link>
-              <Link to="/contact">Contact</Link>
-              {auth ? (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  style={{
-                    background: "none",
-                    border: 0,
-                    padding: 0,
-                    margin: 0,
-                    cursor: "pointer",
-                    font: "inherit",
-                    color: "inherit",
-                    textAlign: "left",
-                  }}
-                >
-                  Logout
-                </button>
-              ) : (
-                <Link to="/company/login">Company login</Link>
-              )}
-            </div>
-            <div>
-              <h4>Legal</h4>
-              <Link to="/legal/privacy">Privacy</Link>
-              <Link to="/legal/terms">Terms</Link>
-            </div>
-          </div>
-          <hr
-            style={{
-              border: 0,
-              borderTop: "1px solid oklch(100% 0 0 / 0.08)",
-              margin: "40px 0 20px",
-            }}
-          />
+                <div>
+                  <p
+                    style={{
+                      color: "oklch(100% 0 0 / 0.6)",
+                      fontSize: 14,
+                      maxWidth: 320,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Instrumented port clearance for Egyptian importers and exporters.
+                    Verified agencies, escrowed payments, live status from gate-in to release.
+                  </p>
+                </div>
+                {!isCompany && (
+                  <div>
+                    <h4>Product</h4>
+                    <Link to="/companies">Browse companies</Link>
+                    {!auth && <Link to="/register">Sign up</Link>}
+                    <Link to="/company/register">List your company</Link>
+                  </div>
+                )}
+                <div>
+                  <h4>Company</h4>
+                  <Link to="/about">About us</Link>
+                  <Link to="/contact">Contact</Link>
+                  {auth ? (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      style={{
+                        background: "none",
+                        border: 0,
+                        padding: 0,
+                        margin: 0,
+                        cursor: "pointer",
+                        font: "inherit",
+                        color: "inherit",
+                        textAlign: "left",
+                      }}
+                    >
+                      Logout
+                    </button>
+                  ) : (
+                    <Link to="/company/login">Company login</Link>
+                  )}
+                </div>
+                <div>
+                  <h4>Legal</h4>
+                  <Link to="/legal/privacy">Privacy</Link>
+                  <Link to="/legal/terms">Terms</Link>
+                </div>
+              </div>
+              <hr
+                style={{
+                  border: 0,
+                  borderTop: "1px solid oklch(100% 0 0 / 0.08)",
+                  margin: "40px 0 20px",
+                }}
+              />
+            </>
+          )}
           <div
             style={{
               display: "flex",

@@ -213,8 +213,24 @@ export const updateApplication = (req, res) => {
             [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompanyID, CategoryID, ClientID, PortID, ApplicationID],
             function (err, result) {
                 if (err) throw err;
-                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] is Updated Successfully" });
-                console.log("Record Id [" + ApplicationID + "] is Updated Successfully");
+
+                const finalize = () => {
+                    res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] is Updated Successfully" });
+                    console.log("Record Id [" + ApplicationID + "] is Updated Successfully");
+                };
+
+                if (isCompleting) {
+                    db.query(
+                        "UPDATE document SET VerficationStatus = 'Accepted' WHERE ApplicationID = ?",
+                        [ApplicationID],
+                        function (docErr) {
+                            if (docErr) throw docErr;
+                            finalize();
+                        }
+                    );
+                } else {
+                    finalize();
+                }
             }
         );
     });

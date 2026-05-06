@@ -3,7 +3,8 @@
     "allow": [
       "Bash(curl -sv \"http://localhost:3000/company?VerficationStatus=Verified\")",
       "Bash(curl -s \"http://localhost:3000/company?VerficationStatus=Verified\")",
-      "Bash(curl -s \"http://localhost:3000/company\")"
+      "Bash(curl -s \"http://localhost:3000/company\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe *)"
     ]
   }
 }

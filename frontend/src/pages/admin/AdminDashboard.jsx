@@ -1,12 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
-import { listCompanies, verifyCompany } from "../../api/companies.js";
 import DocViewer from "../../components/DocViewer.jsx";
-import { listApplications } from "../../api/applications.js";
-import { onlineUsers, listUsers, listSupportTickets, resolveSupportTicket } from "../../api/admin.js";
+import {
+  onlineUsers,
+  getAdminStats,
+  getPendingCompanies,
+  getVerifiedCompanies,
+  verifyCompany,
+  getPendingTickets,
+  getResolvedTickets,
+  resolveTicket,
+} from "../../api/admin.js";
 
 const EMPTY_ANALYTICS = {
   totalRequests: 0,
@@ -24,23 +32,17 @@ const initials2 = (name) =>
     .join("")
     .toUpperCase() || "?";
 
-const relativeTime = (input) => {
-  if (!input) return "";
+const fullName = (first, last) =>
+  [first, last].filter(Boolean).join(" ").trim();
+
+const formatDate = (input) => {
+  if (!input) return "—";
   const d = new Date(input);
-  if (isNaN(d.getTime())) return "";
-  const diff = Math.max(0, Date.now() - d.getTime());
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days} days ago`;
+  if (isNaN(d.getTime())) return "—";
   return d.toISOString().slice(0, 10);
 };
 
-function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData }) {
+function StatCard({ icon, label, value, sub, accent }) {
   const iconClass =
     accent === "accent" ? "card-icon card-icon-accent" : "card-icon";
   return (
@@ -48,10 +50,7 @@ function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData 
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="stat-label">{label}</div>
         {icon && (
-          <div
-            className={iconClass}
-            style={{ marginBottom: 0, width: 32, height: 32 }}
-          >
+          <div className={iconClass} style={{ marginBottom: 0, width: 32, height: 32 }}>
             <Icon name={icon} size={16} />
           </div>
         )}
@@ -67,38 +66,18 @@ function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData 
           {sub}
         </div>
       )}
-      {trend && (
-        <div className={`stat-trend ${trendDir || "up"}`}>
-          <Icon name={trendDir === "down" ? "arrow_down" : "arrow_up"} size={12} />
-          {trend}
-        </div>
-      )}
-      {sparkData && (
-        <div className="spark">
-          {sparkData.map((h, i) => (
-            <span key={i} style={{ height: `${h}px` }} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-function VerificationCard({ company, onDecide, busy }) {
+function PendingCompanyCard({ company, onAccept, busy }) {
   const [viewerUrl, setViewerUrl] = React.useState(null);
-  const initials = (company.Name || "TK")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
 
   return (
     <div className="card card-hover">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
         <div className="row" style={{ gap: 14, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{initials}</div>
+          <div className="avatar avatar-lg">{initials2(company.Name)}</div>
           <div>
             <div className="row" style={{ marginBottom: 4 }}>
               <span className="badge badge-pending">
@@ -106,28 +85,42 @@ function VerificationCard({ company, onDecide, busy }) {
               </span>
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>{company.Name}</div>
-            <div className="muted" style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <Icon name="pin" size={13} /> {company.City || "—"}
-              </span>
-              <span style={{ color: "var(--gray-300)" }}>·</span>
-              <span>{company.Services || "Logistics services"}</span>
-            </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <Icon name="user" size={12} /> {company.ContactName || "—"}
-              </span>
-              <span style={{ color: "var(--gray-300)" }}>·</span>
+            <div
+              className="muted"
+              style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+            >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <Icon name="email" size={12} /> {company.ContactEmail || "—"}
               </span>
+              {company.Governorate && (
+                <>
+                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Icon name="pin" size={12} /> {company.Governorate}
+                  </span>
+                </>
+              )}
+              {company.TaxNumber && (
+                <>
+                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                  <span>Tax #{company.TaxNumber}</span>
+                </>
+              )}
             </div>
+            {company.About && (
+              <p
+                className="muted"
+                style={{ fontSize: 13, margin: "8px 0 0", lineHeight: 1.5, maxWidth: 480 }}
+              >
+                {company.About}
+              </p>
+            )}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="row-meta">Submitted</div>
           <div style={{ fontSize: 13, color: "var(--gray-700)", fontWeight: 500 }}>
-            {company.SubmittedAt || "—"}
+            {formatDate(company.RegistrationDate)}
           </div>
         </div>
       </div>
@@ -156,18 +149,15 @@ function VerificationCard({ company, onDecide, busy }) {
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button
-            className="btn btn-secondary btn-sm"
-            disabled={busy}
-            onClick={() => onDecide(company.CompanyID, "reject")}
-          >
-            Reject
-          </button>
-          <button
             className="btn btn-primary btn-sm"
             disabled={busy}
-            onClick={() => onDecide(company.CompanyID, "approve")}
+            onClick={() => onAccept(company.CompanyID)}
           >
-            <Icon name="check" size={14} /> Approve
+            {busy ? (
+              <ContainerSpinner inline size={14} label="Verifying…" />
+            ) : (
+              <><Icon name="check" size={14} /> Accept</>
+            )}
           </button>
         </div>
       </div>
@@ -175,84 +165,214 @@ function VerificationCard({ company, onDecide, busy }) {
   );
 }
 
+function VerifiedCompanyRow({ company }) {
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "16px 20px",
+        borderBottom: "1px solid var(--gray-100)",
+      }}
+    >
+      <div className="avatar">{initials2(company.Name)}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
+            {company.Name}
+          </span>
+          <span className="badge badge-success">
+            <span className="dot" /> Verified
+          </span>
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span>{company.ContactEmail || "—"}</span>
+          {company.Governorate && (<><span style={{ color: "var(--gray-300)" }}>·</span><span>{company.Governorate}</span></>)}
+          {company.TaxNumber && (<><span style={{ color: "var(--gray-300)" }}>·</span><span>Tax #{company.TaxNumber}</span></>)}
+        </div>
+      </div>
+      <div style={{ textAlign: "right", fontSize: 12, color: "var(--ink-faint)" }}>
+        Joined {formatDate(company.RegistrationDate)}
+      </div>
+    </li>
+  );
+}
+
+function PendingTicketRow({ ticket, onResolve, busy, isLast }) {
+  const clientName = fullName(ticket.ClientFirstName, ticket.ClientLastName) || `Client #${ticket.ClientID}`;
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 16,
+        padding: "18px 20px",
+        borderBottom: isLast ? "none" : "1px solid var(--gray-100)",
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          display: "grid",
+          placeItems: "center",
+          background: "var(--gray-50)",
+          color: "var(--accent-dark)",
+          flexShrink: 0,
+          marginTop: 2,
+        }}
+      >
+        <Icon name="bell" size={15} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
+            Ticket #{ticket.TicketID} · <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+            {ticket.ClientEmail ? ` · ${ticket.ClientEmail}` : ""}
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
+          {ticket.Issue}
+        </p>
+      </div>
+      <button
+        className="btn btn-primary btn-sm"
+        style={{ flexShrink: 0 }}
+        disabled={busy}
+        onClick={() => onResolve(ticket.TicketID)}
+      >
+        {busy ? (
+          <ContainerSpinner inline size={14} label="Resolving…" />
+        ) : (
+          <><Icon name="check" size={14} /> Resolve</>
+        )}
+      </button>
+    </li>
+  );
+}
+
+function ResolvedTicketRow({ ticket, isLast }) {
+  const clientName = fullName(ticket.ClientFirstName, ticket.ClientLastName) || `Client #${ticket.ClientID}`;
+  const adminName = fullName(ticket.AdminFirstName, ticket.AdminLastName);
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 16,
+        padding: "18px 20px",
+        borderBottom: isLast ? "none" : "1px solid var(--gray-100)",
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          display: "grid",
+          placeItems: "center",
+          background: "var(--gray-50)",
+          color: "var(--success)",
+          flexShrink: 0,
+          marginTop: 2,
+        }}
+      >
+        <Icon name="check" size={15} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
+            Ticket #{ticket.TicketID} · <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+          </span>
+          <span className="badge badge-success" style={{ flexShrink: 0 }}>
+            <span className="dot" /> Resolved
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
+          {ticket.Issue}
+        </p>
+        {adminName && (
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Resolved by <strong style={{ color: "var(--navy)" }}>{adminName}</strong>
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function AdminDashboard() {
   const [pendingCompanies, setPendingCompanies] = useState([]);
   const [verifiedCompanies, setVerifiedCompanies] = useState([]);
-  const [applications, setApplications] = useState([]);
+  const [pendingTickets, setPendingTickets] = useState([]);
+  const [resolvedTickets, setResolvedTickets] = useState([]);
   const [analytics, setAnalytics] = useState(EMPTY_ANALYTICS);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [busyId, setBusyId] = useState(null);
-  const [notice, setNotice] = useState("");
-  const [tickets, setTickets] = useState([]);
+  const [companyBusyId, setCompanyBusyId] = useState(null);
   const [ticketBusyId, setTicketBusyId] = useState(null);
-  const [userEmailMap, setUserEmailMap] = useState({});
+  const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const location = useLocation();
+
+  useEffect(() => {
+    if (loading) return;
+    const hash = location.hash?.replace("#", "");
+    if (!hash) return;
+    const target = document.getElementById(hash);
+    if (target) target.scrollIntoView({ behavior: "smooth" });
+  }, [location.hash, loading]);
+
+  const refreshCompanies = async () => {
+    const [pendingRes, verifiedRes] = await Promise.all([
+      getPendingCompanies().catch((err) => {
+        console.error("getPendingCompanies failed:", err?.response?.status, err?.response?.data || err);
+        return null;
+      }),
+      getVerifiedCompanies().catch((err) => {
+        console.error("getVerifiedCompanies failed:", err?.response?.status, err?.response?.data || err);
+        return null;
+      }),
+    ]);
+    setPendingCompanies(Array.isArray(pendingRes?.data) ? pendingRes.data : []);
+    setVerifiedCompanies(Array.isArray(verifiedRes?.data) ? verifiedRes.data : []);
+  };
+
+  const refreshTickets = async () => {
+    const [pendingRes, resolvedRes] = await Promise.all([
+      getPendingTickets().catch(() => null),
+      getResolvedTickets().catch(() => null),
+    ]);
+    setPendingTickets(Array.isArray(pendingRes?.data) ? pendingRes.data : []);
+    setResolvedTickets(Array.isArray(resolvedRes?.data) ? resolvedRes.data : []);
+  };
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [companiesRes, applicationsRes, onlineRes, ticketsRes, usersRes] = await Promise.all([
-          listCompanies().catch(() => null),
-          listApplications().catch(() => null),
+        const [, , statsRes, onlineRes] = await Promise.all([
+          refreshCompanies(),
+          refreshTickets(),
+          getAdminStats().catch((err) => {
+            console.error("getAdminStats failed:", err?.response?.status, err?.response?.data || err);
+            return null;
+          }),
           onlineUsers().catch(() => null),
-          listSupportTickets().catch(() => []),
-          listUsers().catch(() => []),
         ]);
         if (!active) return;
 
-        const allCompanies = Array.isArray(companiesRes)
-          ? companiesRes
-          : companiesRes?.data || [];
-        const apps = Array.isArray(applicationsRes)
-          ? applicationsRes
-          : applicationsRes?.data || [];
+        console.log("Admin Stats Data:", statsRes);
 
-        // Real DB column is `VerficationStatus` (note typo) and the ENUM is
-        // 'Pending' | 'Verified' | 'Rejected' (capitalized). Build pending
-        // queue rows shaped for <VerificationCard />.
-        const pending = allCompanies
-          .filter((c) => c.VerficationStatus === "Pending")
-          .map((c) => ({
-            CompanyID: c.CompanyID,
-            Name: c.Name,
-            ContactEmail: c.ContactEmail,
-            City: c.Governorate || c.Address || "",
-            SubmittedAt: c.RegistrationDate
-              ? String(c.RegistrationDate).slice(0, 10)
-              : "",
-            Services: c.About || "",
-            ContactName: "",
-            ComReg: c.ComReg || null,
-          }));
-        setPendingCompanies(pending);
-        setVerifiedCompanies(allCompanies.filter((c) => c.VerficationStatus === "Verified"));
-        setApplications(apps);
-
-        const allTickets = Array.isArray(ticketsRes) ? ticketsRes : [];
-        setTickets(allTickets.filter((t) => !t.Resolved));
-
-        const allUsers = Array.isArray(usersRes) ? usersRes : usersRes?.data || [];
-        const emailMap = {};
-        for (const u of allUsers) {
-          if (u?.UserID != null) emailMap[Number(u.UserID)] = u.Email || "";
-        }
-        setUserEmailMap(emailMap);
-
-        const totalRequests = apps.length;
-        const transactions = apps.filter((a) => a.Status === "Completed").length;
-        // Application table has no Amount column; revenue is sourced from
-        // payments, which the dashboard doesn't load yet. Show 0 instead
-        // of fabricating a number.
-        const websiteRevenue = 0;
-        const online =
-          onlineRes?.count ?? onlineRes?.users?.length ?? 0;
-
-        setAnalytics({ totalRequests, websiteRevenue, transactions, onlineUsers: online });
-
-        if (companiesRes === null) {
-          setLoadError("Couldn't reach the server. Some sections may be incomplete.");
-        }
+        const stats = statsRes?.data || {};
+        const online = onlineRes?.count ?? onlineRes?.users?.length ?? 0;
+        setAnalytics({
+          totalRequests: Number(stats.TotalRequests) || 0,
+          websiteRevenue: Number(stats.TotalWebsiteRevenue) || 0,
+          transactions: Number(stats.TotalTransactions) || 0,
+          onlineUsers: online,
+        });
       } catch {
         if (!active) return;
         setLoadError("Couldn't load dashboard data. Please refresh.");
@@ -263,115 +383,29 @@ function AdminDashboard() {
     return () => { active = false; };
   }, []);
 
-  // Build the leaderboard from real applications. Rank companies by completed
-  // jobs (descending), then by total applications. Fall back to listing all
-  // verified companies when no application data is available so the section
-  // is never blank with dummy fillers.
-  const topCompanies = useMemo(() => {
-    if (!verifiedCompanies.length && !applications.length) return [];
-
-    const counts = new Map();
-    for (const a of applications) {
-      const id = a.CompanyID;
-      if (id == null) continue;
-      const cur = counts.get(id) || { jobs: 0, total: 0 };
-      cur.total += 1;
-      if (a.Status === "Completed") cur.jobs += 1;
-      counts.set(id, cur);
-    }
-
-    const rows = verifiedCompanies.map((c) => {
-      const cnt = counts.get(c.CompanyID) || { jobs: 0, total: 0 };
-      return {
-        id: c.CompanyID,
-        name: c.Name,
-        initials: initials2(c.Name),
-        jobs: cnt.jobs,
-        total: cnt.total,
-      };
-    });
-
-    rows.sort((a, b) => b.jobs - a.jobs || b.total - a.total);
-    return rows.slice(0, 5);
-  }, [verifiedCompanies, applications]);
-
-  // Recent events: blend the most recent applications and the most recent
-  // company registrations, sorted by timestamp descending.
-  const activity = useMemo(() => {
-    const events = [];
-    const companyName = (id) => {
-      const v = verifiedCompanies.find((c) => c.CompanyID === id);
-      if (v) return v.Name;
-      const p = pendingCompanies.find((c) => c.CompanyID === id);
-      return p?.Name || `Company #${id}`;
-    };
-
-    for (const a of applications.slice(0, 8)) {
-      const date = a.SubmissionDate || a.CompletionDate;
-      if (!date) continue;
-      const status = a.Status === "Completed" ? "completed" : a.Status === "In Progress" ? "is in progress on" : "submitted";
-      events.push({
-        ts: new Date(date).getTime(),
-        who: companyName(a.CompanyID),
-        what: `${status} application #${a.ApplicationID}`,
-        when: relativeTime(date),
-        icon: a.Status === "Completed" ? "check" : "package",
-        color: a.Status === "Completed" ? "var(--success)" : "var(--navy)",
-      });
-    }
-
-    for (const c of [...verifiedCompanies, ...pendingCompanies].slice(0, 8)) {
-      if (!c.RegistrationDate && !c.SubmittedAt) continue;
-      const date = c.RegistrationDate || c.SubmittedAt;
-      events.push({
-        ts: new Date(date).getTime(),
-        who: c.Name,
-        what:
-          c.VerficationStatus === "Verified"
-            ? "joined as a verified company"
-            : "submitted verification documents",
-        when: relativeTime(date),
-        icon: c.VerficationStatus === "Verified" ? "shield" : "doc",
-        color: c.VerficationStatus === "Verified" ? "var(--teal-dark)" : "var(--accent-dark)",
-      });
-    }
-
-    events.sort((a, b) => b.ts - a.ts);
-    return events.slice(0, 6);
-  }, [applications, verifiedCompanies, pendingCompanies]);
-
   const showNotice = (text) => {
     setNotice(text);
     setTimeout(() => setNotice(""), 3500);
   };
 
-  const handleDecide = async (companyId, decision) => {
-    setBusyId(companyId);
-    let ok = false;
+  const handleAccept = async (companyId) => {
+    setCompanyBusyId(companyId);
     try {
-      await verifyCompany(companyId, decision === "approve" ? "Verified" : "Rejected");
-      ok = true;
-    } catch { /* server failure — surface a different notice */ }
-    finally {
-      setBusyId(null);
-      if (ok) {
-        setPendingCompanies((list) => list.filter((c) => c.CompanyID !== companyId));
-      }
-      showNotice(
-        ok
-          ? decision === "approve"
-            ? "Company verified — they’re now live on the marketplace."
-            : "Company rejected. They’ll be notified by email."
-          : "Couldn't update the company. Please try again."
-      );
+      await verifyCompany(companyId, { status: "Verified" });
+      await refreshCompanies();
+      showNotice("Company verified — they're now live on the marketplace.");
+    } catch {
+      showNotice("Couldn't verify the company. Please try again.");
+    } finally {
+      setCompanyBusyId(null);
     }
   };
 
   const handleResolve = async (ticketId) => {
     setTicketBusyId(ticketId);
     try {
-      await resolveSupportTicket(ticketId);
-      setTickets((list) => list.filter((t) => t.TicketID !== ticketId));
+      await resolveTicket(ticketId);
+      await refreshTickets();
       showNotice("Ticket marked as resolved.");
     } catch {
       showNotice("Couldn't resolve the ticket. Please try again.");
@@ -390,13 +424,8 @@ function AdminDashboard() {
   return (
     <PublicLayout
       title="Admin dashboard"
-      subtitle="Marketplace activity, verifications, and revenue."
+      subtitle="Marketplace activity, verifications, and support."
       role="Admin"
-      actions={
-        <button className="btn btn-secondary btn-sm">
-          <Icon name="chart" size={14} /> Export report
-        </button>
-      }
     >
       {notice && (
         <div className="banner-success">
@@ -440,278 +469,171 @@ function AdminDashboard() {
             label="Transactions"
             value={analytics.transactions.toLocaleString()}
             sub={`${conversionRate}% completion rate`}
-            accent="success"
           />
           <StatCard
             icon="user"
             label="Online users"
             value={analytics.onlineUsers}
             sub="Live sessions right now"
-            accent="info"
           />
         </div>
       </Reveal>
 
-      {/* Verification queue */}
-      <Reveal as="section" style={{ marginBottom: 36 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <div>
-            <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
-              <Icon name="bell" size={12} /> Action needed
+      {/* ───────────── COMPANIES ───────────── */}
+      <div id="companies-section">
+        {/* Pending companies */}
+        <Reveal as="section" style={{ marginBottom: 36 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+            <div>
+              <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
+                <Icon name="bell" size={12} /> Action needed
+              </span>
+              <h2 className="h3" style={{ fontSize: 20 }}>Pending companies</h2>
+            </div>
+            <span className="muted" style={{ fontSize: 13 }}>
+              {pendingCompanies.length} awaiting verification
             </span>
-            <h2 className="h3" style={{ fontSize: 20 }}>Company verification queue</h2>
           </div>
-          <span className="muted" style={{ fontSize: 13 }}>
-            {pendingCompanies.length} {pendingCompanies.length === 1 ? "company" : "companies"} awaiting review
-          </span>
-        </div>
 
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
-            <ContainerSpinner size={80} label="Loading verifications" />
-          </div>
-        ) : pendingCompanies.length === 0 ? (
-          <div className="card" style={{ textAlign: "center", padding: 48 }}>
-            <Icon name="check" size={28} color="var(--success)" />
-            <h3 className="h3" style={{ marginTop: 12 }}>The queue is clear</h3>
-            <p className="muted" style={{ margin: 0 }}>No companies waiting for verification.</p>
-          </div>
-        ) : (
-          <div className="grid">
-            {pendingCompanies.map((c) => (
-              <VerificationCard
-                key={c.CompanyID}
-                company={c}
-                busy={busyId === c.CompanyID}
-                onDecide={handleDecide}
-              />
-            ))}
-          </div>
-        )}
-      </Reveal>
-
-      {/* Support tickets */}
-      <Reveal as="section" style={{ marginBottom: 36 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <div>
-            <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
-              <Icon name="bell" size={12} /> Support
-            </span>
-            <h2 className="h3" style={{ fontSize: 20 }}>Open support tickets</h2>
-          </div>
-          <span className="muted" style={{ fontSize: 13 }}>
-            {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} unresolved
-          </span>
-        </div>
-
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
-            <ContainerSpinner size={80} label="Loading tickets" />
-          </div>
-        ) : tickets.length === 0 ? (
-          <div className="card" style={{ textAlign: "center", padding: 48 }}>
-            <Icon name="check" size={28} color="var(--success)" />
-            <h3 className="h3" style={{ marginTop: 12 }}>No open tickets</h3>
-            <p className="muted" style={{ margin: 0 }}>All support tickets have been resolved.</p>
-          </div>
-        ) : (
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {tickets.map((t, i) => (
-                <li
-                  key={t.TicketID}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 16,
-                    padding: "18px 20px",
-                    borderBottom: i < tickets.length - 1 ? "1px solid var(--gray-100)" : "none",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      display: "grid",
-                      placeItems: "center",
-                      background: "var(--gray-50)",
-                      color: "var(--accent-dark)",
-                      flexShrink: 0,
-                      marginTop: 2,
-                    }}
-                  >
-                    <Icon name="bell" size={15} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
-                        Ticket #{t.TicketID}
-                        {" · "}
-                        {userEmailMap[Number(t.ClientID)]
-                          ? userEmailMap[Number(t.ClientID)]
-                          : `Client #${t.ClientID}`}
-                      </span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
-                      {t.Issue}
-                    </p>
-                  </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ flexShrink: 0 }}
-                    disabled={ticketBusyId === t.TicketID}
-                    onClick={() => handleResolve(t.TicketID)}
-                  >
-                    {ticketBusyId === t.TicketID ? (
-                      <ContainerSpinner inline size={14} label="Resolving…" />
-                    ) : (
-                      <><Icon name="check" size={14} /> Mark resolved</>
-                    )}
-                  </button>
-                </li>
+          {loading ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+              <ContainerSpinner size={80} label="Loading verifications" />
+            </div>
+          ) : pendingCompanies.length === 0 ? (
+            <div className="card" style={{ textAlign: "center", padding: 48 }}>
+              <Icon name="check" size={28} color="var(--success)" />
+              <h3 className="h3" style={{ marginTop: 12 }}>The queue is clear</h3>
+              <p className="muted" style={{ margin: 0 }}>No companies waiting for verification.</p>
+            </div>
+          ) : (
+            <div className="grid">
+              {pendingCompanies.map((c) => (
+                <PendingCompanyCard
+                  key={c.CompanyID}
+                  company={c}
+                  busy={companyBusyId === c.CompanyID}
+                  onAccept={handleAccept}
+                />
               ))}
-            </ul>
-          </div>
-        )}
-      </Reveal>
+            </div>
+          )}
+        </Reveal>
 
-      {/* Top companies + Activity */}
-      <Reveal as="section" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: 24, marginBottom: 24 }}>
-        {/* Top companies leaderboard */}
-        <div>
+        {/* Verified companies */}
+        <Reveal as="section" style={{ marginBottom: 36 }}>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
             <div>
-              <span className="eyebrow">Leaderboard</span>
-              <h2 className="h3" style={{ fontSize: 20 }}>Top companies by completed jobs</h2>
+              <span className="eyebrow">Roster</span>
+              <h2 className="h3" style={{ fontSize: 20 }}>Verified companies</h2>
             </div>
-            <span className="muted" style={{ fontSize: 13 }}>All-time</span>
+            <span className="muted" style={{ fontSize: 13 }}>
+              {verifiedCompanies.length} active on the marketplace
+            </span>
           </div>
 
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            {topCompanies.length === 0 ? (
-              <div style={{ padding: 32, textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
-                No verified companies yet — approve a registration to populate the leaderboard.
-              </div>
-            ) : (
-              topCompanies.map((c, i) => {
-                const max = Math.max(1, ...topCompanies.map((x) => x.total));
-                const pct = (c.total / max) * 100;
-                return (
-                  <div
-                    key={c.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      padding: "16px 20px",
-                      borderBottom: i < topCompanies.length - 1 ? "1px solid var(--gray-100)" : "none",
-                    }}
-                  >
-                    <div style={{
-                      width: 24,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--gray-400)",
-                      textAlign: "center",
-                    }}>
-                      {i + 1}
-                    </div>
-                    <div className="avatar">{c.initials}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
-                          {c.name}
-                        </span>
-                        <span style={{ color: "var(--navy)", fontWeight: 700, fontSize: 14 }}>
-                          {c.jobs} / {c.total}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          position: "relative",
-                          height: 6,
-                          background: "var(--gray-100)",
-                          borderRadius: 999,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            width: `${pct}%`,
-                            background: "var(--brand)",
-                            borderRadius: 999,
-                          }}
-                        />
-                      </div>
-                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                        {c.jobs} completed · {c.total} total applications
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Recent activity */}
-        <div>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-            <div>
-              <span className="eyebrow">Activity</span>
-              <h2 className="h3" style={{ fontSize: 20 }}>Recent events</h2>
+          {loading ? null : verifiedCompanies.length === 0 ? (
+            <div className="card" style={{ textAlign: "center", padding: 48 }}>
+              <Icon name="shield" size={28} color="var(--ink-faint)" />
+              <h3 className="h3" style={{ marginTop: 12 }}>No verified companies yet</h3>
+              <p className="muted" style={{ margin: 0 }}>
+                Approve a pending company to get the marketplace started.
+              </p>
             </div>
-          </div>
-
-          <div className="card" style={{ padding: 0 }}>
-            {activity.length === 0 ? (
-              <div style={{ padding: 32, textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
-                No recent activity yet.
-              </div>
-            ) : (
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                {activity.map((row, i) => (
+                {verifiedCompanies.map((c, i) => (
                   <li
-                    key={i}
+                    key={c.CompanyID}
                     style={{
-                      display: "flex",
-                      gap: 12,
-                      padding: "14px 20px",
-                      borderBottom:
-                        i < activity.length - 1 ? "1px solid var(--gray-100)" : "none",
+                      borderBottom: i === verifiedCompanies.length - 1 ? "none" : undefined,
                     }}
                   >
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        display: "grid",
-                        placeItems: "center",
-                        background: "var(--gray-50)",
-                        color: row.color,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon name={row.icon} size={15} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, color: "var(--gray-800)", lineHeight: 1.4 }}>
-                        <strong style={{ color: "var(--navy)" }}>{row.who}</strong>{" "}
-                        <span className="muted">{row.what}</span>
-                      </div>
-                      <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{row.when}</div>
-                    </div>
+                    <VerifiedCompanyRow company={c} />
                   </li>
                 ))}
               </ul>
-            )}
+            </div>
+          )}
+        </Reveal>
+      </div>
+
+      {/* ───────────── SUPPORT ───────────── */}
+      <div id="support-section">
+        {/* Pending tickets */}
+        <Reveal as="section" style={{ marginBottom: 36 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+            <div>
+              <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>
+                <Icon name="bell" size={12} /> Support
+              </span>
+              <h2 className="h3" style={{ fontSize: 20 }}>Pending support tickets</h2>
+            </div>
+            <span className="muted" style={{ fontSize: 13 }}>
+              {pendingTickets.length} unresolved
+            </span>
           </div>
-        </div>
-      </Reveal>
+
+          {loading ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+              <ContainerSpinner size={80} label="Loading tickets" />
+            </div>
+          ) : pendingTickets.length === 0 ? (
+            <div className="card" style={{ textAlign: "center", padding: 48 }}>
+              <Icon name="check" size={28} color="var(--success)" />
+              <h3 className="h3" style={{ marginTop: 12 }}>No open tickets</h3>
+              <p className="muted" style={{ margin: 0 }}>All support tickets have been resolved.</p>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {pendingTickets.map((t, i) => (
+                  <PendingTicketRow
+                    key={t.TicketID}
+                    ticket={t}
+                    busy={ticketBusyId === t.TicketID}
+                    onResolve={handleResolve}
+                    isLast={i === pendingTickets.length - 1}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+        </Reveal>
+
+        {/* Resolved tickets */}
+        <Reveal as="section" style={{ marginBottom: 24 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+            <div>
+              <span className="eyebrow">Archive</span>
+              <h2 className="h3" style={{ fontSize: 20 }}>Resolved support tickets</h2>
+            </div>
+            <span className="muted" style={{ fontSize: 13 }}>
+              {resolvedTickets.length} closed
+            </span>
+          </div>
+
+          {loading ? null : resolvedTickets.length === 0 ? (
+            <div className="card" style={{ textAlign: "center", padding: 48 }}>
+              <Icon name="package" size={28} color="var(--ink-faint)" />
+              <h3 className="h3" style={{ marginTop: 12 }}>Nothing in the archive yet</h3>
+              <p className="muted" style={{ margin: 0 }}>Resolved tickets will show up here.</p>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {resolvedTickets.map((t, i) => (
+                  <ResolvedTicketRow
+                    key={t.TicketID}
+                    ticket={t}
+                    isLast={i === resolvedTickets.length - 1}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+        </Reveal>
+      </div>
     </PublicLayout>
   );
 }

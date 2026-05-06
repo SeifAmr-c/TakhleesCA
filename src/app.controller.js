@@ -15,6 +15,7 @@ import documentRouter from "./modules/document/document_controller.js";
 import paymentRouter from "./modules/payment/payment_controller.js";
 import reviewRouter from "./modules/review/review_controller.js";
 import supportTicketRouter from "./modules/support_ticket/support_ticket_controller.js";
+import adminRouter from "./modules/admin/admin_controller.js";
 
 export const bootstrap = () => {
   const app = express();
@@ -67,6 +68,7 @@ export const bootstrap = () => {
   app.use("/payment", paymentRouter);
   app.use("/review", reviewRouter);
   app.use("/supportticket", supportTicketRouter);
+  app.use("/admin", adminRouter);
 
   // -----------------------------
   // 404 Handler
