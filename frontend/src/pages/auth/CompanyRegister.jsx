@@ -100,20 +100,19 @@ function CompanyRegister() {
     const v = validate();
     if (v) return setError(v);
 
-    const payload = {
-      Name: form.Name.trim(),
-      ContactEmail: form.ContactEmail.trim(),
-      FoundingDate: form.FoundingDate,
-      Password: form.Password,
-      Comm: 10,
-      RegistrationDate: todayISO(),
-      TaxNumber: Number(form.TaxNumber.replace(/-/g, "")),
-      VerficationStatus: "Pending",
-      Governorate: form.Governorate.trim(),
-      Address: form.Address.trim(),
-      About: form.About.trim() || "Trusted clearance company on the Takhlees marketplace.",
-      ComReg: comRegFile.name,
-    };
+    const payload = new FormData();
+    payload.append("Name", form.Name.trim());
+    payload.append("ContactEmail", form.ContactEmail.trim());
+    payload.append("FoundingDate", form.FoundingDate);
+    payload.append("Password", form.Password);
+    payload.append("Comm", "10");
+    payload.append("RegistrationDate", todayISO());
+    payload.append("TaxNumber", String(Number(form.TaxNumber.replace(/-/g, ""))));
+    payload.append("VerficationStatus", "Pending");
+    payload.append("Governorate", form.Governorate.trim());
+    payload.append("Address", form.Address.trim());
+    payload.append("About", form.About.trim() || "Trusted clearance company on the Takhlees marketplace.");
+    payload.append("ComRegFile", comRegFile);
 
     setSubmitting(true);
     try {

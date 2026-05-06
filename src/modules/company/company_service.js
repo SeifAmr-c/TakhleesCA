@@ -32,7 +32,9 @@ export const createCompany = async (req, res, next) => {
         const RegistrationDate = req.body.RegistrationDate;
         const TaxNumber = req.body.TaxNumber;
         const VerficationStatus = req.body.VerficationStatus ?? "Pending";
-        const ComReg = req.body.ComReg ?? null;
+        const ComReg = req.file
+            ? `uploads/compreg/${req.file.filename}`
+            : (req.body.ComReg ?? null);
         const Governorate = req.body.Governorate ?? null;
         const Address = req.body.Address ?? null;
         const About = req.body.About ?? null;

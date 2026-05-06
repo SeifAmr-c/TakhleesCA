@@ -11,6 +11,65 @@ const runQuery = (sql, params = []) =>
 const DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Other'];
 const VERIFICATION_STATUSES = ['Pending', 'Accepted', 'Rejected'];
 
+/* Upload handler — called after multer has saved the file to disk.
+   Stores the relative path so it can be served via /uploads/documents/<name>. */
+export const createDocumentWithFile = async (req, res, next) => {
+    try {
+        const DocType = String(req.body.DocType ?? '').trim();
+        const ApplicationID = Number(req.body.ApplicationID);
+
+        if (!ApplicationID) {
+            return res.status(400).json({ ok: false, message: 'ApplicationID is required.' });
+        }
+        if (!DOC_TYPES.includes(DocType)) {
+            return res.status(400).json({
+                ok: false,
+                message: `DocType must be one of: ${DOC_TYPES.join(', ')}.`,
+            });
+        }
+        if (!req.file) {
+            return res.status(400).json({ ok: false, message: 'File is required.' });
+        }
+
+        const exists = await runQuery(
+            'SELECT 1 FROM application WHERE ApplicationID = ? LIMIT 1',
+            [ApplicationID]
+        );
+        if (!exists.length) {
+            return res.status(404).json({ ok: false, message: `Application ${ApplicationID} not found.` });
+        }
+
+        const filePath = `uploads/documents/${req.file.filename}`;
+        const result = await runQuery(
+            'INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), ?, ?, ?)',
+            [DocType, 'Pending', filePath, ApplicationID]
+        );
+
+        return res.status(201).json({
+            ok: true,
+            message: 'Document uploaded and recorded.',
+            data: { DocumentID: result.insertId, DocType, ApplicationID, Path: filePath },
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const getDocumentsByApplication = (req, res) => {
+    const { ApplicationID } = req.query;
+    if (!ApplicationID) {
+        return res.status(400).json({ error: 'ApplicationID is required' });
+    }
+    db.query(
+        'SELECT DocumentID, DocType, Path, UploadDate, VerficationStatus FROM document WHERE ApplicationID = ? ORDER BY DocumentID ASC',
+        [ApplicationID],
+        function (err, result) {
+            if (err) throw err;
+            res.json(result);
+        }
+    );
+};
+
 export const createDocument = async (req, res, next) => {
     try {
         const DocType = String(req.body.DocType ?? '').trim();

@@ -18,3 +18,21 @@ export const createDocumentRecord = async ({
   });
   return data;
 };
+
+export const uploadDocument = async ({ DocType, ApplicationID, file }) => {
+  const formData = new FormData();
+  formData.append("DocType", DocType);
+  formData.append("ApplicationID", String(ApplicationID));
+  formData.append("file", file);
+  const { data } = await api.post("/document/upload", formData, {
+    headers: { "Content-Type": undefined },
+  });
+  return data;
+};
+
+export const listApplicationDocuments = async (applicationId) => {
+  const { data } = await api.get("/document/by-application", {
+    params: { ApplicationID: applicationId },
+  });
+  return data;
+};

@@ -6,7 +6,7 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
 import { listCompanyPorts } from "../../api/ports.js";
-import { createDocumentRecord } from "../../api/documents.js";
+import { uploadDocument } from "../../api/documents.js";
 import { submitPayment } from "../../api/payments.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
 import dropStyles from "../auth/Auth.module.css";
@@ -896,14 +896,14 @@ function FillApplication() {
         try {
           await Promise.all(
             documents.map((d) =>
-              createDocumentRecord({
+              uploadDocument({
                 DocType: d.type,
-                Path: d.file?.name || "unsaved",
                 ApplicationID: applicationId,
+                file: d.file,
               })
             )
           );
-        } catch { /* document metadata best-effort */ }
+        } catch { /* document upload best-effort */ }
       }
 
       /* Payment: backend expects `PaymentGateway` (not `Method`) and stamps

@@ -9,6 +9,8 @@ import {
   updateApplicationStatus,
 } from "../../api/applications.js";
 import { getCompanyDashboardStats } from "../../api/companies.js";
+import { listApplicationDocuments } from "../../api/documents.js";
+import DocViewer from "../../components/DocViewer.jsx";
 import { useAuth } from "../../api/authState.js";
 
 /* DB ENUM 'Pending' | 'In Progress' | 'Completed'  →  internal lower-case
@@ -112,6 +114,66 @@ function StatCard({ icon, label, value, sub, accent }) {
   );
 }
 
+function DocumentsDrawer({ applicationId }) {
+  const [open, setOpen] = React.useState(false);
+  const [docs, setDocs] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [viewerUrl, setViewerUrl] = React.useState(null);
+  const [viewerTitle, setViewerTitle] = React.useState("");
+
+  const toggle = async () => {
+    if (!open && docs === null) {
+      setLoading(true);
+      try {
+        const result = await listApplicationDocuments(applicationId);
+        setDocs(Array.isArray(result) ? result : []);
+      } catch {
+        setDocs([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setOpen((v) => !v);
+  };
+
+  return (
+    <>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={toggle}>
+        <Icon name="doc" size={14} /> {open ? "Hide documents" : "View documents"}
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {loading ? (
+            <ContainerSpinner inline size={14} label="Loading…" />
+          ) : !docs || docs.length === 0 ? (
+            <span className="muted" style={{ fontSize: 13 }}>No documents attached.</span>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+              {docs.map((d) => (
+                <li key={d.DocumentID} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="doc" size={13} color="var(--ink-faint)" />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: "2px 6px", fontSize: 13, color: "var(--brand)" }}
+                    onClick={() => { setViewerUrl(`/${d.Path}`); setViewerTitle(d.DocType); }}
+                  >
+                    {d.DocType}
+                  </button>
+                  <span className="muted" style={{ fontSize: 12 }}>· {d.VerficationStatus}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {viewerUrl && (
+        <DocViewer url={viewerUrl} title={viewerTitle} onClose={() => setViewerUrl(null)} />
+      )}
+    </>
+  );
+}
+
 function PendingCard({ a, onDecision, busy }) {
   return (
     <div className="card card-hover">
@@ -158,9 +220,12 @@ function PendingCard({ a, onDecision, busy }) {
 
       <hr className="divider" />
 
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <div className="muted" style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Icon name="bell" size={14} color="var(--warning)" /> Awaiting your review
+      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+        <div className="row" style={{ gap: 10 }}>
+          <div className="muted" style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Icon name="bell" size={14} color="var(--warning)" /> Awaiting your review
+          </div>
+          <DocumentsDrawer applicationId={a.ApplicationID} />
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button
@@ -238,6 +303,9 @@ function AcceptedCard({ a, onStatusChange, busy }) {
           </div>
         ))}
       </div>
+
+      <hr className="divider" />
+      <DocumentsDrawer applicationId={a.ApplicationID} />
     </div>
   );
 }

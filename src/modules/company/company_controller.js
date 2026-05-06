@@ -1,7 +1,22 @@
 import { Router } from "express";
+import multer from "multer";
+import path from "path";
 import rateLimit from "express-rate-limit";
 import * as companyService from "./company_service.js";
 import { requireCompany } from "../../middleware/auth.js";
+
+const comRegStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, "uploads/compreg"),
+  filename: (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cb(null, `${unique}${path.extname(file.originalname)}`);
+  },
+});
+const comRegUpload = multer({
+  storage: comRegStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype === "application/pdf"),
+});
 
 const router = Router();
 
@@ -13,7 +28,7 @@ const loginLimiter = rateLimit({
   message: { ok: false, message: "Too many login attempts. Please try again in a minute." },
 });
 
-router.post("/", companyService.createCompany);
+router.post("/", comRegUpload.single("ComRegFile"), companyService.createCompany);
 router.post("/login", loginLimiter, companyService.loginCompany);
 router.post("/logout", companyService.logoutCompany);
 router.get("/", companyService.getCompany);

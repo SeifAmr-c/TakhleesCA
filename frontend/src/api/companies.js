@@ -30,7 +30,10 @@ export const getCompany = async (companyId) => {
 };
 
 export const registerCompany = async (payload) => {
-  const { data } = await api.post("/company", payload);
+  const isFormData = payload instanceof FormData;
+  const { data } = await api.post("/company", payload,
+    isFormData ? { headers: { "Content-Type": undefined } } : {}
+  );
   return data;
 };
 

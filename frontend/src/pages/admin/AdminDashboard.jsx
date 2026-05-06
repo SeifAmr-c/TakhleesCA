@@ -4,6 +4,7 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies, verifyCompany } from "../../api/companies.js";
+import DocViewer from "../../components/DocViewer.jsx";
 import { listApplications } from "../../api/applications.js";
 import { onlineUsers, listUsers, listSupportTickets, resolveSupportTicket } from "../../api/admin.js";
 
@@ -84,6 +85,7 @@ function StatCard({ icon, label, value, sub, trend, trendDir, accent, sparkData 
 }
 
 function VerificationCard({ company, onDecide, busy }) {
+  const [viewerUrl, setViewerUrl] = React.useState(null);
   const initials = (company.Name || "TK")
     .split(" ")
     .filter(Boolean)
@@ -132,11 +134,25 @@ function VerificationCard({ company, onDecide, busy }) {
 
       <hr className="divider" />
 
+      {viewerUrl && (
+        <DocViewer url={viewerUrl} title="Commercial Registration" onClose={() => setViewerUrl(null)} />
+      )}
+
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <div className="row" style={{ gap: 6 }}>
-          <button type="button" className="btn btn-ghost btn-sm">
-            <Icon name="doc" size={14} /> View documents
-          </button>
+          {company.ComReg ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setViewerUrl(`/${company.ComReg}`)}
+            >
+              <Icon name="doc" size={14} /> View registration doc
+            </button>
+          ) : (
+            <span className="btn btn-ghost btn-sm" style={{ opacity: 0.4, cursor: "default" }}>
+              <Icon name="doc" size={14} /> No document uploaded
+            </span>
+          )}
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button
@@ -207,6 +223,7 @@ function AdminDashboard() {
               : "",
             Services: c.About || "",
             ContactName: "",
+            ComReg: c.ComReg || null,
           }));
         setPendingCompanies(pending);
         setVerifiedCompanies(allCompanies.filter((c) => c.VerficationStatus === "Verified"));
