@@ -1,53 +1,55 @@
 import 'dotenv/config';
 import mysql from 'mysql2/promise';
 
+import { initUserTable } from './user.model.js';
+import { initClientTable } from './client.model.js';
+import { initAdminTable } from './admin.model.js';
+import { initSupportTicketTable } from './support_ticket.js';
+import { initCompanyTable } from './company.model.js';
+import { initPortTable } from './port.model.js';
+import { initCompanyPortTable } from './company_port.model.js';
+import { initCategoryTable } from './category.model.js';
+import { initCompanyCategoryTable } from './company_category.model.js';
+import { initApplicationTable } from './application.model.js';
+import { initReviewTable } from './review.model.js';
+import { initDocumentTable } from './document.model.js';
+import { initPaymentTable } from './payment.model.js';
+import { initCompanyPaymentTable } from './company_payment.model.js';
+
 const DB_NAME = 'Takhlees';
+const DB_HOST = 'localhost';
+const DB_USER = 'root';
+const DB_PASSWORD = '';
 
 /* Seed reference data the UI depends on. Idempotent: only inserts when
    the table is empty so re-running setup_db.js doesn't duplicate rows. */
-async function seedReferenceData() {
-    const { default: db } = await import('./connection.js');
-
-    const runQuery = (sql, params = []) =>
-        new Promise((resolve, reject) => {
-            db.query(sql, params, (err, result) => {
-                if (err) return reject(err);
-                resolve(result);
-            });
-        });
-
+async function seedReferenceData(pool) {
     /* Category — Type column is an ENUM('Electronics','Cars','Clothes','Other').
        Product wants only the first three exposed, so we (a) seed only those
        three on a fresh DB and (b) clean up any pre-existing 'Other' row from
        earlier seedings. The CompanyCategory FK rows have to go first.
        The 'Other' value is left in the ENUM definition for backward
        compatibility — no harm in keeping an unused enum option. */
-    await runQuery(
+    await pool.query(
         `DELETE FROM companycategory
           WHERE CategoryID IN (SELECT CategoryID FROM category WHERE Type = 'Other')`
     );
-    const purged = await runQuery("DELETE FROM category WHERE Type = 'Other'");
+    const [purged] = await pool.query("DELETE FROM category WHERE Type = 'Other'");
     if (purged.affectedRows > 0) {
         console.log(`Purged ${purged.affectedRows} legacy 'Other' category row(s).`);
     }
 
-    const [{ count: catCount }] = await runQuery(
-        'SELECT COUNT(*) AS count FROM category'
-    );
-    if (catCount === 0) {
+    const [catRows] = await pool.query('SELECT COUNT(*) AS count FROM category');
+    if (catRows[0].count === 0) {
         const categories = ['Electronics', 'Cars', 'Clothes'];
         for (const type of categories) {
-            await runQuery('INSERT INTO category (`Type`) VALUES (?)', [type]);
+            await pool.query('INSERT INTO category (`Type`) VALUES (?)', [type]);
         }
         console.log(`Seeded ${categories.length} categories.`);
     }
 
-    /* Port — name + type + EstDate (NOT NULL). Use today's date as a
-       harmless placeholder for the establishment date. */
-    const [{ count: portCount }] = await runQuery(
-        'SELECT COUNT(*) AS count FROM port'
-    );
-    if (portCount === 0) {
+    const [portRows] = await pool.query('SELECT COUNT(*) AS count FROM port');
+    if (portRows[0].count === 0) {
         const today = new Date().toISOString().slice(0, 19).replace('T', ' ');
         const ports = [
             ['Alexandria', 'Sea', today],
@@ -57,7 +59,7 @@ async function seedReferenceData() {
             ['Suez', 'Sea', today],
         ];
         for (const [PortName, PortType, EstDate] of ports) {
-            await runQuery(
+            await pool.query(
                 'INSERT INTO port (`PortName`,`PortType`,`EstDate`) VALUES (?,?,?)',
                 [PortName, PortType, EstDate]
             );
@@ -67,51 +69,56 @@ async function seedReferenceData() {
 }
 
 async function main() {
+    /* Bootstrap connection (no database selected) so we can create the
+       target database before opening a pool that pins it. */
     const bootstrap = await mysql.createConnection({
-        host: 'localhost',
-        user: 'root',
-        password: '',
+        host: DB_HOST,
+        user: DB_USER,
+        password: DB_PASSWORD,
     });
     await bootstrap.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME}`);
     await bootstrap.end();
 
-    const { createUserTable } = await import('./user.model.js');
-    const { createClientTable } = await import('./client.model.js');
-    const { createAdminTable } = await import('./admin.model.js');
-    const { createCompanyTable } = await import('./company.model.js');
-    const { createPortTable } = await import('./port.model.js');
-    const { createCompanyPortTable } = await import('./company_port.model.js');
-    const { createCategoryTable } = await import('./category.model.js');
-    const { createCompanyCategoryTable } = await import('./company_category.model.js');
-    const { createApplicationTable } = await import('./application.model.js');
-    const { createReviewTable } = await import('./review.model.js');
-    const { createDocumentTable } = await import('./document.model.js');
-    const { createPaymentTable } = await import('./payment.model.js');
-    const { createCompanyPaymentTable } = await import('./company_payment.model.js');
-    const { createSupportTicketTable } = await import('./support_ticket.js');
+    const pool = mysql.createPool({
+        host: DB_HOST,
+        user: DB_USER,
+        password: DB_PASSWORD,
+        database: DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+    });
 
-    await createUserTable();
-    await createClientTable();
-    await createAdminTable();
-    await createSupportTicketTable();
-    await createCompanyTable();
-    await createPortTable();
-    await createCompanyPortTable();
-    await createCategoryTable();
-    await createCompanyCategoryTable();
-    await createApplicationTable();
-    await createReviewTable();
-    await createDocumentTable();
-    await createPaymentTable();
-    await createCompanyPaymentTable();
+    try {
+        /* FK dependency order: User → Client/Admin → SupportTicket;
+           Company → Port/CompanyPort, Category/CompanyCategory;
+           Application → Review/Document/Payment/CompanyPayment. */
+        await initUserTable(pool);
+        await initClientTable(pool);
+        await initAdminTable(pool);
+        await initSupportTicketTable(pool);
+        await initCompanyTable(pool);
+        await initPortTable(pool);
+        await initCompanyPortTable(pool);
+        await initCategoryTable(pool);
+        await initCompanyCategoryTable(pool);
+        await initApplicationTable(pool);
+        await initReviewTable(pool);
+        await initDocumentTable(pool);
+        await initPaymentTable(pool);
+        await initCompanyPaymentTable(pool);
 
-    await seedReferenceData();
+        await seedReferenceData(pool);
 
-    console.log('All tables are ready (created or already existed).');
-    process.exit(0);
+        console.log('All tables are ready (created or already existed).');
+    } finally {
+        await pool.end();
+    }
 }
 
-main().catch((err) => {
-    console.error('Setup failed:', err.message);
-    process.exit(1);
-});
+main()
+    .then(() => process.exit(0))
+    .catch((err) => {
+        console.error('Setup failed:', err.message);
+        process.exit(1);
+    });

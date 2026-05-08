@@ -52,6 +52,7 @@ function shapeApplication(raw) {
     ApplicationID: raw.ApplicationID,
     CompanyID: raw.CompanyID,
     CompanyName: raw.CompanyName || (raw.CompanyID ? `Company #${raw.CompanyID}` : "—"),
+    CompanyLogoUrl: raw.CompanyLogoUrl || null,
     Status: status,
     Origin: raw.PortName ? `${raw.PortName}${raw.PortType ? ` (${raw.PortType})` : ""}` : "Origin port",
     Destination: raw.DeliveryAddress || "Delivery address",
@@ -73,7 +74,16 @@ function ShipmentRow({ a, onLeaveReview, isReviewed }) {
     <div className="card card-hover">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-          <div className="avatar avatar-lg">{initials}</div>
+          {a.CompanyLogoUrl ? (
+            <img
+              src={a.CompanyLogoUrl}
+              alt={`${a.CompanyName} logo`}
+              className="avatar avatar-lg"
+              style={{ objectFit: "cover" }}
+            />
+          ) : (
+            <div className="avatar avatar-lg">{initials}</div>
+          )}
           <div>
             <div className="row-meta">
               #{a.ApplicationID} · {a.CreatedAt}
@@ -211,7 +221,7 @@ function Tracking() {
       }
     })();
     return () => { active = false; };
-  }, [clientId]);
+  }, [clientId, location.search]);
 
   const openReviewModal = (row) => {
     setReviewTarget(row);
@@ -416,7 +426,7 @@ function Tracking() {
                   </div>
                 )}
 
-                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 16 }}>
                   <button
                     type="button"
                     className="btn btn-secondary"

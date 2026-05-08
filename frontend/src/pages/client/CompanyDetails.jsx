@@ -7,6 +7,7 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { getCompany } from "../../api/companies.js";
 import { listCompanyPorts } from "../../api/ports.js";
 import { listCompanyReviews } from "../../api/reviews.js";
+import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
 import { useAuth } from "../../api/authState.js";
 
 const FALLBACK = {
@@ -28,6 +29,7 @@ function CompanyDetails() {
   const isCompany = auth?.role === "company";
   const [company, setCompany] = useState(null);
   const [companyPorts, setCompanyPorts] = useState([]);
+  const [pricing, setPricing] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -36,16 +38,18 @@ function CompanyDetails() {
     let active = true;
     (async () => {
       try {
-        const [data, portsData, reviewsData] = await Promise.all([
+        const [data, portsData, reviewsData, pricingData] = await Promise.all([
           getCompany(companyId),
           listCompanyPorts(companyId).catch(() => []),
           listCompanyReviews(companyId).catch(() => []),
+          listCompanyCategoryPricing(companyId).catch(() => []),
         ]);
         if (!active) return;
         const row = Array.isArray(data) ? data[0] : data?.data || data;
         setCompany(row || { ...FALLBACK, CompanyID: companyId });
         setCompanyPorts(Array.isArray(portsData) ? portsData : portsData?.data || []);
         setReviews(Array.isArray(reviewsData) ? reviewsData : reviewsData?.data || []);
+        setPricing(Array.isArray(pricingData) ? pricingData : pricingData?.data || []);
       } catch {
         if (!active) return;
         setError("Couldn’t load company — showing sample data.");
@@ -95,11 +99,15 @@ function CompanyDetails() {
               textDecoration: "none",
               display: "inline-flex",
               alignItems: "center",
-              gap: 6,
-              color: "var(--ink-faint)",
+              gap: 8,
+              fontWeight: 500,
+              color: "var(--ink-soft)",
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--ink)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--ink-soft)"; }}
           >
-            ← Back to companies
+            <Icon name="arrow_left" size={16} />
+            Back to companies
           </Link>
           {error && <div className="banner-error" style={{ marginTop: 16 }}>{error}</div>}
         </div>
@@ -110,7 +118,16 @@ function CompanyDetails() {
           <div>
             <Reveal as="div" className="card card-pad-lg">
               <div className="row" style={{ gap: 20, alignItems: "flex-start" }}>
-                <div className="avatar avatar-lg" style={{ width: 64, height: 64, fontSize: 22 }}>{initials || "T"}</div>
+                {c.LogoUrl ? (
+                  <img
+                    src={c.LogoUrl}
+                    alt={`${c.Name} logo`}
+                    className="avatar avatar-lg"
+                    style={{ width: 64, height: 64, objectFit: "cover" }}
+                  />
+                ) : (
+                  <div className="avatar avatar-lg" style={{ width: 64, height: 64, fontSize: 22 }}>{initials || "T"}</div>
+                )}
                 <div style={{ flex: 1 }}>
                   <div className="row" style={{ marginBottom: 8 }}>
                     <span className="badge badge-success"><Icon name="shield" size={12} /> Verified</span>
@@ -206,6 +223,57 @@ function CompanyDetails() {
                   ))}
                 </div>
               </>
+            )}
+
+            <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Service pricing</h2>
+            {pricing.length === 0 ? (
+              <p style={{ color: "var(--ink-soft)", margin: 0 }}>
+                Pricing information not currently available.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {pricing.map((p) => (
+                  <div
+                    key={p.CategoryID}
+                    className="card"
+                    style={{
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        letterSpacing: "0.10em",
+                        textTransform: "uppercase",
+                        color: "var(--ink-faint)",
+                      }}
+                    >
+                      {p.Type}
+                    </div>
+                    <div
+                      className="mono tabular"
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 600,
+                        color: "var(--ink)",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      EGP {Number(p.Price).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
 
             <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Reviews</h2>

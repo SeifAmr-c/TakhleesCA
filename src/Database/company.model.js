@@ -1,7 +1,5 @@
-import db from "./connection.js";
-
-export function createCompanyTable() {
-    const sql = `
+export async function initCompanyTable(db) {
+    await db.query(`
         CREATE TABLE IF NOT EXISTS Company (
             CompanyID INT AUTO_INCREMENT PRIMARY KEY,
             Name VARCHAR(255) NOT NULL,
@@ -15,14 +13,9 @@ export function createCompanyTable() {
             ComReg VARCHAR(255),
             Governorate VARCHAR(20),
             Address VARCHAR(255),
-            About VARCHAR(255)
+            About VARCHAR(255),
+            LogoUrl VARCHAR(255) DEFAULT NULL,
+            PdfExportCount INT DEFAULT 0
         )
-    `;
-
-    return new Promise((resolve, reject) => {
-        db.query(sql, (err) => {
-            if (err) return reject(err);
-            resolve();
-        });
-    });
+    `);
 }

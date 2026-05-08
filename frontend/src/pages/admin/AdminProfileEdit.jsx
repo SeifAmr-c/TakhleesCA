@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
@@ -33,6 +33,7 @@ function AdminProfileEdit() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
   const [serverError, setServerError] = useState("");
+  const successTimerRef = useRef(null);
 
   useEffect(() => {
     setForm({
@@ -41,6 +42,18 @@ function AdminProfileEdit() {
       Email: user?.Email || "",
     });
   }, [user?.UserID, user?.FirstName, user?.LastName, user?.Email]);
+
+  /* Auto-hide the success message after 1500ms. */
+  useEffect(() => {
+    if (!success) return undefined;
+    successTimerRef.current = setTimeout(() => setSuccess(""), 1500);
+    return () => {
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+        successTimerRef.current = null;
+      }
+    };
+  }, [success]);
 
   const update = (key) => (e) => {
     const value = e.target.value;
@@ -122,9 +135,10 @@ function AdminProfileEdit() {
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => navigate("/admin/dashboard")}
-            style={{ zIndex: 1 }}
+            style={{ zIndex: 1, display: "inline-flex", alignItems: "center", gap: 8 }}
           >
-            <span aria-hidden="true">←</span> Back to dashboard
+            <Icon name="arrow_left" size={14} />
+            Back to dashboard
           </button>
           <h1
             className="h2"

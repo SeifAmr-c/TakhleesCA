@@ -1,15 +1,14 @@
-import db from "./connection.js";
-
-export function createApplicationTable() {
-    const sql = `
+export async function initApplicationTable(db) {
+    await db.query(`
         CREATE TABLE IF NOT EXISTS Application (
-            ApplicationID INT AUTO_INCREMENT PRIMARY KEY, 
+            ApplicationID INT AUTO_INCREMENT PRIMARY KEY,
             PaymentType ENUM('FULL', 'PARTIAL') NOT NULL,
             CompletionDate DATETIME,
             SubmissionDate DATETIME NOT NULL,
             TrackingNumber VARCHAR(255) NOT NULL,
             Status ENUM('Pending', 'In Progress', 'Completed') NOT NULL,
             DeliveryAddress VARCHAR(255) NOT NULL,
+            ACID VARCHAR(19) NOT NULL,
             CompanyID INT NOT NULL,
             CategoryID INT NOT NULL,
             ClientID INT NOT NULL,
@@ -19,12 +18,5 @@ export function createApplicationTable() {
             FOREIGN KEY (ClientID) REFERENCES Client(ClientID),
             FOREIGN KEY (PortID) REFERENCES Port(PortID)
         )
-    `;
-
-    return new Promise((resolve, reject) => {
-        db.query(sql, (err) => {
-            if (err) return reject(err);
-            resolve();
-        });
-    });
+    `);
 }

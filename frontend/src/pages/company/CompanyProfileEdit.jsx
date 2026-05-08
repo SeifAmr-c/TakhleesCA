@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import Cropper from "react-easy-crop";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
@@ -13,6 +14,9 @@ import { listCategories } from "../../api/applications.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
 import { listPorts, listCompanyPorts, addCompanyPort, removeCompanyPort } from "../../api/ports.js";
 import { useAuth, setAuth } from "../../api/authState.js";
+import { getCroppedImage } from "../../utils/cropImage.js";
+
+const MAX_LOGO_BYTES = 4 * 1024 * 1024;
 
 /* Mirror the governorate list used during company registration (CompanyRegister.jsx). */
 const GOVERNORATES = [
@@ -36,8 +40,9 @@ const FieldError = ({ message }) =>
     </span>
   ) : null;
 
-/* Tiny status pill rendered right next to the Save button. Green for
-   success, red for error — the page no longer floats banners at the top. */
+/* Tiny status pill rendered as a block directly under the Save button.
+   Green for success, red for error — the page no longer floats banners at
+   the top. Successful messages auto-hide after 1500ms (see useAutoHideStatus). */
 const InlineStatus = ({ status }) => {
   if (!status?.text) return null;
   const isOk = status.kind === "success";
@@ -48,6 +53,7 @@ const InlineStatus = ({ status }) => {
         color: isOk ? "var(--signal-go, #16a34a)" : "var(--signal-stop, #dc2626)",
         fontSize: 13,
         fontWeight: 500,
+        textAlign: "center",
       }}
     >
       {status.text}
@@ -55,7 +61,301 @@ const InlineStatus = ({ status }) => {
   );
 };
 
-/* ---------- Profile form ---------- */
+/* Returns [status, setStatusAutoHide]. setStatusAutoHide behaves like
+   setStatus but, when the new status is a success, schedules a 1500ms
+   timer that clears the message back to empty. The pending timer is
+   cleared on every call and on unmount, so dismounting mid-fade or
+   submitting again before the timer fires can't leak. */
+function useAutoHideStatus() {
+  const [status, setStatus] = useState({ kind: "", text: "" });
+  const timerRef = useRef(null);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const setStatusAutoHide = useCallback((next) => {
+    clearTimer();
+    setStatus(next);
+    if (next?.kind === "success" && next?.text) {
+      timerRef.current = setTimeout(() => {
+        setStatus({ kind: "", text: "" });
+        timerRef.current = null;
+      }, 1500);
+    }
+  }, [clearTimer]);
+
+  useEffect(() => clearTimer, [clearTimer]);
+
+  return [status, setStatusAutoHide];
+}
+
+/* ---------- Logo card (dedicated inline section) ----------
+   Sits at the top of the Edit Profile page as its own card. Owns the
+   logo cropper end-to-end so it can submit independently of the text
+   form below: switches between a "default" view (current avatar +
+   Change Logo button) and an inline "edit" view (the <Cropper /> in
+   strict DOM flow with its own zoom slider and Save/Cancel buttons).
+   On save, sends a FormData with ONLY the `logo` field; the backend's
+   updateCompanyProfile is read-then-write so untouched columns are
+   preserved. The freshly-uploaded URL comes back via res.data.company
+   and is bubbled up to the page via onSaved so the navbar avatar and
+   the page-level company state refresh immediately. */
+function LogoCard({ initial, onSaved }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useAutoHideStatus();
+
+  /* Cropper-edit-mode state. `cropperSrc` is the object URL for the
+     just-picked file; while it's truthy the section renders the
+     inline cropper. `croppedAreaPixels` comes from react-easy-crop's
+     onCropComplete and feeds the canvas crop call. Default zoom of
+     0.5 leaves room to zoom IN. */
+  const [cropperSrc, setCropperSrc] = useState("");
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(0.5);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [cropping, setCropping] = useState(false);
+
+  /* Local preview for the freshly-cropped circle until the parent's
+     `initial.LogoUrl` updates with the persisted Cloudinary URL. */
+  const [localPreview, setLocalPreview] = useState("");
+
+  const fileInputRef = useRef(null);
+
+  /* Free object URLs on unmount or when they change. */
+  useEffect(() => () => {
+    if (cropperSrc) URL.revokeObjectURL(cropperSrc);
+  }, [cropperSrc]);
+  useEffect(() => () => {
+    if (localPreview) URL.revokeObjectURL(localPreview);
+  }, [localPreview]);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0] || null;
+    e.target.value = "";
+    if (!file) return;
+    setStatus({ kind: "", text: "" });
+    if (!/^image\//.test(file.type)) {
+      setStatus({ kind: "error", text: "Logo must be an image file." });
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setStatus({ kind: "error", text: "Logo image must be 4MB or smaller." });
+      return;
+    }
+    setCropperSrc(URL.createObjectURL(file));
+    setCrop({ x: 0, y: 0 });
+    setZoom(0.5);
+    setCroppedAreaPixels(null);
+  };
+
+  const onCropComplete = useCallback((_area, areaPixels) => {
+    setCroppedAreaPixels(areaPixels);
+  }, []);
+
+  const cancelCrop = () => {
+    if (cropperSrc) URL.revokeObjectURL(cropperSrc);
+    setCropperSrc("");
+    setCroppedAreaPixels(null);
+    setStatus({ kind: "", text: "" });
+  };
+
+  const saveLogo = async () => {
+    if (!cropperSrc || !croppedAreaPixels) return;
+    setCropping(true);
+    setStatus({ kind: "", text: "" });
+    let previewUrl = "";
+    try {
+      const cropped = await getCroppedImage(cropperSrc, croppedAreaPixels);
+      previewUrl = cropped.previewUrl;
+      const file = new File([cropped.blob], "logo.png", {
+        type: cropped.blob.type || "image/png",
+      });
+
+      const payload = new FormData();
+      payload.append("logo", file);
+
+      setSubmitting(true);
+      const res = await updateCompanyProfile(payload);
+      if (res?.ok && res?.data?.company) {
+        onSaved(res.data.company);
+        if (localPreview) URL.revokeObjectURL(localPreview);
+        setLocalPreview(previewUrl);
+        URL.revokeObjectURL(cropperSrc);
+        setCropperSrc("");
+        setCroppedAreaPixels(null);
+        setStatus({ kind: "success", text: "Logo updated." });
+      } else {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setStatus({ kind: "error", text: res?.message || "Couldn't update the logo." });
+      }
+    } catch (err) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setStatus({
+        kind: "error",
+        text: err?.response?.data?.message || "Couldn't update the logo.",
+      });
+    } finally {
+      setCropping(false);
+      setSubmitting(false);
+    }
+  };
+
+  /* Show the local preview (just-saved circle) until `initial.LogoUrl`
+     catches up with the persisted URL; if there's no fresh upload,
+     fall back to whatever the server reports. */
+  const displayLogo = localPreview || initial?.LogoUrl || "";
+  const isCropping = Boolean(cropperSrc);
+
+  return (
+    <div className="card card-pad-lg">
+      <h3 className="card-title">Company logo</h3>
+      <p className="card-subtitle">
+        Shown on your public profile and in the navigation bar. PNG or JPG, up to 4MB.
+      </p>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        style={{ display: "none" }}
+      />
+
+      {!isCropping ? (
+        /* Default state — current avatar + "Change Logo" trigger. */
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          <div
+            aria-label={displayLogo ? "Current company logo" : "No logo uploaded yet"}
+            style={{
+              width: 128,
+              height: 128,
+              borderRadius: "50%",
+              overflow: "hidden",
+              border: "2px solid var(--line-strong, #cbd5e1)",
+              backgroundColor: displayLogo ? "transparent" : "var(--surface-2, #f8fafc)",
+              backgroundImage: displayLogo ? `url(${displayLogo})` : "none",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              display: "grid",
+              placeItems: "center",
+              margin: "0 auto",
+            }}
+          >
+            {!displayLogo && (
+              <Icon name="building" size={36} />
+            )}
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={submitting}
+            >
+              {displayLogo ? "Change logo" : "Upload logo"}
+            </button>
+          </div>
+          <p className="hint" style={{ marginTop: 8 }}>
+            You'll be able to crop and zoom before saving.
+          </p>
+          <div style={{ marginTop: 8 }}>
+            <InlineStatus status={status} />
+          </div>
+        </div>
+      ) : (
+        /* Edit state — inline cropper. The wrapper is a strict block
+           div in normal page flow (NOT inside a flex column), so its
+           hardcoded 250x250 box can't be overridden by any parent. */
+        <div>
+          <div
+            style={{
+              position: "relative",
+              width: "250px",
+              height: "250px",
+              margin: "20px auto",
+              backgroundColor: "#111",
+              borderRadius: "8px",
+              overflow: "hidden",
+            }}
+          >
+            <Cropper
+              image={cropperSrc}
+              crop={crop}
+              zoom={zoom}
+              minZoom={0.5}
+              maxZoom={3}
+              aspect={1}
+              cropShape="round"
+              showGrid={false}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={onCropComplete}
+            />
+          </div>
+
+          <div
+            style={{
+              width: "min(320px, 100%)",
+              margin: "0 auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              fontSize: 13,
+            }}
+          >
+            <span style={{ color: "var(--ink-soft, #475569)", minWidth: 40 }}>Zoom</span>
+            <input
+              type="range"
+              min={0.5}
+              max={3}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              style={{ flex: 1 }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+              marginTop: 16,
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={cancelCrop}
+              disabled={cropping || submitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveLogo}
+              disabled={cropping || submitting || !croppedAreaPixels}
+            >
+              {cropping || submitting ? "Saving…" : "Save logo"}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 12, textAlign: "center" }}>
+            <InlineStatus status={status} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Profile form (text only) ---------- */
 function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
   const [form, setForm] = useState(() => ({
     Governorate: initial?.Governorate || "",
@@ -64,8 +364,9 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
     About: initial?.About || "",
   }));
   const [errors, setErrors] = useState({});
-  /* Local form-level status (success/error) rendered next to the button. */
-  const [status, setStatus] = useState({ kind: "", text: "" });
+  /* General save status (success/error) rendered as a block below the
+     submit button. Successes auto-hide after 1500ms. */
+  const [status, setStatus] = useAutoHideStatus();
 
   useEffect(() => {
     setForm({
@@ -99,6 +400,8 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
+    /* Logo is owned by LogoCard now — submit only the text fields here.
+       JSON is fine since the backend accepts either JSON or FormData. */
     setSubmitting(true);
     try {
       const res = await updateCompanyProfile({
@@ -194,10 +497,14 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
       </div>
 
       <div
-        className="row"
-        style={{ justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 20,
+        }}
       >
-        <InlineStatus status={status} />
         <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
           {submitting ? (
             <ContainerSpinner inline size={20} label="Saving…" />
@@ -205,6 +512,7 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
             <>Save profile <Icon name="check" size={16} /></>
           )}
         </button>
+        <InlineStatus status={status} />
       </div>
     </form>
   );
@@ -218,7 +526,7 @@ function PricingForm({ companyId }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [status, setStatus] = useState({ kind: "", text: "" });
+  const [status, setStatus] = useAutoHideStatus();
 
   useEffect(() => {
     let active = true;
@@ -382,10 +690,14 @@ function PricingForm({ companyId }) {
       )}
 
       <div
-        className="row"
-        style={{ justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 20,
+        }}
       >
-        <InlineStatus status={status} />
         <button
           type="submit"
           className="btn btn-primary btn-lg"
@@ -397,6 +709,7 @@ function PricingForm({ companyId }) {
             <>Save pricing <Icon name="check" size={16} /></>
           )}
         </button>
+        <InlineStatus status={status} />
       </div>
     </form>
   );
@@ -409,7 +722,7 @@ function PortsForm({ companyId }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState({ kind: "", text: "" });
+  const [status, setStatus] = useAutoHideStatus();
 
   useEffect(() => {
     let active = true;
@@ -520,8 +833,15 @@ function PortsForm({ companyId }) {
         </div>
       )}
 
-      <div className="row" style={{ justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}>
-        <InlineStatus status={status} />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 20,
+        }}
+      >
         <button
           type="submit"
           className="btn btn-primary btn-lg"
@@ -533,6 +853,7 @@ function PortsForm({ companyId }) {
             <>Save ports <Icon name="check" size={16} /></>
           )}
         </button>
+        <InlineStatus status={status} />
       </div>
     </form>
   );
@@ -603,8 +924,10 @@ function CompanyProfileEdit() {
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => navigate("/company/dashboard")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
             >
-              <span aria-hidden="true">←</span> Back to dashboard
+              <Icon name="arrow_left" size={14} />
+              Back to dashboard
             </button>
           </div>
           <h1 className="h2" style={{ margin: 0 }}>Edit Profile</h1>
@@ -627,6 +950,7 @@ function CompanyProfileEdit() {
           </div>
         ) : (
           <Reveal as="div" style={{ display: "grid", gap: 24, maxWidth: 820, margin: "0 auto" }}>
+            <LogoCard initial={company} onSaved={handleProfileSaved} />
             <ProfileForm
               initial={company}
               onSaved={handleProfileSaved}

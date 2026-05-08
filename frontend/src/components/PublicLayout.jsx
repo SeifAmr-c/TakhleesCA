@@ -80,7 +80,7 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                   whiteSpace: "nowrap",
                 }}
               >
-                Hello {greetingName}
+                Hello <strong style={{ fontWeight: 700, color: "var(--ink)" }}>{greetingName}</strong>
               </span>
             )}
           </div>
@@ -172,15 +172,29 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                         width: 32,
                         height: 32,
                         borderRadius: "50%",
-                        background: "transparent",
+                        background: auth?.company?.LogoUrl ? "transparent" : "var(--surface-2, #f8fafc)",
+                        backgroundImage: auth?.company?.LogoUrl ? `url(${auth.company.LogoUrl})` : "none",
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
                         border: "1px solid var(--line)",
                         color: isActive ? "var(--ink)" : "var(--ink-soft)",
                         cursor: "pointer",
                         padding: 0,
                         textDecoration: "none",
+                        overflow: "hidden",
+                        fontSize: 12,
+                        fontWeight: 700,
                       })}
                     >
-                      <Icon name="user" size={16} />
+                      {!auth?.company?.LogoUrl && (
+                        (auth?.company?.Name || "")
+                          .split(" ")
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((w) => w[0])
+                          .join("")
+                          .toUpperCase() || <Icon name="user" size={16} />
+                      )}
                     </NavLink>
                   )}
                   <button

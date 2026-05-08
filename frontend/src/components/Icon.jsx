@@ -14,6 +14,7 @@ const PATHS = {
   search:
     "M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm6 13 4 4",
   arrow_right: "M5 12h14m-6-6 6 6-6 6",
+  arrow_left: "M19 12H5m6-6-6 6 6 6",
   arrow_up: "M12 19V5m-6 6 6-6 6 6",
   arrow_down: "M12 5v14m-6-6 6 6 6-6",
   bell:

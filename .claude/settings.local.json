@@ -4,7 +4,22 @@
       "Bash(curl -sv \"http://localhost:3000/company?VerficationStatus=Verified\")",
       "Bash(curl -s \"http://localhost:3000/company?VerficationStatus=Verified\")",
       "Bash(curl -s \"http://localhost:3000/company\")",
-      "Bash(/c/xampp/mysql/bin/mysql.exe *)"
+      "Bash(/c/xampp/mysql/bin/mysql.exe *)",
+      "PowerShell(Copy-Item *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(python -c \"from PIL import Image; print\\(Image.__version__\\)\")",
+      "PowerShell(python scripts\\\\transparent_logo.py)",
+      "PowerShell(Remove-Item *)",
+      "Bash(npm install *)",
+      "Bash(node --check src/config/cloudinary.js)",
+      "Bash(node --check src/modules/company/company_controller.js)",
+      "Bash(node --check src/modules/company/company_service.js)",
+      "Bash(node --check src/modules/document/document_controller.js)",
+      "Bash(node --check src/modules/document/document_service.js)",
+      "Bash(dir frontend\\\\src\\\\pages)",
+      "Bash(node --check \"/c/Users/seifa/Desktop/node MySQL/src/Database/client.model.js\")",
+      "Bash(node --check frontend/src/api/companies.js)",
+      "Bash(node *)"
     ]
   }
 }

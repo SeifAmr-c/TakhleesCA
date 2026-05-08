@@ -41,9 +41,9 @@ function CompanyCard({ c, rating }) {
     >
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div className="row" style={{ gap: 12 }}>
-          {c.Logo ? (
+          {c.LogoUrl ? (
             <img
-              src={c.Logo}
+              src={c.LogoUrl}
               alt={`${c.Name} logo`}
               className="avatar avatar-lg"
               style={{ objectFit: "cover" }}

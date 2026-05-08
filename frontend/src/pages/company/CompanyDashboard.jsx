@@ -8,9 +8,8 @@ import {
   listApplications,
   updateApplicationStatus,
 } from "../../api/applications.js";
-import { getCompanyDashboardStats } from "../../api/companies.js";
+import { getCompanyDashboardStats, exportCompanyReport } from "../../api/companies.js";
 import { listApplicationDocuments } from "../../api/documents.js";
-import DocViewer from "../../components/DocViewer.jsx";
 import { useAuth } from "../../api/authState.js";
 
 /* DB ENUM 'Pending' | 'In Progress' | 'Completed'  →  internal lower-case
@@ -118,8 +117,6 @@ function DocumentsDrawer({ applicationId, applicationStatus }) {
   const [open, setOpen] = React.useState(false);
   const [docs, setDocs] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
-  const [viewerUrl, setViewerUrl] = React.useState(null);
-  const [viewerTitle, setViewerTitle] = React.useState("");
 
   const isCompleted = applicationStatus === "completed";
 
@@ -150,36 +147,69 @@ function DocumentsDrawer({ applicationId, applicationStatus }) {
           ) : !docs || docs.length === 0 ? (
             <span className="muted" style={{ fontSize: 13 }}>No documents attached.</span>
           ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column" }}>
               {docs.map((d) => (
-                <li key={d.DocumentID} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Icon name="doc" size={13} color="var(--ink-faint)" />
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ padding: "2px 6px", fontSize: 13, color: "var(--brand)" }}
-                    onClick={() => { setViewerUrl(`/${d.Path}`); setViewerTitle(d.DocType); }}
-                  >
-                    {d.DocType}
-                  </button>
+                <li
+                  key={d.DocumentID}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    padding: "8px 0",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                    <Icon name="doc" size={13} color="var(--ink-faint)" />
+                    <a
+                      href={d.Path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-ghost btn-sm"
+                      style={{
+                        padding: "2px 6px",
+                        fontSize: 13,
+                        color: "var(--brand)",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                      title={`Open ${d.DocType} in a new tab`}
+                    >
+                      {d.DocType}
+                      <Icon name="arrow_right" size={11} />
+                    </a>
+                  </div>
                   <span
                     className="muted"
                     style={{
                       fontSize: 12,
                       color: isCompleted ? "var(--success)" : undefined,
                       fontWeight: isCompleted ? 600 : undefined,
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
                     }}
                   >
-                    · {isCompleted ? "Completed" : d.VerficationStatus}
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: isCompleted ? "var(--success)" : "var(--ink-faint)",
+                        display: "inline-block",
+                      }}
+                    />
+                    {isCompleted ? "Completed" : d.VerficationStatus}
                   </span>
                 </li>
               ))}
             </ul>
           )}
         </div>
-      )}
-      {viewerUrl && (
-        <DocViewer url={viewerUrl} title={viewerTitle} onClose={() => setViewerUrl(null)} />
       )}
     </>
   );
@@ -273,18 +303,29 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
               <Icon name="check" size={14} /> Accept
             </button>
           </div>
-        ) : (
-          <select
-            className="select"
-            style={{ width: 160, height: 36, fontSize: 13 }}
-            value={a.Status}
-            onChange={(e) => onStatusChange(a.ApplicationID, e.target.value)}
-            disabled={busy}
-          >
-            <option value="in_progress">In progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        )}
+        ) : (() => {
+          const isCompleted = a.Status === "completed";
+          return (
+            <select
+              className="select"
+              style={{
+                width: 160,
+                height: 36,
+                fontSize: 13,
+                opacity: isCompleted ? 0.6 : 1,
+                background: isCompleted ? "var(--steel-100)" : undefined,
+                cursor: isCompleted ? "not-allowed" : undefined,
+              }}
+              value={a.Status}
+              onChange={(e) => onStatusChange(a.ApplicationID, e.target.value)}
+              disabled={busy || isCompleted}
+              title={isCompleted ? "This application is completed and can no longer be changed." : undefined}
+            >
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          );
+        })()}
       </div>
     </div>
   );
@@ -299,6 +340,7 @@ function CompanyDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
 
@@ -430,6 +472,28 @@ function CompanyDashboard() {
     }
   };
 
+  const handleExportReport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await exportCompanyReport();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Company_Performance_Report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showNotice("Performance report downloaded.");
+    } catch (err) {
+      console.error("Export failed:", err);
+      showNotice("Couldn't generate the report. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleStatusChange = async (applicationId, status) => {
     setBusyId(applicationId);
     try {
@@ -455,9 +519,19 @@ function CompanyDashboard() {
       subtitle="Monitor every application your company has received — pending, in progress and completed."
       role="Company"
       actions={
-        <button className="btn btn-secondary btn-sm" onClick={reloadApplications}>
-          <Icon name="bell" size={14} /> Refresh
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleExportReport}
+            disabled={exporting || !companyId}
+            title="Download a PDF performance report"
+          >
+            <Icon name="doc" size={14} /> {exporting ? "Generating…" : "Export as PDF"}
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={reloadApplications}>
+            <Icon name="bell" size={14} /> Refresh
+          </button>
+        </div>
       }
     >
       {notice && (

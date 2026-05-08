@@ -6,7 +6,6 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
 import { listCompanyPorts } from "../../api/ports.js";
-import { uploadDocument } from "../../api/documents.js";
 import { submitPayment } from "../../api/payments.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
 import dropStyles from "../auth/Auth.module.css";
@@ -15,8 +14,17 @@ const DOCUMENT_TYPES = [
   "National ID / Passport",
   "Proof Of Payment",
   "Delegation",
-  "Other",
+  "Shipping Document",
 ];
+
+const REQUIRED_DOC_COUNT = 4;
+
+const makeInitialDocuments = () =>
+  Array.from({ length: REQUIRED_DOC_COUNT }, (_, i) => ({
+    id: i + 1,
+    type: "",
+    file: null,
+  }));
 
 const MAX_DOC_BYTES = 5 * 1024 * 1024;
 
@@ -63,15 +71,6 @@ const MastercardLogo = () => (
     <path
       d="M20 6.4a9 9 0 0 1 0 11.2 9 9 0 0 1 0-11.2Z"
       fill="var(--accent-dark)"
-    />
-  </svg>
-);
-
-const BankLogo = () => (
-  <svg viewBox="0 0 32 22" width="32" height="22" aria-label="Bank">
-    <path
-      d="M16 2 2 8h28L16 2Zm-12 8h4v8H4v-8Zm9 0h4v8h-4v-8Zm9 0h4v8h-4v-8ZM2 20h28v2H2v-2Z"
-      fill="var(--harbor-800)"
     />
   </svg>
 );
@@ -160,7 +159,16 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
   );
 }
 
-function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocErrors }) {
+function DocumentsStep({
+  acid,
+  onAcidChange,
+  acidError,
+  documents,
+  setDocuments,
+  submitting,
+  docErrors,
+  setDocErrors,
+}) {
   const setDocFieldError = (id, key, msg) =>
     setDocErrors((m) => ({ ...m, [id]: { ...(m[id] || {}), [key]: msg } }));
 
@@ -171,23 +179,6 @@ function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocE
 
   const updateFile = (id, file) =>
     setDocuments((list) => list.map((d) => (d.id === id ? { ...d, file } : d)));
-
-  const addDocument = () =>
-    setDocuments((list) => [
-      ...list,
-      { id: Date.now() + Math.random(), type: "", file: null },
-    ]);
-
-  const removeDocument = (id) => {
-    setDocuments((list) =>
-      list.length === 1 ? list : list.filter((d) => d.id !== id)
-    );
-    setDocErrors((m) => {
-      const next = { ...m };
-      delete next[id];
-      return next;
-    });
-  };
 
   const onPickFile = (id) => (e) => {
     const file = e.target.files?.[0] ?? null;
@@ -205,14 +196,39 @@ function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocE
     updateFile(id, file);
   };
 
+  const handleAcidChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 19);
+    onAcidChange(digits);
+  };
+
   return (
     <div className="card card-pad-lg">
       <h3 className="card-title">Supporting documents</h3>
       <p className="card-subtitle">
-        Choose a document type for each upload. Add more rows as needed.
+        Enter your ACID number and attach all four required documents.
       </p>
 
       <div className="stack">
+        <label className="field">
+          <span className="field-label">ACID Number *</span>
+          <div className="input-with-icon">
+            <span className="input-icon"><Icon name="lock" size={16} /></span>
+            <input
+              className="input"
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={19}
+              required
+              value={acid}
+              onChange={handleAcidChange}
+              disabled={submitting}
+              placeholder="19-digit ACID number"
+            />
+          </div>
+          <span className="hint">Must be exactly 19 digits</span>
+          <FieldError message={acidError} />
+        </label>
+
         {documents.map((d, i) => {
           const errs = docErrors[d.id] || {};
           return (
@@ -238,18 +254,8 @@ function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocE
                     color: "var(--ink-faint)",
                   }}
                 >
-                  Document #{i + 1}
+                  Document #{i + 1} (required)
                 </span>
-                {documents.length > 1 && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => removeDocument(d.id)}
-                    disabled={submitting}
-                  >
-                    Remove
-                  </button>
-                )}
               </div>
 
               <div
@@ -263,6 +269,7 @@ function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocE
                     value={d.type}
                     onChange={(e) => updateType(d.id, e.target.value)}
                     disabled={submitting}
+                    required
                   >
                     <option value="">Select type…</option>
                     {DOCUMENT_TYPES.map((t) => (
@@ -283,6 +290,7 @@ function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocE
                       className={dropStyles.dropzoneInput}
                       onChange={onPickFile(d.id)}
                       disabled={submitting}
+                      required
                     />
                     <span className={dropStyles.dropzoneIcon} aria-hidden="true">
                       <Icon name={d.file ? "check" : "doc"} size={24} />
@@ -305,36 +313,6 @@ function DocumentsStep({ documents, setDocuments, submitting, docErrors, setDocE
             </div>
           );
         })}
-
-        <button
-          type="button"
-          onClick={addDocument}
-          disabled={submitting}
-          className="btn btn-secondary"
-          style={{
-            alignSelf: "flex-start",
-            borderStyle: "dashed",
-          }}
-          aria-label="Add another document"
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-grid",
-              placeItems: "center",
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              border: "1px solid var(--ink-soft)",
-              fontSize: 14,
-              fontWeight: 600,
-              lineHeight: 1,
-            }}
-          >
-            +
-          </span>
-          Add another document
-        </button>
       </div>
     </div>
   );
@@ -388,7 +366,6 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
   });
 
   const isCard = payment.Gateway === "Credit Card";
-  const isBank = payment.Gateway === "Bank Transfer";
 
   return (
     <div className="card card-pad-lg">
@@ -425,7 +402,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
 
         <div className="field">
           <span className="field-label">Payment gateway *</span>
-          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 12 }}>
             <label style={optionStyle(isCard)}>
               <input
                 type="radio"
@@ -448,27 +425,6 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                 <VisaLogo />
                 <MastercardLogo />
               </div>
-            </label>
-
-            <label style={optionStyle(isBank)}>
-              <input
-                type="radio"
-                name="payment-gateway"
-                value="Bank Transfer"
-                checked={isBank}
-                onChange={() => setGateway("Bank Transfer")}
-                disabled={submitting}
-                style={{ accentColor: "var(--brand)" }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>
-                  Bank Transfer
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Wire from your bank. 1–2 business days.
-                </div>
-              </div>
-              <BankLogo />
             </label>
           </div>
           <FieldError message={errors.Gateway} />
@@ -538,30 +494,6 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                 </label>
               </div>
             </div>
-          </div>
-        )}
-
-        {isBank && (
-          <div
-            style={{
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius-md)",
-              padding: 16,
-              background: "var(--surface-2)",
-              fontSize: 13,
-              color: "var(--ink-soft)",
-              lineHeight: 1.6,
-            }}
-          >
-            <div
-              className="row"
-              style={{ gap: 8, color: "var(--ink)", marginBottom: 6, fontWeight: 600 }}
-            >
-              <Icon name="building" size={14} /> Wire instructions
-            </div>
-            Beneficiary: <span className="mono">Takhlees Escrow Ltd.</span><br />
-            IBAN: <span className="mono">EG12 3456 7890 1234 5678 9012</span><br />
-            Reference: include your application number (issued after submission).
           </div>
         )}
 
@@ -698,11 +630,10 @@ function FillApplication() {
     CategoryID: "",
     PortID: "",
     DeliveryAddress: "",
+    ACID: "",
   });
 
-  const [documents, setDocuments] = useState([
-    { id: 1, type: "", file: null },
-  ]);
+  const [documents, setDocuments] = useState(makeInitialDocuments);
 
   const [payment, setPayment] = useState({
     Type: "FULL",
@@ -808,8 +739,11 @@ function FillApplication() {
 
   const validateDocuments = () => {
     const errs = {};
-    if (!documents.length) {
-      return { __global: "Add at least one document." };
+    if (!/^\d{19}$/.test(form.ACID || "")) {
+      errs.__acid = "ACID must be exactly 19 digits.";
+    }
+    if (documents.length !== REQUIRED_DOC_COUNT) {
+      errs.__global = `Exactly ${REQUIRED_DOC_COUNT} documents are required.`;
     }
     for (const d of documents) {
       const e = {};
@@ -878,33 +812,25 @@ function FillApplication() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      const res = await createApplication({
-        CategoryID: Number(form.CategoryID),
-        PortID: Number(form.PortID),
-        DeliveryAddress: form.DeliveryAddress.trim(),
-        PaymentType: "FULL",
-        CompanyID: companyId ? Number(companyId) : undefined,
+      /* Bundle the application fields and all 4 documents into one
+         multipart request. Files use indexed field names so the backend
+         can pair each file with its DocType (also indexed). */
+      const payload = new FormData();
+      payload.append("CategoryID", String(Number(form.CategoryID)));
+      payload.append("PortID", String(Number(form.PortID)));
+      payload.append("DeliveryAddress", form.DeliveryAddress.trim());
+      payload.append("ACID", form.ACID);
+      payload.append("PaymentType", "FULL");
+      if (companyId) payload.append("CompanyID", String(Number(companyId)));
+      documents.forEach((d, i) => {
+        if (d.file) payload.append(`Document_${i}`, d.file);
+        payload.append(`DocType_${i}`, d.type);
       });
+
+      const res = await createApplication(payload);
 
       const applicationId =
         res?.data?.ApplicationID || res?.ApplicationID || res?.data?.insertId || null;
-
-      /* Document metadata: send ENUM-valid `DocType` and the file name as `Path`.
-         The backend stamps UploadDate / VerficationStatus, so we don't send those.
-         Best-effort — a failure here doesn't undo the application. */
-      if (applicationId) {
-        try {
-          await Promise.all(
-            documents.map((d) =>
-              uploadDocument({
-                DocType: d.type,
-                ApplicationID: applicationId,
-                file: d.file,
-              })
-            )
-          );
-        } catch { /* document upload best-effort */ }
-      }
 
       /* Payment: backend expects `PaymentGateway` (not `Method`) and stamps
          the date itself. Best-effort — surfacing a payment failure is more
@@ -970,6 +896,17 @@ function FillApplication() {
 
         {step === 1 && (
           <DocumentsStep
+            acid={form.ACID}
+            onAcidChange={(value) => {
+              setForm((f) => ({ ...f, ACID: value }));
+              setDocErrors((m) => {
+                if (!m.__acid) return m;
+                const next = { ...m };
+                delete next.__acid;
+                return next;
+              });
+            }}
+            acidError={docErrors.__acid}
             documents={documents}
             setDocuments={setDocuments}
             submitting={submitting}

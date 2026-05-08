@@ -1,5 +1,13 @@
 import db from '../../Database/connection.js';
 import bcrypt from 'bcrypt';
+import PDFDocument from 'pdfkit';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { uploadToCloudinary, destroyCloudinaryAsset } from '../../config/cloudinary.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOGO_PATH = path.resolve(__dirname, '../../../frontend/src/assets/logo.png');
 
 const SALT_ROUNDS = 10;
 
@@ -32,9 +40,18 @@ export const createCompany = async (req, res, next) => {
         const RegistrationDate = req.body.RegistrationDate;
         const TaxNumber = req.body.TaxNumber;
         const VerficationStatus = req.body.VerficationStatus ?? "Pending";
-        const ComReg = req.file
-            ? `uploads/compreg/${req.file.filename}`
-            : (req.body.ComReg ?? null);
+        let ComReg = req.body.ComReg ?? null;
+        let LogoUrl = req.body.LogoUrl ?? null;
+        const comRegFile = req.files?.ComReg?.[0];
+        const logoFile = req.files?.logo?.[0];
+        if (comRegFile) {
+            const uploaded = await uploadToCloudinary(comRegFile.buffer, "takhlees/compreg");
+            ComReg = uploaded.secure_url;
+        }
+        if (logoFile?.buffer) {
+            const uploaded = await uploadToCloudinary(logoFile.buffer, "takhlees/logos");
+            LogoUrl = uploaded.secure_url;
+        }
         const Governorate = req.body.Governorate ?? null;
         const Address = req.body.Address ?? null;
         const About = req.body.About ?? null;
@@ -68,8 +85,8 @@ export const createCompany = async (req, res, next) => {
         const hashedPassword = await bcrypt.hash(Password, SALT_ROUNDS);
 
         const result = await runQuery(
-            "INSERT INTO company (`Name`,`ContactEmail`,`FoundingDate`,`Password`,`Comm`,`RegistrationDate`,`TaxNumber`,`VerficationStatus`,`ComReg`,`Governorate`,`Address`,`About`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            [Name, ContactEmail, FoundingDate, hashedPassword, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About]
+            "INSERT INTO company (`Name`,`ContactEmail`,`FoundingDate`,`Password`,`Comm`,`RegistrationDate`,`TaxNumber`,`VerficationStatus`,`ComReg`,`Governorate`,`Address`,`About`,`LogoUrl`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [Name, ContactEmail, FoundingDate, hashedPassword, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About, LogoUrl]
         );
 
         return res.status(201).json({
@@ -136,7 +153,7 @@ export const getCompany = async (req, res, next) => {
     const CompanyID = req.query.CompanyID;
     const VerficationStatus = req.query.VerficationStatus;
 
-    const cols = "CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About";
+    const cols = "CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About, LogoUrl";
 
     if (CompanyID !== undefined && CompanyID !== '' && CompanyID !== '%') {
         try {
@@ -265,13 +282,34 @@ export const updateCompanyProfile = async (req, res, next) => {
         const ContactEmail = incomingEmail !== null ? incomingEmail : existing.ContactEmail;
         const About        = req.body.About        !== undefined ? String(req.body.About).trim()        : existing.About;
 
+        /* If multer parsed a `logo` upload, stream it to Cloudinary and
+           use the secure URL going forward. Otherwise keep the existing
+           URL — partial PUTs must NOT null out an unchanged logo. We
+           read from req.files.logo[0] to match the createCompany flow,
+           since both routes register `logo` via multer.fields(). */
+        const logoFile = req.files?.logo?.[0];
+        let LogoUrl = existing.LogoUrl;
+        if (logoFile?.buffer) {
+            const uploaded = await uploadToCloudinary(logoFile.buffer, "takhlees/logos");
+            LogoUrl = uploaded.secure_url;
+            /* Garbage-collect the previous logo on Cloudinary so we
+               don't accumulate orphaned uploads. We only attempt this
+               AFTER the new upload succeeds (so a failure here doesn't
+               lose the old asset before we have a replacement), and
+               destroyCloudinaryAsset itself swallows errors so a stale
+               public_id never blocks the profile update. */
+            if (existing.LogoUrl) {
+                await destroyCloudinaryAsset(existing.LogoUrl);
+            }
+        }
+
         await runQuery(
-            "UPDATE company SET `Governorate` = ?, `Address` = ?, `ContactEmail` = ?, `About` = ? WHERE CompanyID = ?",
-            [Governorate, Address, ContactEmail, About, CompanyID]
+            "UPDATE company SET `Governorate` = ?, `Address` = ?, `ContactEmail` = ?, `About` = ?, `LogoUrl` = ? WHERE CompanyID = ?",
+            [Governorate, Address, ContactEmail, About, LogoUrl, CompanyID]
         );
 
         const updated = await runQuery(
-            "SELECT CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About FROM company WHERE CompanyID = ?",
+            "SELECT CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About, LogoUrl FROM company WHERE CompanyID = ?",
             [CompanyID]
         );
 
@@ -401,6 +439,265 @@ export const getCompanyDashboardStats = async (req, res, next) => {
         });
     } catch (err) {
         return next(err);
+    }
+};
+
+/* GET /company/export-report  (requires company session)
+   Aggregates the signed-in company's KPIs, increments PdfExportCount,
+   then streams a Company Performance Report PDF to the response. */
+export const generatePerformanceReport = async (req, res, next) => {
+    try {
+        const companyId = req.session?.companyId;
+        if (!companyId) {
+            return res.status(401).json({ ok: false, message: "Company sign-in required." });
+        }
+
+        const companyRows = await runQuery(
+            "SELECT CompanyID, Name, Comm FROM company WHERE CompanyID = ? LIMIT 1",
+            [companyId]
+        );
+        if (!companyRows.length) {
+            return res.status(404).json({ ok: false, message: "Company not found." });
+        }
+        const company = companyRows[0];
+        const CommPercentage = Number(company.Comm) || 0;
+
+        const revenueRows = await runQuery(
+            `SELECT COALESCE(SUM(p.Amount), 0) AS TotalRevenue
+               FROM payment p
+               JOIN application a ON p.ApplicationID = a.ApplicationID
+              WHERE a.CompanyID = ? AND a.Status = 'Completed'`,
+            [companyId]
+        );
+        const TotalRevenue = Number(revenueRows[0]?.TotalRevenue ?? 0);
+        const CommissionAmount = (TotalRevenue * CommPercentage) / 100;
+        const NetRevenue = Math.max(0, TotalRevenue - PLATFORM_FEE - CommissionAmount);
+
+        const statusRows = await runQuery(
+            `SELECT
+                SUM(CASE WHEN Status = 'Completed' THEN 1 ELSE 0 END) AS Completed,
+                SUM(CASE WHEN Status = 'Pending'   THEN 1 ELSE 0 END) AS Pending,
+                SUM(CASE WHEN Status = 'In Progress' THEN 1 ELSE 0 END) AS InProgress
+               FROM application WHERE CompanyID = ?`,
+            [companyId]
+        );
+        const CompletedCount  = Number(statusRows[0]?.Completed ?? 0);
+        const PendingCount    = Number(statusRows[0]?.Pending ?? 0);
+        const InProgressCount = Number(statusRows[0]?.InProgress ?? 0);
+
+        const topCategories = await runQuery(
+            `SELECT c.Type AS CategoryName,
+                    COUNT(*) AS AppCount,
+                    COALESCE(SUM(p.Amount), 0) AS Revenue
+               FROM application a
+               JOIN category c    ON a.CategoryID    = c.CategoryID
+               LEFT JOIN payment p ON p.ApplicationID = a.ApplicationID
+              WHERE a.CompanyID = ?
+              GROUP BY c.CategoryID, c.Type
+              ORDER BY Revenue DESC, AppCount DESC
+              LIMIT 5`,
+            [companyId]
+        );
+
+        const reviews = await runQuery(
+            `SELECT r.ReviewID, r.Review, r.Rating, u.FirstName, u.LastName
+               FROM review r
+               JOIN application a ON r.ApplicationID = a.ApplicationID
+               JOIN user u        ON a.ClientID      = u.UserID
+              WHERE a.CompanyID = ?
+              ORDER BY r.ReviewID DESC
+              LIMIT 5`,
+            [companyId]
+        );
+
+        await runQuery(
+            "UPDATE company SET PdfExportCount = PdfExportCount + 1 WHERE CompanyID = ?",
+            [companyId]
+        );
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+            "Content-Disposition",
+            'attachment; filename="Company_Performance_Report.pdf"'
+        );
+
+        const doc = new PDFDocument({ size: "A4", margin: 50 });
+
+        // Page border — drawn first so all content sits inside it.
+        doc
+            .lineWidth(1)
+            .strokeColor("#000000")
+            .rect(20, 20, doc.page.width - 40, doc.page.height - 40)
+            .stroke();
+
+        doc.pipe(res);
+
+        const LEFT = doc.page.margins.left;
+        const PAGE_WIDTH = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+        const hr = (gap = 8) => {
+            doc.moveDown(0.4);
+            const y = doc.y + gap;
+            doc
+                .strokeColor("#000000")
+                .lineWidth(0.5)
+                .moveTo(LEFT, y)
+                .lineTo(LEFT + PAGE_WIDTH, y)
+                .stroke();
+            doc.moveDown(0.6);
+        };
+
+        const sectionTitle = (label) => {
+            doc.moveDown(1);
+            doc
+                .font("Helvetica-Bold")
+                .fontSize(12)
+                .fillColor("#000000")
+                .text(label.toUpperCase(), LEFT, doc.y, {
+                    width: PAGE_WIDTH,
+                    align: "center",
+                    characterSpacing: 1.5,
+                });
+            doc.moveDown(0.4);
+        };
+
+        const row = (label, value) => {
+            const y = doc.y;
+            doc.font("Helvetica").fontSize(10).fillColor("#000000").text(label, LEFT, y);
+            doc.font("Helvetica-Bold").fillColor("#000000").text(value, LEFT, y, {
+                width: PAGE_WIDTH,
+                align: "right",
+            });
+            doc.moveDown(0.3);
+        };
+
+        const fmtMoney = (n) =>
+            "EGP " + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Section 1 — Centered logo + Takhlees header
+        const LOGO_WIDTH = 100;
+        if (fs.existsSync(LOGO_PATH)) {
+            doc.image(LOGO_PATH, (doc.page.width - LOGO_WIDTH) / 2, doc.y, { width: LOGO_WIDTH });
+            doc.y += LOGO_WIDTH + 8;
+        }
+        doc
+            .font("Helvetica-Bold")
+            .fontSize(28)
+            .fillColor("#000000")
+            .text("Takhlees", LEFT, doc.y, { width: PAGE_WIDTH, align: "center" });
+        doc
+            .font("Helvetica")
+            .fontSize(9)
+            .fillColor("#000000")
+            .text("Customs clearance, simplified.", LEFT, doc.y, { width: PAGE_WIDTH, align: "center" });
+        hr(4);
+
+        // Section 2 — Report title (centered, with extra breathing room)
+        doc.moveDown(2);
+        doc
+            .font("Helvetica-Bold")
+            .fontSize(18)
+            .fillColor("#000000")
+            .text(`${company.Name} Performance Report`, LEFT, doc.y, {
+                width: PAGE_WIDTH,
+                align: "center",
+            });
+        doc
+            .font("Helvetica")
+            .fontSize(10)
+            .fillColor("#000000")
+            .text(`Generated ${new Date().toISOString().slice(0, 10)}`, LEFT, doc.y, {
+                width: PAGE_WIDTH,
+                align: "center",
+            });
+
+        // Section 3 — Financials (left/right receipt rows)
+        sectionTitle("Financials");
+        row("Total Revenue", fmtMoney(TotalRevenue));
+        row(`Commission (${CommPercentage}%)`, fmtMoney(CommissionAmount));
+        row("Platform Fee", fmtMoney(PLATFORM_FEE));
+        row("Net Revenue", fmtMoney(NetRevenue));
+
+        // Section 4 — Applications status (left/right rows)
+        sectionTitle("Applications Status");
+        row("Completed", String(CompletedCount));
+        row("In Progress", String(InProgressCount));
+        row("Pending", String(PendingCount));
+
+        // Section 5 — Top categories
+        sectionTitle("Top Categories");
+        if (!topCategories.length) {
+            doc
+                .font("Helvetica-Oblique")
+                .fontSize(10)
+                .fillColor("#000000")
+                .text("No category activity yet.", LEFT, doc.y, { width: PAGE_WIDTH, align: "center" });
+        } else {
+            topCategories.forEach((c, i) => {
+                const y = doc.y;
+                doc
+                    .font("Helvetica-Bold")
+                    .fontSize(10)
+                    .fillColor("#000000")
+                    .text(`${i + 1}. ${c.CategoryName}`, LEFT, y);
+                doc
+                    .font("Helvetica")
+                    .fillColor("#000000")
+                    .text(
+                        `${c.AppCount} application${c.AppCount === 1 ? "" : "s"} · ${fmtMoney(c.Revenue)}`,
+                        LEFT,
+                        y,
+                        { width: PAGE_WIDTH, align: "right" }
+                    );
+                doc.moveDown(0.3);
+            });
+        }
+
+        // Section 6 — Reviews
+        sectionTitle("Latest Reviews");
+        if (!reviews.length) {
+            doc
+                .font("Helvetica-Oblique")
+                .fontSize(10)
+                .fillColor("#000000")
+                .text("No reviews yet.", LEFT, doc.y, { width: PAGE_WIDTH, align: "center" });
+        } else {
+            reviews.forEach((r) => {
+                const stars = "★".repeat(Math.max(0, Math.min(5, Number(r.Rating) || 0)));
+                const author = `${r.FirstName ?? ""} ${r.LastName ?? ""}`.trim() || "Anonymous";
+                doc
+                    .font("Helvetica-Bold")
+                    .fontSize(10)
+                    .fillColor("#000000")
+                    .text(`${author} `, { continued: true });
+                doc
+                    .font("Helvetica")
+                    .fillColor("#000000")
+                    .text(`${stars}  (${r.Rating}/5)`);
+                if (r.Review) {
+                    doc.font("Helvetica").fontSize(10).fillColor("#000000").text(`"${r.Review}"`);
+                }
+                doc.moveDown(0.3);
+            });
+        }
+
+        // Section 7 — Footer pinned safely above the bottom margin
+        doc.fillColor("#888888").fontSize(10);
+        doc
+            .font("Helvetica-Bold")
+            .text("Takhlees", 20, doc.page.height - 70, {
+                align: "center",
+                width: doc.page.width - 40,
+                lineBreak: false,
+            });
+
+        doc.end();
+    } catch (err) {
+        if (!res.headersSent) {
+            return next(err);
+        }
+        // Headers already flushed — destroy the response so the client sees a truncated download rather than a malformed PDF body.
+        res.destroy(err);
     }
 };
 

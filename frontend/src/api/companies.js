@@ -49,10 +49,17 @@ export const verifyCompany = async (companyId, status) => {
 };
 
 // Backend contract (PUT /company/profile, requires company session):
-//   body: { Governorate?, Address?, ContactEmail?, About? }
-//   200:  { ok: true, data: { company: {...} } }
+//   Plain JSON body: { Governorate?, Address?, ContactEmail?, About? }
+//   OR FormData with the same fields plus optional `logo` File for the
+//   circular avatar. Backend's multer middleware handles either shape.
+//   200: { ok: true, data: { company: {...} } }
 export const updateCompanyProfile = async (payload) => {
-  const { data } = await api.put("/company/profile", payload);
+  const isFormData = payload instanceof FormData;
+  const { data } = await api.put(
+    "/company/profile",
+    payload,
+    isFormData ? { headers: { "Content-Type": undefined } } : {}
+  );
   return data;
 };
 
@@ -70,6 +77,17 @@ export const updateCompanyPricing = async (prices) => {
 export const getCompanyDashboardStats = async () => {
   const { data } = await api.get("/company/dashboard-stats");
   return data;
+};
+
+// Backend contract (GET /company/export-report, requires company session):
+//   Returns a streamed application/pdf body with Content-Disposition:
+//   attachment. We request a Blob so the caller can trigger a download
+//   via Object URL + hidden <a>.
+export const exportCompanyReport = async () => {
+  const response = await api.get("/company/export-report", {
+    responseType: "blob",
+  });
+  return response.data;
 };
 
 export const searchCompanies = async ({ keyword, keyvalue, sort } = {}) => {

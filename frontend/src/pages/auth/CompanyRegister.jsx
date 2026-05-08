@@ -1,9 +1,13 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import Cropper from "react-easy-crop";
 import { registerCompany } from "../../api/companies.js";
+import { getCroppedImage } from "../../utils/cropImage.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
+
+const MAX_LOGO_BYTES = 4 * 1024 * 1024;
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
@@ -30,6 +34,17 @@ const extractErrorMessage = (err) => {
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+/* Tiny inline error rendered directly under an input. */
+const FieldError = ({ message }) =>
+  message ? (
+    <span
+      role="alert"
+      style={{ color: "var(--signal-stop)", fontSize: 12, marginTop: 4, display: "block" }}
+    >
+      {message}
+    </span>
+  ) : null;
+
 function CompanyRegister() {
   const [form, setForm] = useState({
     Name: "",
@@ -42,29 +57,60 @@ function CompanyRegister() {
     About: "",
   });
   const [comRegFile, setComRegFile] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState("");
+
+  /* Cropper modal state. `cropperSrc` holds the original image the user
+     picked (object URL); the modal stays open while it's truthy. */
+  const [cropperSrc, setCropperSrc] = useState("");
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  /* Default zoom of 0.5 keeps the photo small inside the circle by
+     default — users zoom IN rather than starting at "fill". */
+  const [zoom, setZoom] = useState(0.5);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [cropping, setCropping] = useState(false);
+  const avatarInputRef = useRef(null);
+
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  /* Per-field errors keyed by form field name (and "ComReg" / "Logo"
+     for the file inputs). Generic errors land in `genericError` and
+     render directly above the submit button. */
+  const [errors, setErrors] = useState({});
+  const [genericError, setGenericError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /* Drives the button into its locked "Submitted for verification"
+     success state — text swaps, spinner shows, button stays disabled
+     until the redirect timer fires. */
+  const [succeeded, setSucceeded] = useState(false);
   const navigate = useNavigate();
+
+  /* Free any object URLs we created when the component unmounts or the
+     preview / cropper source changes — otherwise they leak. */
+  useEffect(() => () => {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+  }, [logoPreview]);
+  useEffect(() => () => {
+    if (cropperSrc) URL.revokeObjectURL(cropperSrc);
+  }, [cropperSrc]);
 
   const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
   const handleComRegChange = (e) => {
     const file = e.target.files?.[0] || null;
-    setError("");
+    setErrors((m) => ({ ...m, ComReg: "" }));
+    setGenericError("");
     if (!file) {
       setComRegFile(null);
       return;
     }
     if (file.type !== "application/pdf") {
-      setError("Commercial registration must be a PDF.");
+      setErrors((m) => ({ ...m, ComReg: "Commercial registration must be a PDF." }));
       e.target.value = "";
       setComRegFile(null);
       return;
     }
     if (file.size > MAX_PDF_BYTES) {
-      setError("Commercial registration PDF must be 5MB or smaller.");
+      setErrors((m) => ({ ...m, ComReg: "Commercial registration PDF must be 5MB or smaller." }));
       e.target.value = "";
       setComRegFile(null);
       return;
@@ -72,33 +118,131 @@ function CompanyRegister() {
     setComRegFile(file);
   };
 
-  const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const handleLogoSelect = (e) => {
+    const file = e.target.files?.[0] || null;
+    e.target.value = "";
+    if (!file) return;
+    setErrors((m) => ({ ...m, Logo: "" }));
+    setGenericError("");
+    if (!/^image\//.test(file.type)) {
+      setErrors((m) => ({ ...m, Logo: "Logo must be an image file." }));
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setErrors((m) => ({ ...m, Logo: "Logo image must be 4MB or smaller." }));
+      return;
+    }
+    setCropperSrc(URL.createObjectURL(file));
+    setCrop({ x: 0, y: 0 });
+    setZoom(0.5);
+    setCroppedAreaPixels(null);
+  };
 
-  const handleTaxNumberChange = (e) =>
+  const onCropComplete = useCallback((_area, areaPixels) => {
+    setCroppedAreaPixels(areaPixels);
+  }, []);
+
+  const cancelCrop = () => {
+    if (cropperSrc) URL.revokeObjectURL(cropperSrc);
+    setCropperSrc("");
+    setCroppedAreaPixels(null);
+  };
+
+  const confirmCrop = async () => {
+    if (!cropperSrc || !croppedAreaPixels) return;
+    setCropping(true);
+    try {
+      const { blob, previewUrl } = await getCroppedImage(cropperSrc, croppedAreaPixels);
+      const cropped = new File([blob], "logo.png", { type: blob.type || "image/png" });
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+      setLogoFile(cropped);
+      setLogoPreview(previewUrl);
+      URL.revokeObjectURL(cropperSrc);
+      setCropperSrc("");
+    } catch {
+      setGenericError("Could not crop that image. Try another one.");
+    } finally {
+      setCropping(false);
+    }
+  };
+
+  const update = (key) => (e) => {
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+    setErrors((m) => ({ ...m, [key]: "" }));
+    setGenericError("");
+  };
+
+  const handleTaxNumberChange = (e) => {
     setForm((f) => ({ ...f, TaxNumber: formatTaxNumber(e.target.value) }));
+    setErrors((m) => ({ ...m, TaxNumber: "" }));
+    setGenericError("");
+  };
 
+  /* Returns a per-field error map. An empty object means we can hit
+     the API. Keys match form fields, plus "ComReg" for the PDF input. */
   const validate = () => {
-    if (form.Name.trim().length < 2) return "Company name is required.";
-    if (!isValidEmail(form.ContactEmail.trim())) return "Please enter a valid contact email.";
-    if (!form.FoundingDate) return "Founding date is required.";
-    if (new Date(form.FoundingDate) > new Date()) return "Founding date cannot be in the future.";
-    if (form.Password.length < 8) return "Password must be at least 8 characters long.";
-    if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password))
-      return "Password must contain at least one letter and one number.";
+    const errs = {};
+    if (form.Name.trim().length < 2) errs.Name = "Company name is required.";
+    if (!isValidEmail(form.ContactEmail.trim())) errs.ContactEmail = "Please enter a valid contact email.";
+    if (!form.FoundingDate) errs.FoundingDate = "Founding date is required.";
+    else if (new Date(form.FoundingDate) > new Date())
+      errs.FoundingDate = "Founding date cannot be in the future.";
+    if (form.Password.length < 8) {
+      errs.Password = "Password must be at least 8 characters long.";
+    } else if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password)) {
+      errs.Password = "Password must contain at least one letter and one number.";
+    }
     const taxDigits = form.TaxNumber.replace(/-/g, "");
-    if (!/^\d{9}$/.test(taxDigits)) return "Tax number must be 9 digits.";
-    if (Number(taxDigits) <= 0) return "Tax number must be a positive integer.";
-    if (!form.Governorate.trim()) return "Governorate is required.";
-    if (!form.Address.trim()) return "Address is required.";
-    if (!comRegFile) return "Commercial registration PDF is required.";
-    return null;
+    if (!/^\d{9}$/.test(taxDigits)) errs.TaxNumber = "Tax number must be 9 digits.";
+    else if (Number(taxDigits) <= 0) errs.TaxNumber = "Tax number must be a positive integer.";
+    if (!form.Governorate.trim()) errs.Governorate = "Governorate is required.";
+    if (!form.Address.trim()) errs.Address = "Address is required.";
+    if (!comRegFile) errs.ComReg = "Commercial registration PDF is required.";
+    return errs;
+  };
+
+  /* Best-effort mapping from a server message to a field. Falls
+     through to a generic error if no input matches. */
+  const assignServerError = (message) => {
+    const text = String(message || "");
+    const lower = text.toLowerCase();
+    if (lower.includes("tax")) {
+      setErrors((m) => ({ ...m, TaxNumber: text }));
+      return;
+    }
+    if (lower.includes("email")) {
+      setErrors((m) => ({ ...m, ContactEmail: text }));
+      return;
+    }
+    if (lower.includes("name") && !lower.includes("user")) {
+      setErrors((m) => ({ ...m, Name: text }));
+      return;
+    }
+    if (lower.includes("password")) {
+      setErrors((m) => ({ ...m, Password: text }));
+      return;
+    }
+    if (lower.includes("governorate")) {
+      setErrors((m) => ({ ...m, Governorate: text }));
+      return;
+    }
+    if (lower.includes("address")) {
+      setErrors((m) => ({ ...m, Address: text }));
+      return;
+    }
+    if (lower.includes("registration") || lower.includes("pdf") || lower.includes("comreg")) {
+      setErrors((m) => ({ ...m, ComReg: text }));
+      return;
+    }
+    setGenericError(text || "Registration failed.");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(""); setSuccess("");
-    const v = validate();
-    if (v) return setError(v);
+    setGenericError("");
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
 
     const payload = new FormData();
     payload.append("Name", form.Name.trim());
@@ -112,23 +256,32 @@ function CompanyRegister() {
     payload.append("Governorate", form.Governorate.trim());
     payload.append("Address", form.Address.trim());
     payload.append("About", form.About.trim() || "Trusted clearance company on the Takhlees marketplace.");
-    payload.append("ComRegFile", comRegFile);
+    payload.append("ComReg", comRegFile);
+    if (logoFile) {
+      payload.append("logo", logoFile);
+    }
 
     setSubmitting(true);
     try {
       const res = await registerCompany(payload);
       if (res?.Status && res.Status !== "OK") {
-        setError(res?.Message || "Registration failed.");
+        assignServerError(res?.Message);
+        setSubmitting(false);
         return;
       }
-      setSuccess("Company submitted for verification. Sign in once approved.");
-      setTimeout(() => navigate("/company/login", { replace: true }), 1500);
+      /* Success — lock the button into its success state and redirect
+         after a short pause so the affordance is visible. */
+      setSucceeded(true);
+      setTimeout(() => navigate("/company/login", { replace: true }), 2000);
     } catch (err) {
-      setError(extractErrorMessage(err));
-    } finally {
+      assignServerError(extractErrorMessage(err));
       setSubmitting(false);
     }
   };
+
+  /* Disabled while submitting OR after success (until redirect) so a
+     stray click can't double-submit. */
+  const buttonDisabled = submitting || succeeded;
 
   return (
     <div className={styles.shell}>
@@ -152,16 +305,100 @@ function CompanyRegister() {
             Tell us about your business — we’ll review and verify before you go live.
           </p>
 
-          {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
-          {success && <div className="banner-success"><Icon name="check" size={16} />{success}</div>}
-
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
+            <div
+              className="field"
+              style={{ alignItems: "center", display: "flex", flexDirection: "column", gap: 8 }}
+            >
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={buttonDisabled}
+                aria-label={logoFile ? "Change company logo" : "Upload company logo"}
+                style={{
+                  width: 112,
+                  height: 112,
+                  borderRadius: "50%",
+                  border: "2px dashed var(--line-strong, #cbd5e1)",
+                  background: logoPreview ? "transparent" : "var(--surface-2, #f8fafc)",
+                  backgroundImage: logoPreview ? `url(${logoPreview})` : "none",
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                  position: "relative",
+                  padding: 0,
+                  overflow: "hidden",
+                }}
+              >
+                {!logoPreview && (
+                  <span style={{ display: "grid", placeItems: "center", gap: 4, color: "var(--ink-faint, #64748b)" }}>
+                    <Icon name="building" size={28} />
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                      Logo
+                    </span>
+                  </span>
+                )}
+                {logoPreview && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "rgba(15, 23, 42, 0.35)",
+                      color: "white",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      opacity: 0,
+                      transition: "opacity 200ms ease",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = 0)}
+                  >
+                    Change
+                  </span>
+                )}
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoSelect}
+                disabled={buttonDisabled}
+                style={{ display: "none" }}
+              />
+              <span className="hint" style={{ textAlign: "center" }}>
+                {logoFile ? "Click to replace · cropped to a circle" : "Add a company logo (optional). It'll be cropped to a circle."}
+              </span>
+              <FieldError message={errors.Logo} />
+              {logoFile && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    if (logoPreview) URL.revokeObjectURL(logoPreview);
+                    setLogoPreview("");
+                    setLogoFile(null);
+                  }}
+                  disabled={buttonDisabled}
+                >
+                  Remove logo
+                </button>
+              )}
+            </div>
+
             <label className="field">
               <span className="field-label">Company name</span>
               <div className="input-with-icon">
                 <span className="input-icon"><Icon name="building" size={16} /></span>
-                <input className="input" value={form.Name} onChange={update("Name")} required disabled={submitting} />
+                <input className="input" value={form.Name} onChange={update("Name")} required disabled={buttonDisabled} />
               </div>
+              <FieldError message={errors.Name} />
             </label>
 
             <label className="field">
@@ -175,9 +412,10 @@ function CompanyRegister() {
                   value={form.ContactEmail}
                   onChange={update("ContactEmail")}
                   required
-                  disabled={submitting}
+                  disabled={buttonDisabled}
                 />
               </div>
+              <FieldError message={errors.ContactEmail} />
             </label>
 
             <label className="field">
@@ -189,8 +427,9 @@ function CompanyRegister() {
                 onChange={update("FoundingDate")}
                 max={todayISO()}
                 required
-                disabled={submitting}
+                disabled={buttonDisabled}
               />
+              <FieldError message={errors.FoundingDate} />
             </label>
 
             <label className="field">
@@ -203,9 +442,10 @@ function CompanyRegister() {
                 maxLength={11}
                 placeholder="123-456-789"
                 required
-                disabled={submitting}
+                disabled={buttonDisabled}
               />
               <span className="hint">9 digits, formatted as XXX-XXX-XXX. Must be unique.</span>
+              <FieldError message={errors.TaxNumber} />
             </label>
 
             <label className="field">
@@ -220,7 +460,7 @@ function CompanyRegister() {
                     value={form.Password}
                     onChange={update("Password")}
                     required
-                    disabled={submitting}
+                    disabled={buttonDisabled}
                     placeholder="At least 8 characters with a number"
                   />
                 </div>
@@ -229,6 +469,7 @@ function CompanyRegister() {
                 </button>
               </div>
               <span className="hint">Minimum 8 characters with at least one letter and one number.</span>
+              <FieldError message={errors.Password} />
             </label>
 
             <label className="field">
@@ -238,7 +479,7 @@ function CompanyRegister() {
                 value={form.Governorate}
                 onChange={update("Governorate")}
                 required
-                disabled={submitting}
+                disabled={buttonDisabled}
               >
                 <option value="" disabled>Select a Governorate</option>
                 <option value="Al Daqahliyah">Al Daqahliyah</option>
@@ -269,6 +510,7 @@ function CompanyRegister() {
                 <option value="North Sinai">North Sinai</option>
                 <option value="Suhaj">Suhaj</option>
               </select>
+              <FieldError message={errors.Governorate} />
             </label>
 
             <label className="field">
@@ -280,8 +522,9 @@ function CompanyRegister() {
                 maxLength={255}
                 placeholder="Street, building, city"
                 required
-                disabled={submitting}
+                disabled={buttonDisabled}
               />
+              <FieldError message={errors.Address} />
             </label>
 
             <div className="field">
@@ -294,7 +537,7 @@ function CompanyRegister() {
                   accept="application/pdf"
                   className={styles.dropzoneInput}
                   onChange={handleComRegChange}
-                  disabled={submitting}
+                  disabled={buttonDisabled}
                 />
                 <span className={styles.dropzoneIcon} aria-hidden="true">
                   <Icon name={comRegFile ? "check" : "doc"} size={28} />
@@ -311,6 +554,7 @@ function CompanyRegister() {
                   </>
                 )}
               </label>
+              <FieldError message={errors.ComReg} />
             </div>
 
             <label className="field">
@@ -322,13 +566,32 @@ function CompanyRegister() {
                 value={form.About}
                 onChange={update("About")}
                 placeholder="A short description of your company"
-                disabled={submitting}
+                disabled={buttonDisabled}
               />
               <span className="hint">If accepted, this is what the user sees like a bio for the company. If left blank, we'll use a default description.</span>
             </label>
 
-            <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-              {submitting ? (
+            {genericError && (
+              <div
+                role="alert"
+                style={{
+                  color: "var(--signal-stop)",
+                  fontSize: 13,
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
+                {genericError}
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={buttonDisabled}>
+              {succeeded ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  Account created successfully
+                  <ContainerSpinner inline size={18} label="Redirecting…" />
+                </span>
+              ) : submitting ? (
                 <ContainerSpinner inline size={20} label="Submitting…" />
               ) : (
                 <>Submit for verification <Icon name="arrow_right" size={16} /></>
@@ -341,6 +604,131 @@ function CompanyRegister() {
           </p>
         </div>
       </section>
+
+      {cropperSrc && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Crop your logo"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            display: "grid",
+            placeItems: "center",
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !cropping) cancelCrop();
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: "var(--surface, white)",
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Crop your logo</h3>
+              <p style={{ margin: "4px 0 0", color: "var(--ink-soft, #475569)", fontSize: 13 }}>
+                Drag to position, scroll or use the slider to zoom.
+              </p>
+            </div>
+
+            {/* Section A — double-wrapper to fully isolate the canvas
+                from the modal's flex column. The OUTER div is a plain
+                block-level element, so it doesn't inherit any flex
+                stretching from its parent. The INNER div locks the
+                <Cropper /> to an exact 250x250 square (mx-auto centered),
+                immune to any flex parent rules. */}
+            <div style={{ display: "block" }}>
+              <div
+                style={{
+                  position: "relative",
+                  width: "250px",
+                  height: "250px",
+                  margin: "0 auto",
+                  overflow: "hidden",
+                  borderRadius: "8px",
+                  backgroundColor: "#f3f4f6",
+                }}
+              >
+                <Cropper
+                  image={cropperSrc}
+                  crop={crop}
+                  zoom={zoom}
+                  minZoom={0.5}
+                  maxZoom={3}
+                  aspect={1}
+                  cropShape="round"
+                  showGrid={false}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropComplete}
+                />
+              </div>
+            </div>
+
+            {/* Section B — controls, fully outside Section A. Centered
+                column with its own spacing rhythm. */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 16,
+                marginTop: 16,
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, width: "100%" }}>
+                <span style={{ color: "var(--ink-soft, #475569)", minWidth: 40 }}>Zoom</span>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+              </label>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 16,
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={cancelCrop}
+                  disabled={cropping}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={confirmCrop}
+                  disabled={cropping || !croppedAreaPixels}
+                >
+                  {cropping ? "Saving…" : "Save logo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

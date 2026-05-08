@@ -1,9 +1,7 @@
-import db from "./connection.js";
-
-export function createSupportTicketTable() {
-    const sql = `
+export async function initSupportTicketTable(db) {
+    await db.query(`
         CREATE TABLE IF NOT EXISTS SupportTicket (
-            TicketID INT AUTO_INCREMENT PRIMARY KEY, 
+            TicketID INT AUTO_INCREMENT PRIMARY KEY,
             Issue VARCHAR(255) NOT NULL,
             Resolved BOOLEAN NOT NULL,
             AdminID INT,
@@ -11,12 +9,5 @@ export function createSupportTicketTable() {
             FOREIGN KEY (AdminID) REFERENCES Admin(AdminID),
             FOREIGN KEY (ClientID) REFERENCES Client(ClientID)
         )
-    `;
-
-    return new Promise((resolve, reject) => {
-        db.query(sql, (err) => {
-            if (err) return reject(err);
-            resolve();
-        });
-    });
+    `);
 }

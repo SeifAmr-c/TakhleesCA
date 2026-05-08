@@ -1,4 +1,5 @@
 import db from '../../Database/connection.js';
+import { uploadToCloudinary } from '../../config/cloudinary.js';
 
 const runQuery = (sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -8,11 +9,11 @@ const runQuery = (sql, params = []) =>
         });
     });
 
-const DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Other'];
+const DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Shipping Document'];
 const VERIFICATION_STATUSES = ['Pending', 'Accepted', 'Rejected'];
 
-/* Upload handler — called after multer has saved the file to disk.
-   Stores the relative path so it can be served via /uploads/documents/<name>. */
+/* Upload handler — multer keeps the file in memory; we stream the buffer
+   to Cloudinary and persist the returned secure_url in document.Path. */
 export const createDocumentWithFile = async (req, res, next) => {
     try {
         const DocType = String(req.body.DocType ?? '').trim();
@@ -39,7 +40,8 @@ export const createDocumentWithFile = async (req, res, next) => {
             return res.status(404).json({ ok: false, message: `Application ${ApplicationID} not found.` });
         }
 
-        const filePath = `uploads/documents/${req.file.filename}`;
+        const uploaded = await uploadToCloudinary(req.file.buffer, 'takhlees/documents');
+        const filePath = uploaded.secure_url;
         const result = await runQuery(
             'INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), ?, ?, ?)',
             [DocType, 'Pending', filePath, ApplicationID]

@@ -23,6 +23,8 @@ import CompanyProfileEdit from "./pages/company/CompanyProfileEdit.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import AdminProfileEdit from "./pages/admin/AdminProfileEdit.jsx";
 
+import ScrollToTop from "./components/ScrollToTop.jsx";
+
 function RequireAuth({ children }) {
   const auth = useAuth();
   const location = useLocation();
@@ -35,6 +37,7 @@ function RequireAuth({ children }) {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* Public */}
         <Route path="/" element={<LandingPage />} />

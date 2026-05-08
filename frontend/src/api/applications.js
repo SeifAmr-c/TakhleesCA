@@ -6,7 +6,12 @@ export const listApplications = async (params = {}) => {
 };
 
 export const createApplication = async (payload) => {
-  const { data } = await api.post("/application", payload);
+  const isFormData = payload instanceof FormData;
+  const { data } = await api.post(
+    "/application",
+    payload,
+    isFormData ? { headers: { "Content-Type": undefined } } : {}
+  );
   return data;
 };
 

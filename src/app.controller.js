@@ -49,10 +49,6 @@ export const bootstrap = () => {
     },
   }));
 
-  // Serve uploaded files (documents, company registrations) as static assets.
-  // Files under uploads/ are accessible at /uploads/<path>.
-  app.use('/uploads', express.static('uploads'));
-
   // -----------------------------
   // Main Router (API Mount)
   // -----------------------------

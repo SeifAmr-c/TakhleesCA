@@ -6,6 +6,7 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import InteractiveMap from "../../components/InteractiveMap.jsx";
 import { searchCompanies } from "../../api/companies.js";
+import { useAuth } from "../../api/authState.js";
 
 /* ----------------------------------------------------------------
    Operational data shown on the landing page is illustrative — it
@@ -958,6 +959,18 @@ function OperationalReach() {
    CTA — flat dark band, factual
    ================================================================ */
 function CTA() {
+  const auth = useAuth();
+  const isCompany = auth?.role === "company";
+  /* Visibility rules:
+       - Company logged in: hide the entire button column (no awkward
+         empty right-hand cell). The text expands to fill the row.
+       - Client (or any other authed non-company) logged in: show only
+         "List an agency" — the importer CTA is redundant for them.
+       - Logged out: show both buttons. */
+  const showImporter = !auth;
+  const showAgency = !isCompany;
+  const showButtons = showImporter || showAgency;
+
   return (
     <section style={{ padding: "0 0 96px" }}>
       <div className="container">
@@ -968,13 +981,14 @@ function CTA() {
             border: "1px solid oklch(100% 0 0 / 0.08)",
             borderRadius: "var(--radius-lg)",
             padding: "56px 48px",
-            display: "grid",
-            gridTemplateColumns: "1.4fr 1fr",
-            gap: 40,
+            display: "flex",
+            justifyContent: "space-between",
             alignItems: "center",
+            gap: 40,
+            flexWrap: "wrap",
           }}
         >
-          <div>
+          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
             <span
               className="eyebrow"
               style={{ color: "var(--safety)", marginBottom: 12 }}
@@ -1011,15 +1025,33 @@ function CTA() {
               . You only pay when the container is released to you.
             </p>
           </div>
-          <div className="row" style={{ justifyContent: "flex-end", gap: 12 }}>
-            <Link to="/register" className="btn btn-accent btn-lg">
-              Start as importer
-              <Icon name="arrow_right" size={14} />
-            </Link>
-            <Link to="/company/register" className="btn btn-on-dark btn-lg">
-              List an agency
-            </Link>
-          </div>
+          {showButtons && (
+            <div
+              className="row"
+              style={{
+                justifyContent: "flex-end",
+                gap: 12,
+                flexShrink: 0,
+                /* When only one button renders (client case), nudge it
+                   leftward so it doesn't cling to the far-right edge.
+                   Logged-out double-button view keeps its original
+                   right-flush alignment. */
+                marginRight: showImporter && showAgency ? 0 : 80,
+              }}
+            >
+              {showImporter && (
+                <Link to="/register" className="btn btn-accent btn-lg">
+                  Start as importer
+                  <Icon name="arrow_right" size={14} />
+                </Link>
+              )}
+              {showAgency && (
+                <Link to="/company/register" className="btn btn-on-dark btn-lg">
+                  List an agency
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>
