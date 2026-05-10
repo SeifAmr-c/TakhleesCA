@@ -58,3 +58,11 @@ export const resolveTicket = async (ticketId) => {
   const { data } = await api.put(`/admin/tickets/${ticketId}/resolve`);
   return data;
 };
+
+// GET /admin/export-report → streamed application/pdf as a Blob.
+export const exportAdminReport = async () => {
+  const response = await api.get("/admin/export-report", {
+    responseType: "blob",
+  });
+  return response.data;
+};

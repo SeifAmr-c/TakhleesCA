@@ -14,6 +14,7 @@ import {
   getPendingTickets,
   getResolvedTickets,
   resolveTicket,
+  exportAdminReport,
 } from "../../api/admin.js";
 
 const EMPTY_ANALYTICS = {
@@ -312,6 +313,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [companyBusyId, setCompanyBusyId] = useState(null);
   const [ticketBusyId, setTicketBusyId] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
   const location = useLocation();
@@ -401,6 +403,28 @@ function AdminDashboard() {
     }
   };
 
+  const handleExportReport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await exportAdminReport();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Takhlees_Executive_Report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showNotice("Executive report downloaded.");
+    } catch (err) {
+      console.error("Export failed:", err);
+      showNotice("Couldn't generate the report. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleResolve = async (ticketId) => {
     setTicketBusyId(ticketId);
     try {
@@ -426,6 +450,16 @@ function AdminDashboard() {
       title="Admin dashboard"
       subtitle="Marketplace activity, verifications, and support."
       role="Admin"
+      actions={
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={handleExportReport}
+          disabled={exporting}
+          title="Download a platform-wide executive PDF report"
+        >
+          <Icon name="doc" size={14} /> {exporting ? "Generating…" : "Export as PDF"}
+        </button>
+      }
     >
       {notice && (
         <div className="banner-success">
