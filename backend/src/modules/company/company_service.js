@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { uploadToCloudinary, destroyCloudinaryAsset } from '../../config/cloudinary.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOGO_PATH = path.resolve(__dirname, '../../../frontend/src/assets/logo.png');
+const LOGO_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/logo.png');
 
 const SALT_ROUNDS = 10;
 

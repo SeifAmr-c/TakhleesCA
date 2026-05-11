@@ -2,15 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repo layout
+
+The repo is a monorepo with three siblings at the root:
+
+- `backend/` — Node.js + Express + MySQL API (this CLAUDE.md is about this app).
+- `frontend/` — React (CRA) web client. Its `package.json` sets `"proxy": "http://localhost:3000"` so dev requests forward to the backend.
+- `mobile/` — Expo / React Native app for companies.
+
+All backend commands must be run from inside `backend/` (that's where `package.json` and `.env` live).
+
 ## Commands
 
-- **Run the API server**: `npm start` (or `node src/index.js`). Listens on `PORT`, default `3000`.
-- **Initialize / migrate the database**: `node src/Database/setup_db.js` — creates the `Takhlees` database (if missing) and all tables in dependency order. Idempotent (`CREATE TABLE IF NOT EXISTS`). Run this once before first use and after pulling schema changes.
+- **Run the API server**: `cd backend && npm start` (or `node backend/src/index.js`). Listens on `PORT`, default `3000`.
+- **Initialize / migrate the database**: `cd backend && node src/Database/setup_db.js` — creates the `Takhlees` database (if missing) and all tables in dependency order. Idempotent (`CREATE TABLE IF NOT EXISTS`). Run this once before first use and after pulling schema changes.
 - **Tests / lint**: none configured.
 
 ## Required local environment
 
-Configuration comes from a `.env` file at the project root (loaded via `dotenv` in `src/index.js` and `src/Database/setup_db.js`). See `.env.example` for the full list. Required keys:
+Configuration comes from a `.env` file in `backend/` (loaded via `dotenv` in `backend/src/index.js` and `backend/src/Database/setup_db.js`). See `.env.example` for the full list. Required keys:
 
 - `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` — MySQL connection (used by both `src/Database/connection.js` and the `express-mysql-session` store in `src/app.controller.js`).
 - `SESSION_SECRET` — signing key for session cookies.

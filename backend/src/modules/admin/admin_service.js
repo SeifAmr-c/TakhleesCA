@@ -5,7 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOGO_PATH = path.resolve(__dirname, '../../../frontend/src/assets/logo.png');
+const LOGO_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/logo.png');
 
 const runQuery = (sql, params = []) =>
   new Promise((resolve, reject) => {

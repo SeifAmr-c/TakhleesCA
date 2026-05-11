@@ -19,7 +19,13 @@
       "Bash(dir frontend\\\\src\\\\pages)",
       "Bash(node --check \"/c/Users/seifa/Desktop/node MySQL/src/Database/client.model.js\")",
       "Bash(node --check frontend/src/api/companies.js)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(git mv *)",
+      "Bash(npm start *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(jobs -p)",
+      "Bash(xargs -r kill)",
+      "Bash(npx --yes create-expo-app@latest mobile --template blank --no-install)"
     ]
   }
 }
