@@ -19,6 +19,27 @@ const ALLOWED_DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delega
 const generateTrackingNumber = () =>
     `TKL-${crypto.randomBytes(4).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
+/* The CompletionToken is the shared secret of the QR handshake — the
+   ONLY caller allowed to see it is the client who owns the row. Anyone
+   else (company, admin, unauthenticated would-be readers) must get a
+   payload with CompletionToken stripped. We delete the key entirely
+   rather than null-it so it cannot be re-introduced via spread. */
+const sanitizeApplicationRow = (row, req) => {
+    if (!row || typeof row !== 'object') return row;
+    const session = req?.session;
+    const callerIsOwnerClient =
+        session?.role === 'client' &&
+        session?.userId != null &&
+        row.ClientID != null &&
+        Number(session.userId) === Number(row.ClientID);
+    if (callerIsOwnerClient) return row;
+    const { CompletionToken: _omit, ...rest } = row;
+    return rest;
+};
+
+const sanitizeApplicationRows = (rows, req) =>
+    Array.isArray(rows) ? rows.map((row) => sanitizeApplicationRow(row, req)) : rows;
+
 export const createApplication = async (req, res, next) => {
     try {
         /* The application is filed by the logged-in client. The signed-in
@@ -130,7 +151,7 @@ export const getApplication = (req, res) => {
             [ApplicationID],
             function (err, result) {
                 if (err) throw err;
-                res.json(result);
+                res.json(sanitizeApplicationRows(result, req));
             }
         );
         return;
@@ -170,7 +191,7 @@ export const getApplication = (req, res) => {
 
     db.query(sql, params, function (err, result) {
         if (err) throw err;
-        res.json(result);
+        res.json(sanitizeApplicationRows(result, req));
     });
 };
 
@@ -213,8 +234,87 @@ export const searchApplication = (req, res) => {
             console.error(err);
             return res.status(500).json({ error: 'Database error' });
         }
-        res.json(result);
+        res.json(sanitizeApplicationRows(result, req));
     });
+};
+
+/* QR handshake: the company physically scans the QR rendered on the
+   client's screen. The payload is `TrackingNumber:CompletionToken`; we
+   verify the token belongs to the scanning company and that the app is
+   currently 'In Progress', then mark it 'Completed' and burn the token. */
+export const completeViaQr = async (req, res, next) => {
+    const CompanyID = req.session?.companyId;
+    if (!CompanyID) {
+        return res.status(401).json({ ok: false, message: 'Company sign-in required.' });
+    }
+
+    const qrPayload = String(req.body?.qrPayload ?? '').trim();
+    if (!qrPayload) {
+        return res.status(400).json({ ok: false, message: 'qrPayload is required.' });
+    }
+
+    const sepIdx = qrPayload.indexOf(':');
+    if (sepIdx <= 0 || sepIdx === qrPayload.length - 1) {
+        return res.status(400).json({ ok: false, message: 'qrPayload must be in the format "TrackingNumber:Token".' });
+    }
+    const trackingNumber = qrPayload.slice(0, sepIdx).trim();
+    const token = qrPayload.slice(sepIdx + 1).trim();
+    if (!trackingNumber || !token) {
+        return res.status(400).json({ ok: false, message: 'qrPayload must contain both a tracking number and a token.' });
+    }
+
+    const conn = await db.pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        const [rows] = await conn.query(
+            "SELECT * FROM application WHERE CompletionToken = ? LIMIT 1",
+            [token]
+        );
+        if (rows.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({ ok: false, message: 'No active shipment matches this QR code.' });
+        }
+        const app = rows[0];
+
+        if (String(app.TrackingNumber) !== trackingNumber) {
+            await conn.rollback();
+            return res.status(400).json({ ok: false, message: 'QR payload tracking number does not match the token.' });
+        }
+        if (Number(app.CompanyID) !== Number(CompanyID)) {
+            await conn.rollback();
+            return res.status(403).json({ ok: false, message: 'This shipment does not belong to your company.' });
+        }
+        if (String(app.Status) !== 'In Progress') {
+            await conn.rollback();
+            return res.status(409).json({ ok: false, message: `Shipment is "${app.Status}", not "In Progress".` });
+        }
+
+        await conn.query(
+            "UPDATE application SET Status = 'Completed', CompletionDate = NOW(), CompletionToken = NULL WHERE ApplicationID = ?",
+            [app.ApplicationID]
+        );
+        await conn.query(
+            "UPDATE document SET VerficationStatus = 'Accepted' WHERE ApplicationID = ?",
+            [app.ApplicationID]
+        );
+
+        await conn.commit();
+        return res.status(200).json({
+            ok: true,
+            message: 'Shipment marked as completed.',
+            data: {
+                ApplicationID: app.ApplicationID,
+                TrackingNumber: app.TrackingNumber,
+                Status: 'Completed',
+            },
+        });
+    } catch (err) {
+        try { await conn.rollback(); } catch { /* ignore */ }
+        return next(err);
+    } finally {
+        conn.release();
+    }
 };
 
 export const updateApplication = async (req, res, next) => {
@@ -252,13 +352,20 @@ export const updateApplication = async (req, res, next) => {
            re-saving an application that's already Accepted must not
            double-insert a CompanyPayment row. */
         const isAccepting = newStatus === 'Accepted' && String(existing.Status) !== 'Accepted';
+        /* The QR handshake token is minted on the first transition into
+           'In Progress'. We don't re-roll on subsequent saves so the token
+           the client is currently displaying stays valid until completion. */
+        const isStartingProgress = newStatus === 'In Progress' && String(existing.Status) !== 'In Progress';
         const CompletionDate = req.body.CompletionDate !== undefined
             ? req.body.CompletionDate
             : (isCompleting ? new Date() : existing.CompletionDate);
+        const CompletionToken = isStartingProgress && !existing.CompletionToken
+            ? crypto.randomUUID()
+            : existing.CompletionToken;
 
         await conn.query(
-            "UPDATE application SET `PaymentType` = ?, `CompletionDate` = ?, `SubmissionDate` = ?, `TrackingNumber` = ?, `Status` = ?, `DeliveryAddress` = ?, `CompanyID` = ?, `CategoryID` = ?, `ClientID` = ?, `PortID` = ? WHERE ApplicationID = ?",
-            [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompanyID, CategoryID, ClientID, PortID, ApplicationID]
+            "UPDATE application SET `PaymentType` = ?, `CompletionDate` = ?, `SubmissionDate` = ?, `TrackingNumber` = ?, `Status` = ?, `DeliveryAddress` = ?, `CompletionToken` = ?, `CompanyID` = ?, `CategoryID` = ?, `ClientID` = ?, `PortID` = ? WHERE ApplicationID = ?",
+            [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompletionToken, CompanyID, CategoryID, ClientID, PortID, ApplicationID]
         );
 
         if (isCompleting) {

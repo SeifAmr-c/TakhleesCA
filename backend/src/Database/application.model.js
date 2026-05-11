@@ -9,6 +9,7 @@ export async function initApplicationTable(db) {
             Status ENUM('Pending', 'In Progress', 'Completed') NOT NULL,
             DeliveryAddress VARCHAR(255) NOT NULL,
             ACID VARCHAR(19) NOT NULL,
+            CompletionToken VARCHAR(255) UNIQUE,
             CompanyID INT NOT NULL,
             CategoryID INT NOT NULL,
             ClientID INT NOT NULL,

@@ -1,6 +1,7 @@
 import express from "express";
 import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
+import cors from "cors";
 
 import { errorHandler } from "./middleware/errorHandler.js";
 import userRouter from "./modules/user/user_controller.js";
@@ -23,6 +24,28 @@ export const bootstrap = () => {
   // -----------------------------
   // Middlewares
   // -----------------------------
+  /* CORS first so preflights pass before session/body parsing runs.
+     Dev: reflect any origin and allow credentials so the React web
+     client and the Expo mobile app (LAN IP / 10.0.2.2) all work. */
+  app.use(cors({
+    origin: (origin, callback) => callback(null, true),
+    credentials: true,
+  }));
+
+  /* React Native's native networking stack force-appends cookies from
+     its internal jar to whatever Cookie header we set manually,
+     producing `connect.sid=X,connect.sid=X` on the wire. cookie-parser
+     then refuses to parse this and express-session falls back to a
+     fresh empty session, breaking auth. Collapse any comma-joined
+     duplicates to the first segment before downstream middleware
+     touches the header. */
+  app.use((req, _res, next) => {
+    if (req.headers.cookie && req.headers.cookie.includes(',')) {
+      req.headers.cookie = req.headers.cookie.split(',')[0].trim();
+    }
+    next();
+  });
+
   app.use(express.json());
 
   const MySQLStore = MySQLStoreFactory(session);
@@ -34,8 +57,6 @@ export const bootstrap = () => {
     createDatabaseTable: true,
   });
 
-  const isProduction = false;
-
   app.use(session({
     secret: 'dev-local-session-secret-change-me',
     store: sessionStore,
@@ -44,8 +65,13 @@ export const bootstrap = () => {
     cookie: {
       maxAge: 30 * 60 * 1000,
       httpOnly: true,
+      /* sameSite must be 'lax' for local HTTP. 'none' would silently
+         drop the cookie unless secure: true is also set, which breaks
+         http://localhost dev. */
       sameSite: 'lax',
-      secure: isProduction,
+      /* secure must be false over plain HTTP — otherwise the browser /
+         RN networking stack will refuse to store or send the cookie. */
+      secure: false,
     },
   }));
 

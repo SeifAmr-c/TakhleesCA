@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
@@ -61,6 +62,7 @@ function shapeApplication(raw) {
     TrackingNumber: raw.TrackingNumber || null,
     CategoryName: raw.CategoryName || null,
     CategoryID: raw.CategoryID || null,
+    CompletionToken: raw.CompletionToken || null,
   };
 }
 
@@ -129,6 +131,56 @@ function ShipmentRow({ a, onLeaveReview, isReviewed }) {
           </div>
         ))}
       </div>
+
+      {a.Status === "in_progress" && a.CompletionToken && a.TrackingNumber && (
+        <>
+          <hr className="divider" />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+              padding: "20px 16px",
+              borderRadius: 12,
+              background:
+                "linear-gradient(180deg, oklch(98% 0.012 200) 0%, oklch(95% 0.02 200) 100%)",
+              border: "1px solid var(--line)",
+            }}
+          >
+            <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
+              Completion handshake
+            </span>
+            <div
+              style={{
+                padding: 12,
+                background: "#fff",
+                borderRadius: 10,
+                boxShadow: "0 1px 2px oklch(15% 0.04 245 / 0.06)",
+                lineHeight: 0,
+              }}
+            >
+              <QRCodeSVG
+                value={`${a.TrackingNumber}:${a.CompletionToken}`}
+                size={168}
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+            <p
+              style={{
+                margin: 0,
+                maxWidth: 320,
+                textAlign: "center",
+                fontSize: 13,
+                color: "var(--ink-soft)",
+              }}
+            >
+              Show this QR code to the clearance company to complete your shipment.
+            </p>
+          </div>
+        </>
+      )}
 
       {isCompleted && (
         <>

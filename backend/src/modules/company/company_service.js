@@ -125,8 +125,23 @@ export const loginCompany = async (req, res, next) => {
             return res.status(401).json({ ok: false, message: "Invalid email or password." });
         }
 
+        /* Regenerate the session ID on login (prevents session fixation
+           and gives express-mysql-session a clean row to INSERT into). */
+        await new Promise((resolve, reject) => {
+            req.session.regenerate((err) => (err ? reject(err) : resolve()));
+        });
+
         req.session.companyId = companyRow.CompanyID;
         req.session.role = "company";
+
+        /* CRITICAL: express-mysql-session writes asynchronously. Without
+           an explicit save() the response (and Set-Cookie) can be flushed
+           to the client BEFORE the sessions row is committed, so the next
+           request looks up a session that does not yet exist and
+           express-session silently spawns a fresh empty one. */
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => (err ? reject(err) : resolve()));
+        });
 
         return res.status(200).json({
             ok: true,

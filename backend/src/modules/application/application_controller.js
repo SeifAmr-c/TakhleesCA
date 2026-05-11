@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import * as applicationService from "./application_service.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireCompany, requireSession } from "../../middleware/auth.js";
 
 /* Buffers the entire multipart payload in memory so the service can
    stream each file to Cloudinary. `any()` so we don't have to declare
@@ -15,8 +15,9 @@ const applicationUpload = multer({
 const router = Router();
 
 router.post("/", requireAuth, applicationUpload.any(), applicationService.createApplication);
-router.get("/", applicationService.getApplication);
-router.get("/search", applicationService.searchApplication);
+router.post("/complete-via-qr", requireCompany, applicationService.completeViaQr);
+router.get("/", requireSession, applicationService.getApplication);
+router.get("/search", requireSession, applicationService.searchApplication);
 router.delete("/", applicationService.deleteApplication);
 router.put("/", applicationService.updateApplication);
 

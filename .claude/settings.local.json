@@ -25,7 +25,10 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/)",
       "Bash(jobs -p)",
       "Bash(xargs -r kill)",
-      "Bash(npx --yes create-expo-app@latest mobile --template blank --no-install)"
+      "Bash(npx --yes create-expo-app@latest mobile --template blank --no-install)",
+      "Bash(npx expo *)",
+      "Bash(git *)",
+      "Bash(xxd \"C:/Users/seifa/Desktop/node MySQL/mobile/secrets/AuthKey_2TJ98T7SXQ.p8\")"
     ]
   }
 }

@@ -21,3 +21,13 @@ export const requireCompany = (req, res, next) => {
   }
   return next();
 };
+
+/* Either a signed-in User (client/admin) or a signed-in Company is enough.
+   Use this for endpoints both audiences legitimately read — e.g. the
+   application list, where clients see their own and companies see theirs. */
+export const requireSession = (req, res, next) => {
+  if (req.session && (req.session.userId || req.session.companyId)) {
+    return next();
+  }
+  return res.status(401).json({ ok: false, message: "Authentication required." });
+};
