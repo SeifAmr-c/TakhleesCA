@@ -9,11 +9,13 @@ import {
   getCompany,
   updateCompanyProfile,
   updateCompanyPricing,
+  deleteCompanyAccount,
+  canDeleteCompany,
 } from "../../api/companies.js";
 import { listCategories } from "../../api/applications.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
 import { listPorts, listCompanyPorts, addCompanyPort, removeCompanyPort } from "../../api/ports.js";
-import { useAuth, setAuth } from "../../api/authState.js";
+import { useAuth, setAuth, clearAuth } from "../../api/authState.js";
 import { getCroppedImage } from "../../utils/cropImage.js";
 
 const MAX_LOGO_BYTES = 4 * 1024 * 1024;
@@ -859,6 +861,87 @@ function PortsForm({ companyId }) {
   );
 }
 
+/* ---------- Danger zone (account deletion) ----------
+   The Delete button is gated by /company/can-delete so the company
+   can't click through into the server's 400 path. While the flag is
+   still loading (`null`) we keep the button disabled to be safe. */
+function DangerZoneCard() {
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
+  const [hasActiveApplications, setHasActiveApplications] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await canDeleteCompany();
+        if (!active) return;
+        setHasActiveApplications(Boolean(res?.hasActiveApplications));
+      } catch {
+        if (!active) return;
+        setHasActiveApplications(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const res = await deleteCompanyAccount();
+      if (res?.ok) {
+        clearAuth();
+        navigate("/company/login", { replace: true });
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const blocked = hasActiveApplications !== false;
+  const isDisabled = blocked || deleting;
+
+  return (
+    <div
+      className="card card-pad-lg"
+      style={{ borderColor: "var(--signal-stop, #dc2626)" }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+        <p className="card-subtitle" style={{ margin: 0, textAlign: "center" }}>
+          Deleting your company is permanent. You won't be able to do this while
+          you have any active applications.
+        </p>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={isDisabled}
+          style={{
+            background: isDisabled ? "var(--gray-200, #e5e7eb)" : "var(--signal-stop, #dc2626)",
+            color: isDisabled ? "var(--ink-faint, #94a3b8)" : "#fff",
+            border: `1px solid ${isDisabled ? "var(--line, #e5e7eb)" : "var(--signal-stop, #dc2626)"}`,
+            padding: "10px 20px",
+            borderRadius: 8,
+            fontWeight: 600,
+            cursor: isDisabled ? "not-allowed" : "pointer",
+            opacity: isDisabled ? 0.65 : 1,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {deleting ? "Deleting…" : "Delete account"}
+        </button>
+        {hasActiveApplications === true && (
+          <span style={{ fontSize: 12, color: "var(--ink-soft, #64748b)", textAlign: "center" }}>
+            Account deletion is disabled because you have active applications.
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Page ---------- */
 function CompanyProfileEdit() {
   const auth = useAuth();
@@ -959,6 +1042,7 @@ function CompanyProfileEdit() {
             />
             <PricingForm companyId={companyId} />
             <PortsForm companyId={companyId} />
+            <DangerZoneCard />
           </Reveal>
         )}
       </div>

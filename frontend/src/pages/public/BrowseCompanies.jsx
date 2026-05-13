@@ -12,7 +12,7 @@ function StarRating({ avg, count }) {
   return (
     <div className="row" style={{ gap: 3, marginTop: 6, alignItems: "center" }}>
       {[1, 2, 3, 4, 5].map((i) => (
-        <Icon key={i} name="star" size={12} color={i <= filled ? "var(--safety)" : "var(--line-strong)"} />
+        <Icon key={i} name="star" size={12} color={i <= filled ? "var(--safety)" : "var(--line-strong)"} filled={i <= filled} />
       ))}
       <span style={{ fontSize: 12, color: "var(--ink-soft)", marginLeft: 4 }}>
         {avg} &nbsp;·&nbsp; {count} {count === 1 ? "review" : "reviews"}

@@ -217,6 +217,69 @@ export const getCompany = async (req, res, next) => {
     });
 };
 
+/* GET /company/can-delete  (requires company session)
+   Frontend gates the Delete button on this flag so the company never
+   triggers the 400 path. */
+export const canDeleteCompany = async (req, res, next) => {
+    try {
+        const CompanyID = req.session.companyId;
+        const rows = await runQuery(
+            "SELECT COUNT(*) AS c FROM application WHERE CompanyID = ? AND Status IN ('Pending', 'In Progress')",
+            [CompanyID]
+        );
+        return res.json({ ok: true, hasActiveApplications: Number(rows[0].c) > 0 });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+/* DELETE /company/profile  (requires company session)
+   Self-deletion guarded by an active-application check — a company
+   cannot walk away from work it's currently handling. */
+export const deleteCompanyProfile = async (req, res, next) => {
+    const CompanyID = req.session.companyId;
+
+    try {
+        const active = await runQuery(
+            "SELECT COUNT(*) AS c FROM application WHERE CompanyID = ? AND Status IN ('Pending', 'In Progress')",
+            [CompanyID]
+        );
+        if (Number(active[0].c) > 0) {
+            return res.status(400).json({ ok: false, message: "Cannot delete company if there is an active application." });
+        }
+
+        const conn = await db.pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            /* Clear every table that FKs into company before removing
+               the parent. Pricing rows and port assignments are pure
+               configuration — drop them. CompanyPayment and Application
+               are historical financial / audit records — anonymize by
+               nulling CompanyID so the rows survive. Active
+               applications are already excluded by the guard above. */
+            await conn.query("DELETE FROM companycategory WHERE CompanyID = ?", [CompanyID]);
+            await conn.query("DELETE FROM companyport WHERE CompanyID = ?", [CompanyID]);
+            await conn.query("UPDATE companypayment SET CompanyID = NULL WHERE CompanyID = ?", [CompanyID]);
+            await conn.query("UPDATE application SET CompanyID = NULL WHERE CompanyID = ?", [CompanyID]);
+            await conn.query("DELETE FROM company WHERE CompanyID = ?", [CompanyID]);
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            conn.release();
+        }
+
+        req.session.destroy((err) => {
+            if (err) return next(err);
+            res.clearCookie('connect.sid');
+            return res.status(200).json({ ok: true, message: "Company deleted successfully." });
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 export const deleteCompany = (req, res) => {
     const CompanyID = req.query.CompanyID;
 

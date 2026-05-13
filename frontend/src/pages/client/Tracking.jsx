@@ -5,7 +5,7 @@ import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
-import { listApplications } from "../../api/applications.js";
+import { listApplications, cancelApplication } from "../../api/applications.js";
 import { submitReview, checkApplicationReviewed } from "../../api/reviews.js";
 import { useAuth } from "../../api/authState.js";
 
@@ -66,10 +66,11 @@ function shapeApplication(raw) {
   };
 }
 
-function ShipmentRow({ a, onLeaveReview, onRevealQr, isReviewed }) {
+function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isReviewed }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
   const stepIdx = statusToStepIndex(a.Status);
   const isCompleted = a.Status === "completed";
+  const isPending = a.Status === "pending";
   const initials = (a.CompanyName || "TK").split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
   const canRevealQr = a.Status === "in_progress" && !!a.CompletionToken && !!a.TrackingNumber;
 
@@ -177,6 +178,30 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, isReviewed }) {
         </>
       )}
 
+      {isPending && (
+        <>
+          <hr className="divider" />
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => onCancel?.(a)}
+              disabled={cancelling}
+              style={{
+                background: "var(--signal-stop, #dc2626)",
+                color: "#fff",
+                border: "1px solid var(--signal-stop, #dc2626)",
+                fontWeight: 600,
+                opacity: cancelling ? 0.7 : 1,
+                cursor: cancelling ? "not-allowed" : "pointer",
+              }}
+            >
+              {cancelling ? "Cancelling…" : "Cancel application"}
+            </button>
+          </div>
+        </>
+      )}
+
       {isCompleted && (
         <>
           <hr className="divider" />
@@ -188,7 +213,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, isReviewed }) {
               disabled={isReviewed}
               title={isReviewed ? "You've already reviewed this shipment" : undefined}
             >
-              <Icon name="star" size={14} />
+              <Icon name="star" size={14} filled />
               {isReviewed ? "Reviewed" : "Leave a review"}
             </button>
           </div>
@@ -210,6 +235,11 @@ function Tracking() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  /* Bump after a cancel to re-run the list fetch. Kept as a counter so
+     successive cancellations always change the dep value. */
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [cancellingId, setCancellingId] = useState(null);
+  const [cancelError, setCancelError] = useState("");
 
   const [qrTarget, setQrTarget] = useState(null);
   const [reviewTarget, setReviewTarget] = useState(null);
@@ -269,7 +299,27 @@ function Tracking() {
       }
     })();
     return () => { active = false; };
-  }, [clientId, location.search]);
+  }, [clientId, location.search, refreshTick]);
+
+  const handleCancelApplication = async (row) => {
+    setCancelError("");
+    if (!window.confirm("Cancel this application? This cannot be undone.")) return;
+    setCancellingId(row.ApplicationID);
+    try {
+      const res = await cancelApplication(row.ApplicationID);
+      if (res?.ok) {
+        setRefreshTick((n) => n + 1);
+      } else {
+        setCancelError(res?.message || "Couldn't cancel this application.");
+      }
+    } catch (err) {
+      setCancelError(
+        err?.response?.data?.message || "Couldn't cancel this application."
+      );
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const openReviewModal = (row) => {
     setReviewTarget(row);
@@ -360,6 +410,11 @@ function Tracking() {
       </div>
 
       {error && <div className="banner-error"><Icon name="bell" size={16} />{error}</div>}
+      {cancelError && (
+        <div className="banner-error" style={{ marginTop: error ? 8 : 0 }}>
+          <Icon name="bell" size={16} />{cancelError}
+        </div>
+      )}
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
@@ -381,6 +436,8 @@ function Tracking() {
                 a={a}
                 onLeaveReview={openReviewModal}
                 onRevealQr={setQrTarget}
+                onCancel={handleCancelApplication}
+                cancelling={cancellingId === a.ApplicationID}
                 isReviewed={reviewedIds.has(Number(a.ApplicationID))}
               />
             ))}
@@ -531,6 +588,7 @@ function Tracking() {
                           name="star"
                           size={20}
                           color={i <= reviewRating ? "var(--accent)" : "var(--line-strong)"}
+                          filled={i <= reviewRating}
                         />
                       </button>
                     ))}

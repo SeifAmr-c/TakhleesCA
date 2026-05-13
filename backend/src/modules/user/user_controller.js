@@ -22,6 +22,8 @@ router.post("/login", loginLimiter, userService.login);
 router.post("/logout", userService.logout);
 router.delete("/", userService.deleteUser);
 router.put("/profile", requireAuth, userService.updateProfile);
+router.get("/can-delete", requireAuth, userService.canDelete);
+router.delete("/profile", requireAuth, userService.deleteProfile);
 router.put("/", userService.updateUser);
 router.put("/client", userService.updateClient);
 router.put("/admin", userService.updateAdmin);

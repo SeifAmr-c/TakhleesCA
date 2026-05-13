@@ -119,6 +119,65 @@ export const deleteUser = async (req, res, next) => {
     console.log("Delete request processed for UserID [" + uid + "]");
 };
 
+// ── canDelete (frontend gates the delete button on this flag) ──
+export const canDelete = async (req, res, next) => {
+    try {
+        const uid = req.session.userId;
+        const rows = await runQuery(
+            "SELECT COUNT(*) AS c FROM application WHERE ClientID = ? AND Status IN ('Pending', 'In Progress')",
+            [uid]
+        );
+        return res.json({ ok: true, hasActiveApplications: Number(rows[0].c) > 0 });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+// ── deleteProfile (session user self-deletes) ────────────
+export const deleteProfile = async (req, res, next) => {
+    const uid = req.session.userId;
+
+    try {
+        const active = await runQuery(
+            "SELECT COUNT(*) AS c FROM application WHERE ClientID = ? AND Status IN ('Pending', 'In Progress')",
+            [uid]
+        );
+        if (Number(active[0].c) > 0) {
+            return res.status(400).json({ ok: false, message: "Cannot delete account if there is an active application." });
+        }
+
+        const conn = await db.pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            /* Clear out everything that FKs into Client/User before
+               removing the parent rows. Support tickets are cheap
+               correspondence — delete them outright. Completed
+               applications are historical financial records — anonymize
+               by nulling ClientID instead of dropping the row. Active
+               applications are already ruled out by the guard above. */
+            await conn.query("DELETE FROM supportticket WHERE ClientID = ?", [uid]);
+            await conn.query("UPDATE application SET ClientID = NULL WHERE ClientID = ?", [uid]);
+            await conn.query("DELETE FROM Client WHERE ClientID = ?", [uid]);
+            await conn.query("DELETE FROM Admin WHERE AdminID = ?", [uid]);
+            await conn.query("DELETE FROM User WHERE UserID = ?", [uid]);
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            conn.release();
+        }
+
+        req.session.destroy((err) => {
+            if (err) return next(err);
+            res.clearCookie('connect.sid');
+            return res.status(200).json({ ok: true, message: "Account deleted successfully." });
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 // ── updateUser ───────────────────────────────────────────
 export const updateUser = async (req, res) => {
     console.log('PUT Request Received');

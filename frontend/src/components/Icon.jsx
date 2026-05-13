@@ -55,17 +55,22 @@ const PATHS = {
     "M3 3l18 18M10 10a3 3 0 0 0 4 4M9.9 4.2A10 10 0 0 1 22 12c-.6 1.1-1.5 2.3-2.7 3.4M6.1 6.1C3.7 7.8 2 10 2 12c0 0 4 7 10 7 1.6 0 3.1-.4 4.5-1",
 };
 
-function Icon({ name, size = 20, strokeWidth = 1.8, color, style, className }) {
+function Icon({ name, size = 20, strokeWidth = 1.8, color, fill, filled, style, className }) {
   const d = PATHS[name];
   if (!d) return null;
   const stroke = color || "currentColor";
+  /* `filled` (boolean) is a convenience that solid-fills the path with
+     the same colour as the stroke — used for star ratings and other
+     glyphs where we want a solid silhouette. `fill` (string) is the
+     escape hatch for explicit colours. */
+  const resolvedFill = fill || (filled ? stroke : "none");
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={resolvedFill}
       stroke={stroke}
       strokeWidth={strokeWidth}
       strokeLinecap="round"

@@ -600,7 +600,7 @@ function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
             className="btn btn-accent"
             onClick={onLeaveReview}
           >
-            <Icon name="star" size={14} /> Leave a review
+            <Icon name="star" size={14} filled /> Leave a review
           </button>
         )}
       </div>

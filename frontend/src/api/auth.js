@@ -37,3 +37,22 @@ export const updateUserProfile = async ({ FirstName, LastName, Email }) => {
   const { data } = await api.put("/user/profile", { FirstName, LastName, Email });
   return data;
 };
+
+// GET /user/can-delete (requires user session)
+//   Used by the profile-edit page to freeze the Delete button before
+//   the user can trigger the 400 path.
+//   200: { ok: true, hasActiveApplications: boolean }
+export const canDeleteUser = async () => {
+  const { data } = await api.get("/user/can-delete");
+  return data;
+};
+
+// DELETE /user/profile (requires user session)
+//   Account self-deletion. Backend blocks with 400 when the user has
+//   any Pending / In Progress applications.
+//   200: { ok: true, message }
+//   400: { ok: false, message: "Cannot delete account if there is an active application." }
+export const deleteUserAccount = async () => {
+  const { data } = await api.delete("/user/profile");
+  return data;
+};

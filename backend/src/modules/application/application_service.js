@@ -274,6 +274,37 @@ export const getApplication = (req, res) => {
     });
 };
 
+/* DELETE /application/:id/cancel  (requires client session)
+   Client-initiated cancellation. Only Pending rows belonging to the
+   signed-in client can be cancelled; anything in progress or further
+   along must be handled by the company side. */
+export const cancelApplication = async (req, res, next) => {
+    try {
+        const ClientID = req.session?.userId;
+        if (!ClientID) {
+            return res.status(401).json({ ok: false, message: "Authentication required." });
+        }
+
+        const ApplicationID = Number(req.params.id);
+        if (!Number.isInteger(ApplicationID) || ApplicationID < 1) {
+            return res.status(400).json({ ok: false, message: "Invalid application id." });
+        }
+
+        const result = await runQuery(
+            "DELETE FROM application WHERE ApplicationID = ? AND ClientID = ? AND Status = 'Pending'",
+            [ApplicationID, ClientID]
+        );
+
+        if (!result.affectedRows) {
+            return res.status(400).json({ ok: false, message: "Application cannot be cancelled." });
+        }
+
+        return res.status(200).json({ ok: true, message: "Application cancelled successfully." });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 export const deleteApplication = (req, res) => {
     const ApplicationID = req.query.ApplicationID;
 

@@ -44,3 +44,14 @@ export const listCategories = async () => {
   const { data } = await api.get("/category");
   return data;
 };
+
+// DELETE /application/:id/cancel (requires user session)
+//   Client-initiated cancellation. Backend deletes only when the row
+//   belongs to the signed-in client AND is still 'Pending'; otherwise
+//   responds 400.
+//   200: { ok: true, message }
+//   400: { ok: false, message: "Application cannot be cancelled." }
+export const cancelApplication = async (applicationId) => {
+  const { data } = await api.delete(`/application/${applicationId}/cancel`);
+  return data;
+};

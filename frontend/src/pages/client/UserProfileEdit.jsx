@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
-import { useAuth, setAuth } from "../../api/authState.js";
-import { updateUserProfile } from "../../api/auth.js";
+import { useAuth, setAuth, clearAuth } from "../../api/authState.js";
+import { updateUserProfile, deleteUserAccount, canDeleteUser } from "../../api/auth.js";
 
 const isValidEmail = (email) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
@@ -33,6 +33,11 @@ function UserProfileEdit() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
   const [serverError, setServerError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  /* hasActiveApplications gates the Delete button. null = still loading
+     the flag (button shows disabled with no helper text yet), true =
+     blocked, false = safe to delete. */
+  const [hasActiveApplications, setHasActiveApplications] = useState(null);
   const successTimerRef = useRef(null);
 
   useEffect(() => {
@@ -42,6 +47,24 @@ function UserProfileEdit() {
       Email: user?.Email || "",
     });
   }, [user?.UserID, user?.FirstName, user?.LastName, user?.Email]);
+
+  /* Pull the can-delete flag once on mount so the button reflects the
+     real eligibility before the user ever clicks. On failure we leave
+     the button disabled — safer than silently letting the click through. */
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await canDeleteUser();
+        if (!active) return;
+        setHasActiveApplications(Boolean(res?.hasActiveApplications));
+      } catch {
+        if (!active) return;
+        setHasActiveApplications(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   /* Auto-hide the success message after 1500ms. */
   useEffect(() => {
@@ -104,6 +127,23 @@ function UserProfileEdit() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /* Account self-deletion. The button is gated upstream by
+     hasActiveApplications so this handler never has to surface the
+     server's 400 path. */
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Are you sure? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const res = await deleteUserAccount();
+      if (res?.ok) {
+        clearAuth();
+        navigate("/login", { replace: true });
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -231,6 +271,56 @@ function UserProfileEdit() {
               {serverError}
             </div>
           )}
+
+          {(() => {
+            /* Treat `null` (flag still loading) and `true` as blocked. The
+               helper text is only shown when we know for sure the user
+               has active applications. */
+            const blocked = hasActiveApplications !== false;
+            const isDisabled = blocked || deleting || submitting;
+            return (
+              <div
+                style={{
+                  marginTop: 32,
+                  paddingTop: 20,
+                  borderTop: "1px solid var(--line)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 13, color: "var(--ink-soft)", textAlign: "center" }}>
+                  Deleting your account is permanent and removes your profile data.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={isDisabled}
+                  style={{
+                    background: isDisabled ? "var(--gray-200, #e5e7eb)" : "var(--signal-stop, #dc2626)",
+                    color: isDisabled ? "var(--ink-faint, #94a3b8)" : "#fff",
+                    border: `1px solid ${isDisabled ? "var(--line, #e5e7eb)" : "var(--signal-stop, #dc2626)"}`,
+                    padding: "10px 20px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: isDisabled ? "not-allowed" : "pointer",
+                    opacity: isDisabled ? 0.65 : 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  {deleting ? "Deleting…" : "Delete account"}
+                </button>
+                {hasActiveApplications === true && (
+                  <span style={{ fontSize: 12, color: "var(--ink-soft, #64748b)", textAlign: "center" }}>
+                    Account deletion is disabled because you have active applications.
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </form>
       </div>
     </PublicLayout>

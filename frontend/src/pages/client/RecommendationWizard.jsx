@@ -41,6 +41,7 @@ function StarRating({ avg }) {
           name="star"
           size={13}
           color={i <= filled ? "var(--safety)" : "var(--line-strong)"}
+          filled={i <= filled}
         />
       ))}
       <span style={{ fontSize: 12, color: "var(--ink-soft)", marginLeft: 4 }} className="tabular">

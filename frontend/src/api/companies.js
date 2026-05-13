@@ -63,6 +63,23 @@ export const updateCompanyProfile = async (payload) => {
   return data;
 };
 
+// GET /company/can-delete (requires company session)
+//   200: { ok: true, hasActiveApplications: boolean }
+export const canDeleteCompany = async () => {
+  const { data } = await api.get("/company/can-delete");
+  return data;
+};
+
+// DELETE /company/profile (requires company session)
+//   Self-deletion. Backend blocks with 400 when the company has any
+//   Pending / In Progress applications.
+//   200: { ok: true, message }
+//   400: { ok: false, message: "Cannot delete company if there is an active application." }
+export const deleteCompanyAccount = async () => {
+  const { data } = await api.delete("/company/profile");
+  return data;
+};
+
 // Backend contract (PUT /company/pricing, requires company session):
 //   body: { prices: [{ CategoryID, Price }, ...] }
 //   200:  { ok: true, data: { prices: [...] } }

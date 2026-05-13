@@ -133,7 +133,7 @@ function CompanyDetails() {
                     <span className="badge badge-success"><Icon name="shield" size={12} /> Verified</span>
                     {avgRating != null && (
                       <span className="badge badge-dark">
-                        <Icon name="star" size={12} color="var(--accent)" />
+                        <Icon name="star" size={12} color="var(--accent)" filled />
                         <strong>{avgRating}</strong>
                         <span className="muted">· {reviews.length} {reviews.length === 1 ? "review" : "reviews"}</span>
                       </span>
@@ -293,7 +293,7 @@ function CompanyDetails() {
                             <strong style={{ color: "var(--ink)" }}>{fullName}</strong>
                             <div className="row" style={{ marginTop: 2 }}>
                               {[1, 2, 3, 4, 5].map((i) => (
-                                <Icon key={i} name="star" size={12} color={i <= r.Rating ? "var(--safety)" : "var(--line-strong)"} />
+                                <Icon key={i} name="star" size={12} color={i <= r.Rating ? "var(--safety)" : "var(--line-strong)"} filled={i <= r.Rating} />
                               ))}
                             </div>
                           </div>
