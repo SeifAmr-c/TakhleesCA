@@ -66,11 +66,12 @@ function shapeApplication(raw) {
   };
 }
 
-function ShipmentRow({ a, onLeaveReview, isReviewed }) {
+function ShipmentRow({ a, onLeaveReview, onRevealQr, isReviewed }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
   const stepIdx = statusToStepIndex(a.Status);
   const isCompleted = a.Status === "completed";
   const initials = (a.CompanyName || "TK").split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  const canRevealQr = a.Status === "in_progress" && !!a.CompletionToken && !!a.TrackingNumber;
 
   return (
     <div className="card card-hover">
@@ -132,7 +133,7 @@ function ShipmentRow({ a, onLeaveReview, isReviewed }) {
         ))}
       </div>
 
-      {a.Status === "in_progress" && a.CompletionToken && a.TrackingNumber && (
+      {canRevealQr && (
         <>
           <hr className="divider" />
           <div
@@ -140,7 +141,7 @@ function ShipmentRow({ a, onLeaveReview, isReviewed }) {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 12,
+              gap: 10,
               padding: "20px 16px",
               borderRadius: 12,
               background:
@@ -151,22 +152,6 @@ function ShipmentRow({ a, onLeaveReview, isReviewed }) {
             <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
               Completion handshake
             </span>
-            <div
-              style={{
-                padding: 12,
-                background: "#fff",
-                borderRadius: 10,
-                boxShadow: "0 1px 2px oklch(15% 0.04 245 / 0.06)",
-                lineHeight: 0,
-              }}
-            >
-              <QRCodeSVG
-                value={`${a.TrackingNumber}:${a.CompletionToken}`}
-                size={168}
-                level="M"
-                includeMargin={false}
-              />
-            </div>
             <p
               style={{
                 margin: 0,
@@ -176,8 +161,18 @@ function ShipmentRow({ a, onLeaveReview, isReviewed }) {
                 color: "var(--ink-soft)",
               }}
             >
-              Show this QR code to the clearance company to complete your shipment.
+              Your QR code is hidden for security. Reveal it only when a clearance
+              officer is ready to scan.
             </p>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => onRevealQr?.(a)}
+              style={{ marginTop: 4 }}
+            >
+              <Icon name="lock" size={14} />
+              Reveal QR Code
+            </button>
           </div>
         </>
       )}
@@ -216,6 +211,7 @@ function Tracking() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [qrTarget, setQrTarget] = useState(null);
   const [reviewTarget, setReviewTarget] = useState(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
@@ -384,11 +380,95 @@ function Tracking() {
                 key={a.ApplicationID}
                 a={a}
                 onLeaveReview={openReviewModal}
+                onRevealQr={setQrTarget}
                 isReviewed={reviewedIds.has(Number(a.ApplicationID))}
               />
             ))}
           </div>
         </Reveal>
+      )}
+
+      {qrTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Completion QR code"
+          onClick={() => setQrTarget(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.7)",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            zIndex: 110,
+            backdropFilter: "blur(3px)",
+            WebkitBackdropFilter: "blur(3px)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: "#fff",
+              borderRadius: 20,
+              padding: 28,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 14,
+              boxShadow: "0 24px 60px rgba(0,0,0,0.45)",
+            }}
+          >
+            <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
+              Completion handshake
+            </span>
+            <div style={{ textAlign: "center" }}>
+              <div className="card-title" style={{ fontSize: 18 }}>
+                #{qrTarget.TrackingNumber}
+              </div>
+              <div style={{ color: "var(--ink-soft)", fontSize: 13, marginTop: 2 }}>
+                {qrTarget.CompanyName}
+              </div>
+            </div>
+            <div
+              style={{
+                padding: 16,
+                background: "#fff",
+                borderRadius: 14,
+                border: "1px solid var(--line)",
+                lineHeight: 0,
+              }}
+            >
+              <QRCodeSVG
+                value={`${qrTarget.TrackingNumber}:${qrTarget.CompletionToken}`}
+                size={280}
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+            <p
+              style={{
+                margin: 0,
+                maxWidth: 320,
+                textAlign: "center",
+                fontSize: 13,
+                color: "var(--ink-soft)",
+              }}
+            >
+              Hold your screen up to the clearance officer's scanner.
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setQrTarget(null)}
+              style={{ marginTop: 6 }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
       {reviewTarget && (

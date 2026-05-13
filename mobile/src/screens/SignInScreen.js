@@ -14,12 +14,16 @@ import {
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
-import { loginCompany } from '../api';
+import { loginCompany, loginUser } from '../api';
+import { brand, colors } from '../theme';
 
-const ACCENT = '#34D399';
-const ACCENT_DEEP = '#10B981';
+const ROLES = [
+  { key: 'company', label: 'Company' },
+  { key: 'client', label: 'Client' },
+];
 
 export default function SignInScreen({ onSignedIn }) {
+  const [role, setRole] = useState('company');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -33,8 +37,11 @@ export default function SignInScreen({ onSignedIn }) {
     setError(null);
     setSubmitting(true);
     try {
-      const company = await loginCompany(email.trim(), password);
-      onSignedIn?.(company);
+      const session =
+        role === 'company'
+          ? await loginCompany(email.trim(), password)
+          : await loginUser(email.trim(), password);
+      onSignedIn?.(session);
     } catch (e) {
       setError(e.message || 'Could not sign in.');
     } finally {
@@ -72,13 +79,43 @@ export default function SignInScreen({ onSignedIn }) {
               resizeMode="contain"
             />
             <Text style={styles.title}>Takhlees</Text>
-            <Text style={styles.subtitle}>Company portal</Text>
+            <Text style={styles.subtitle}>
+              {role === 'company' ? 'Company portal' : 'Client portal'}
+            </Text>
           </View>
 
           <BlurView intensity={40} tint="dark" style={styles.card}>
+            <View style={styles.segment}>
+              {ROLES.map((r) => {
+                const active = role === r.key;
+                return (
+                  <Pressable
+                    key={r.key}
+                    onPress={() => {
+                      if (submitting) return;
+                      setRole(r.key);
+                      setError(null);
+                    }}
+                    style={[styles.segmentItem, active && styles.segmentItemActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        active && styles.segmentTextActive,
+                      ]}
+                    >
+                      {r.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <Text style={styles.cardTitle}>Sign in</Text>
             <Text style={styles.cardHint}>
-              Use the email and password for your company account.
+              {role === 'company'
+                ? 'Use the email and password for your company account.'
+                : 'Use the email and password for your client account.'}
             </Text>
 
             <Text style={styles.label}>Email</Text>
@@ -90,7 +127,9 @@ export default function SignInScreen({ onSignedIn }) {
               keyboardType="email-address"
               returnKeyType="next"
               onSubmitEditing={() => passwordRef.current?.focus()}
-              placeholder="company@example.com"
+              placeholder={
+                role === 'company' ? 'company@example.com' : 'you@example.com'
+              }
               placeholderTextColor="rgba(255,255,255,0.4)"
               style={styles.input}
               editable={!submitting}
@@ -124,7 +163,7 @@ export default function SignInScreen({ onSignedIn }) {
               ]}
             >
               {submitting ? (
-                <ActivityIndicator color="#06231A" />
+                <ActivityIndicator color={colors.harbor950} />
               ) : (
                 <Text style={styles.buttonText}>Sign In</Text>
               )}
@@ -132,7 +171,9 @@ export default function SignInScreen({ onSignedIn }) {
           </BlurView>
 
           <Text style={styles.footer}>
-            Scan completion QR codes after signing in.
+            {role === 'company'
+              ? 'Scan completion QR codes after signing in.'
+              : 'Track your shipments after signing in.'}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -141,7 +182,7 @@ export default function SignInScreen({ onSignedIn }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0C1A2C' },
+  root: { flex: 1, backgroundColor: brand.background },
   flex: { flex: 1 },
   darkOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -157,13 +198,13 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 28 },
   logo: { width: 72, height: 72, marginBottom: 12 },
   title: {
-    color: '#fff',
+    color: brand.text,
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.7)',
+    color: brand.textSoft,
     fontSize: 14,
     marginTop: 4,
     letterSpacing: 1.2,
@@ -177,9 +218,34 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: 'rgba(15,23,42,0.45)',
   },
-  cardTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 18,
+  },
+  segmentItem: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 9,
+  },
+  segmentItemActive: {
+    backgroundColor: brand.tabActive,
+  },
+  segmentText: {
+    color: brand.textSoft,
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.4,
+  },
+  segmentTextActive: {
+    color: colors.harbor950,
+  },
+  cardTitle: { color: brand.text, fontSize: 22, fontWeight: '700' },
   cardHint: {
-    color: 'rgba(255,255,255,0.7)',
+    color: brand.textSoft,
     fontSize: 13,
     marginTop: 4,
     marginBottom: 18,
@@ -197,7 +263,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'ios' ? 14 : 10,
-    color: '#fff',
+    color: brand.text,
     fontSize: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -209,27 +275,27 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 22,
-    backgroundColor: ACCENT,
+    backgroundColor: brand.tabActive,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: ACCENT_DEEP,
+    shadowColor: colors.safety700,
     shadowOpacity: 0.4,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
   },
-  buttonPressed: { backgroundColor: ACCENT_DEEP },
-  buttonDisabled: { backgroundColor: 'rgba(52,211,153,0.4)' },
+  buttonPressed: { backgroundColor: colors.safety700 },
+  buttonDisabled: { backgroundColor: 'rgba(244,161,54,0.4)' },
   buttonText: {
-    color: '#06231A',
+    color: colors.harbor950,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   footer: {
-    color: 'rgba(255,255,255,0.5)',
+    color: brand.textFaint,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 24,

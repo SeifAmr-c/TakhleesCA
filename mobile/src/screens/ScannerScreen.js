@@ -9,17 +9,26 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { completeViaQr, logoutCompany } from '../api';
+import { completeViaQr } from '../api';
+import { brand } from '../theme';
 
-const ACCENT = '#34D399';
+const ACCENT = brand.tabActive;
 
-export default function ScannerScreen({ company, onSignOut }) {
+export default function ScannerScreen({ session, onSignOut }) {
+  const company = session?.company ?? null;
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState(null);
   const lockRef = useRef(false);
+  /* Tab-blur ghost scans: while the Scanner tab is animating out the
+     camera can still fire onBarcodeScanned with a partial frame, which
+     surfaces as a spurious "scan failed" alert on the Applications tab.
+     Gating both the CameraView mount and the scan callback on
+     isFocused stops the stale frame from reaching the handler. */
+  const isFocused = useIsFocused();
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
@@ -28,7 +37,7 @@ export default function ScannerScreen({ company, onSignOut }) {
   }, [permission, requestPermission]);
 
   async function handleScanned({ data }) {
-    if (lockRef.current || submitting || !scanning) return;
+    if (lockRef.current || submitting || !scanning || !isFocused) return;
     const payload = String(data || '').trim();
     if (!payload) return;
     lockRef.current = true;
@@ -48,10 +57,11 @@ export default function ScannerScreen({ company, onSignOut }) {
         { cancelable: false }
       );
     } catch (e) {
-      setLastResult({ ok: false, message: e.message });
+      const userMessage = 'Scan failed. Please contact the system admin.';
+      setLastResult({ ok: false, message: userMessage });
       Alert.alert(
         'Scan failed',
-        e.message || 'Could not complete this shipment.',
+        userMessage,
         [{ text: 'Try again', onPress: resumeScanning }],
         { cancelable: false }
       );
@@ -65,8 +75,7 @@ export default function ScannerScreen({ company, onSignOut }) {
     setScanning(true);
   }
 
-  async function handleSignOut() {
-    await logoutCompany();
+  function handleSignOut() {
     onSignOut?.();
   }
 
@@ -98,13 +107,15 @@ export default function ScannerScreen({ company, onSignOut }) {
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        active={scanning}
-        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={scanning ? handleScanned : undefined}
-      />
+      {isFocused ? (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          active={scanning && isFocused}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={scanning && isFocused ? handleScanned : undefined}
+        />
+      ) : null}
 
       <View style={styles.topBar} pointerEvents="box-none">
         <View>
@@ -130,7 +141,7 @@ export default function ScannerScreen({ company, onSignOut }) {
       <View style={styles.bottomBar} pointerEvents="box-none">
         {submitting ? (
           <View style={styles.statusPill}>
-            <ActivityIndicator color="#06231A" />
+            <ActivityIndicator color="#2A1A05" />
             <Text style={styles.statusText}>Completing shipment…</Text>
           </View>
         ) : !scanning ? (
@@ -164,7 +175,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   center: {
     flex: 1,
-    backgroundColor: '#0C1A2C',
+    backgroundColor: brand.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -234,7 +245,7 @@ const styles = StyleSheet.create({
     minWidth: 200,
     alignItems: 'center',
   },
-  primaryBtnText: { color: '#06231A', fontWeight: '700', fontSize: 16 },
+  primaryBtnText: { color: '#2A1A05', fontWeight: '700', fontSize: 16 },
   linkBtn: { marginTop: 14 },
   linkBtnText: { color: 'rgba(255,255,255,0.7)' },
   statusPill: {
@@ -246,7 +257,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  statusText: { color: '#06231A', fontWeight: '700' },
+  statusText: { color: '#2A1A05', fontWeight: '700' },
   idleHint: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
   lastResult: { fontSize: 12 },
 });

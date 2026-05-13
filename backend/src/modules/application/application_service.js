@@ -140,6 +140,85 @@ export const createApplication = async (req, res, next) => {
     }
 };
 
+/* Mobile company dashboard: list applications assigned to the signed-in
+   company. Only returns rows with Status in ('Pending','Completed') so
+   the screen excludes Accepted/Rejected applications. */
+export const listCompanyApplications = (req, res, next) => {
+    const CompanyID = req.session?.companyId;
+    if (!CompanyID) {
+        return res.status(401).json({ ok: false, message: 'Company sign-in required.' });
+    }
+
+    const sql = `
+        SELECT
+            a.ApplicationID, a.TrackingNumber, a.Status, a.PaymentType,
+            a.SubmissionDate, a.CompletionDate, a.DeliveryAddress, a.ACID,
+            a.CompanyID, a.ClientID, a.CategoryID, a.PortID,
+            CONCAT(u.FirstName, ' ', u.LastName) AS ClientName,
+            cat.Type    AS CategoryName,
+            p.PortName  AS PortName,
+            p.PortType  AS PortType,
+            co.Name     AS CompanyName,
+            co.LogoUrl  AS CompanyLogoUrl,
+            COALESCE((SELECT SUM(pay.Amount) FROM payment pay WHERE pay.ApplicationID = a.ApplicationID), 0) AS Amount
+        FROM application a
+        LEFT JOIN client cl    ON cl.ClientID    = a.ClientID
+        LEFT JOIN user u       ON u.UserID       = cl.ClientID
+        LEFT JOIN category cat ON cat.CategoryID = a.CategoryID
+        LEFT JOIN port p       ON p.PortID       = a.PortID
+        LEFT JOIN company co   ON co.CompanyID   = a.CompanyID
+        WHERE a.CompanyID = ? AND a.Status IN ('Pending', 'Completed')
+        ORDER BY a.ApplicationID DESC
+    `;
+
+    db.query(sql, [CompanyID], (err, result) => {
+        if (err) return next(err);
+        return res.json(result);
+    });
+};
+
+/* Mobile client tracking screen: list the signed-in client's own
+   applications. Caller is always the owner (filter is the session's
+   userId), so CompletionToken is safe to expose — the phone needs it
+   to render the QR the company will scan. QrPayload is the exact
+   format completeViaQr expects ("TrackingNumber:Token"); it is null
+   until the application enters 'In Progress' and the token is minted. */
+export const listClientApplications = (req, res, next) => {
+    const ClientID = req.session?.userId;
+    if (!ClientID) {
+        return res.status(401).json({ ok: false, message: 'Authentication required.' });
+    }
+
+    const sql = `
+        SELECT
+            a.ApplicationID, a.TrackingNumber, a.Status, a.PaymentType,
+            a.SubmissionDate, a.CompletionDate, a.DeliveryAddress, a.ACID,
+            a.CompanyID, a.ClientID, a.CategoryID, a.PortID,
+            a.CompletionToken,
+            CASE
+                WHEN a.CompletionToken IS NULL OR a.CompletionToken = '' THEN NULL
+                ELSE CONCAT(a.TrackingNumber, ':', a.CompletionToken)
+            END AS QrPayload,
+            cat.Type    AS CategoryName,
+            p.PortName  AS PortName,
+            p.PortType  AS PortType,
+            co.Name     AS CompanyName,
+            co.LogoUrl  AS CompanyLogoUrl,
+            COALESCE((SELECT SUM(pay.Amount) FROM payment pay WHERE pay.ApplicationID = a.ApplicationID), 0) AS Amount
+        FROM application a
+        LEFT JOIN category cat ON cat.CategoryID = a.CategoryID
+        LEFT JOIN port p       ON p.PortID       = a.PortID
+        LEFT JOIN company co   ON co.CompanyID   = a.CompanyID
+        WHERE a.ClientID = ?
+        ORDER BY a.ApplicationID DESC
+    `;
+
+    db.query(sql, [ClientID], (err, result) => {
+        if (err) return next(err);
+        return res.json(result);
+    });
+};
+
 export const getApplication = (req, res) => {
     const ApplicationID = req.query.ApplicationID;
     const CompanyID = req.query.CompanyID;

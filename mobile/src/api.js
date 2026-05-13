@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { API_URL } from '../config';
 
 const COOKIE_KEY = 'takhlees.sessionCookie';
+const SESSION_KEY = 'takhlees.session';
 
 /* Reduce any messy cookie string down to a single canonical
    `connect.sid=<value>` pair. Handles:
@@ -35,6 +36,29 @@ export async function getStoredCookie() {
 
 export async function clearStoredCookie() {
   return SecureStore.deleteItemAsync(COOKIE_KEY);
+}
+
+/* The role + identity blob lives next to the cookie so the bootstrap
+   path can pick the correct navigator without a network round-trip. */
+export async function getStoredSession() {
+  const raw = await SecureStore.getItemAsync(SESSION_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function setStoredSession(session) {
+  await SecureStore.deleteItemAsync(SESSION_KEY);
+  if (session) {
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
+  }
+}
+
+export async function clearStoredSession() {
+  await SecureStore.deleteItemAsync(SESSION_KEY);
 }
 
 /* React Native's fetch does not maintain a cookie jar across requests,
@@ -96,20 +120,7 @@ function extractConnectSid(setCookieValues) {
   return null;
 }
 
-export async function loginCompany(email, password) {
-  const res = await fetch(`${API_URL}/company/login`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ ContactEmail: email, Password: password }),
-  });
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || body.ok === false) {
-    const message = body?.message || `Login failed (${res.status}).`;
-    throw new Error(message);
-  }
-
+async function persistCookieFromResponse(res) {
   const setCookieValues = collectSetCookieValues(res);
   const cookie = extractConnectSid(setCookieValues);
 
@@ -127,8 +138,108 @@ export async function loginCompany(email, password) {
      never be concatenated with the new one by the platform. */
   await SecureStore.deleteItemAsync(COOKIE_KEY);
   await SecureStore.setItemAsync(COOKIE_KEY, cookie);
+}
 
-  return body.data?.company ?? null;
+export async function loginCompany(email, password) {
+  const res = await fetch(`${API_URL}/company/login`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ ContactEmail: email, Password: password }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok === false) {
+    const message = body?.message || `Login failed (${res.status}).`;
+    throw new Error(message);
+  }
+
+  await persistCookieFromResponse(res);
+
+  const company = body.data?.company ?? null;
+  const session = {
+    role: 'company',
+    company,
+    companyId: company?.CompanyID ?? null,
+  };
+  await setStoredSession(session);
+  return session;
+}
+
+export async function loginUser(email, password) {
+  const res = await fetch(`${API_URL}/user/login`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ Email: email, Password: password }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok === false) {
+    const message = body?.message || `Login failed (${res.status}).`;
+    throw new Error(message);
+  }
+
+  await persistCookieFromResponse(res);
+
+  const user = body.data?.user ?? null;
+  /* The backend returns role = 'admin' for User.Type === 'A', otherwise
+     'client'. The mobile app only services the 'client' experience —
+     admins should manage the platform via the web dashboard. */
+  if (user?.Type === 'A') {
+    await clearStoredCookie();
+    throw new Error('Admin accounts must sign in on the web dashboard.');
+  }
+  const session = {
+    role: 'client',
+    user,
+    userId: user?.UserID ?? null,
+  };
+  await setStoredSession(session);
+  return session;
+}
+
+/* Generic GET-with-session helper used by the listing screens. */
+async function authedGet(path) {
+  const cleanCookie = sanitizeConnectSid(await getStoredCookie());
+  if (!cleanCookie) {
+    const err = new Error('Session expired. Please sign in again.');
+    err.status = 401;
+    throw err;
+  }
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Cookie: cleanCookie,
+    },
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message =
+      (body && (body.message || body.error)) || `Request failed (${res.status}).`;
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+  return body;
+}
+
+/* The backend identifies the company from the session, not from a
+   query string, so the id argument is informational only — we still
+   keep the signature so the call sites don't change. */
+export async function listCompanyApplications(companyId) {
+  if (!companyId) {
+    throw new Error('Missing companyId.');
+  }
+  return authedGet('/application/company-list');
+}
+
+export async function listClientApplications(clientId) {
+  if (!clientId) {
+    throw new Error('Missing clientId.');
+  }
+  return authedGet('/application/client-list');
 }
 
 export async function completeViaQr(qrPayload) {
@@ -179,4 +290,19 @@ export async function logoutCompany() {
     /* best-effort */
   }
   await clearStoredCookie();
+  await clearStoredSession();
+}
+
+export async function logoutUser() {
+  const cleanCookie = sanitizeConnectSid(await getStoredCookie());
+  try {
+    await fetch(`${API_URL}/user/logout`, {
+      method: 'POST',
+      headers: { ...(cleanCookie ? { Cookie: cleanCookie } : {}) },
+    });
+  } catch {
+    /* best-effort */
+  }
+  await clearStoredCookie();
+  await clearStoredSession();
 }

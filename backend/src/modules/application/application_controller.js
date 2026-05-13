@@ -16,6 +16,8 @@ const router = Router();
 
 router.post("/", requireAuth, applicationUpload.any(), applicationService.createApplication);
 router.post("/complete-via-qr", requireCompany, applicationService.completeViaQr);
+router.get("/company-list", requireCompany, applicationService.listCompanyApplications);
+router.get("/client-list", requireAuth, applicationService.listClientApplications);
 router.get("/", requireSession, applicationService.getApplication);
 router.get("/search", requireSession, applicationService.searchApplication);
 router.delete("/", applicationService.deleteApplication);

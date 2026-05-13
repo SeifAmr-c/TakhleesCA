@@ -28,7 +28,8 @@
       "Bash(npx --yes create-expo-app@latest mobile --template blank --no-install)",
       "Bash(npx expo *)",
       "Bash(git *)",
-      "Bash(xxd \"C:/Users/seifa/Desktop/node MySQL/mobile/secrets/AuthKey_2TJ98T7SXQ.p8\")"
+      "Bash(xxd \"C:/Users/seifa/Desktop/node MySQL/mobile/secrets/AuthKey_2TJ98T7SXQ.p8\")",
+      "Bash(npx --yes expo install react-native-qrcode-svg react-native-svg)"
     ]
   }
 }
