@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import * as companyService from "./company_service.js";
-import { requireCompany } from "../../middleware/auth.js";
+import { requireCompany, requireAuth } from "../../middleware/auth.js";
 
 const companyRegistrationUpload = multer({
   storage: multer.memoryStorage(),
@@ -51,6 +51,7 @@ router.post(
   companyService.createCompany
 );
 router.post("/login", loginLimiter, companyService.loginCompany);
+router.post("/recommend", requireAuth, companyService.recommendCompanies);
 router.post("/logout", companyService.logoutCompany);
 router.get("/", companyService.getCompany);
 router.get("/dashboard-stats", requireCompany, companyService.getCompanyDashboardStats);

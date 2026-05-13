@@ -94,3 +94,17 @@ export const searchCompanies = async ({ keyword, keyvalue, sort } = {}) => {
   const { data } = await api.get(`/company/search`, { params: { keyword, keyvalue, sort } });
   return data;
 };
+
+// Backend contract (POST /company/recommend, requires user session):
+//   body: { governorate, category, minPrice, maxPrice }
+//   200:  { ok: true, data: [ { CompanyID, Name, Governorate, CategoryType,
+//                              CategoryPrice, FulfilledCount, AverageRating, ... } ] }
+export const recommendCompanies = async ({ governorate, category, minPrice, maxPrice }) => {
+  const { data } = await api.post("/company/recommend", {
+    governorate,
+    category,
+    minPrice,
+    maxPrice,
+  });
+  return Array.isArray(data?.data) ? data.data : [];
+};

@@ -104,6 +104,7 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
               <>
                 <NavLink to="/companies">Companies</NavLink>
                 {isUser && <NavLink to="/tracking">Shipments</NavLink>}
+                {isUser && <NavLink to="/recommend">Find a Company</NavLink>}
                 <NavLink to="/about">About</NavLink>
                 <NavLink to="/contact">Contact</NavLink>
               </>

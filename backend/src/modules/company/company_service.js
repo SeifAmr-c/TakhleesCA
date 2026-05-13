@@ -716,6 +716,83 @@ export const generatePerformanceReport = async (req, res, next) => {
     }
 };
 
+/* POST /company/recommend  (requires user session)
+   Body: { governorate, category, minPrice, maxPrice }
+   Matchmaker: returns Verified companies that serve the given governorate
+   AND offer the given category at a price in [minPrice, maxPrice], ranked
+   by fulfilled-count for that category and then by average rating. */
+export const recommendCompanies = async (req, res, next) => {
+    try {
+        const governorate = typeof req.body.governorate === "string" ? req.body.governorate.trim() : "";
+        const category    = typeof req.body.category    === "string" ? req.body.category.trim()    : "";
+        const minPrice    = Number(req.body.minPrice);
+        const maxPrice    = Number(req.body.maxPrice);
+
+        if (!governorate) {
+            return res.status(400).json({ ok: false, message: "governorate is required." });
+        }
+        if (!category) {
+            return res.status(400).json({ ok: false, message: "category is required." });
+        }
+        if (!Number.isFinite(minPrice) || !Number.isFinite(maxPrice) || minPrice < 0 || maxPrice < 0) {
+            return res.status(400).json({ ok: false, message: "minPrice and maxPrice must be non-negative numbers." });
+        }
+        if (minPrice > maxPrice) {
+            return res.status(400).json({ ok: false, message: "minPrice cannot be greater than maxPrice." });
+        }
+
+        const rows = await runQuery(
+            `SELECT c.CompanyID,
+                    c.Name,
+                    c.ContactEmail,
+                    c.Governorate,
+                    c.Address,
+                    c.About,
+                    c.LogoUrl,
+                    c.VerficationStatus,
+                    cat.CategoryID,
+                    cat.Type AS CategoryType,
+                    cc.Price AS CategoryPrice,
+                    COALESCE(fa.FulfilledCount, 0) AS FulfilledCount,
+                    ar.AverageRating
+               FROM company c
+               JOIN companycategory cc ON cc.CompanyID  = c.CompanyID
+               JOIN category cat       ON cat.CategoryID = cc.CategoryID
+               LEFT JOIN (
+                   SELECT CompanyID, CategoryID, COUNT(*) AS FulfilledCount
+                     FROM application
+                    WHERE Status = 'Completed'
+                    GROUP BY CompanyID, CategoryID
+               ) fa ON fa.CompanyID = c.CompanyID AND fa.CategoryID = cc.CategoryID
+               LEFT JOIN (
+                   SELECT a.CompanyID, r.CategoryID, AVG(r.Rating) AS AverageRating
+                     FROM review r
+                     JOIN application a ON a.ApplicationID = r.ApplicationID
+                    GROUP BY a.CompanyID, r.CategoryID
+               ) ar ON ar.CompanyID = c.CompanyID AND ar.CategoryID = cc.CategoryID
+              WHERE c.Governorate = ?
+                AND cat.Type = ?
+                AND cc.Price BETWEEN ? AND ?
+                AND c.VerficationStatus = 'Verified'
+              ORDER BY FulfilledCount DESC, AverageRating DESC, c.Name ASC`,
+            [governorate, category, minPrice, maxPrice]
+        );
+
+        /* DECIMAL/AVG columns come back as strings from mysql2; normalize so
+           the client gets numbers (or null for "no reviews yet"). */
+        const data = rows.map((r) => ({
+            ...r,
+            CategoryPrice:  Number(r.CategoryPrice),
+            FulfilledCount: Number(r.FulfilledCount),
+            AverageRating:  r.AverageRating === null ? null : Number(Number(r.AverageRating).toFixed(2)),
+        }));
+
+        return res.status(200).json({ ok: true, data });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 export const updateCompany = (req, res) => {
     console.log("PUT Request Received");
     const CompanyID = req.query.CompanyID;
