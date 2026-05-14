@@ -16,10 +16,10 @@ import { initDocumentTable } from './document.model.js';
 import { initPaymentTable } from './payment.model.js';
 import { initCompanyPaymentTable } from './company_payment.model.js';
 
-const DB_NAME = 'Takhlees';
-const DB_HOST = 'localhost';
-const DB_USER = 'root';
-const DB_PASSWORD = '';
+const DB_NAME = process.env.DB_NAME;
+const DB_HOST = process.env.DB_HOST;
+const DB_USER = process.env.DB_USER;
+const DB_PASSWORD = process.env.DB_PASSWORD;
 
 /* Seed reference data the UI depends on. Idempotent: only inserts when
    the table is empty so re-running setup_db.js doesn't duplicate rows. */
