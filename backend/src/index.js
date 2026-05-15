@@ -1,5 +1,12 @@
 import 'dotenv/config';
 import { bootstrap } from "./app.controller.js";
+import { connectMongo } from "./Database/mongo_connection.js";
+
+/* Connect to MongoDB on boot but do not block server startup if Atlas
+   is unreachable — MySQL remains the source of truth during migration. */
+connectMongo().catch((err) => {
+  console.error('[mongo] initial connect failed:', err.message);
+});
 
 /* Several legacy handlers still use the `db.query(..., (err, rows) => { if (err) throw err })`
    pattern. A throw inside that callback fires after Express's request lifecycle, so the

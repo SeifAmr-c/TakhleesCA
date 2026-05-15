@@ -19,6 +19,34 @@ export const uploadToCloudinary = (buffer, folderName) =>
         streamifier.createReadStream(buffer).pipe(stream);
     });
 
+/* Per-company folder layout in Cloudinary:
+       takhlees/<company-slug>/logo
+       takhlees/<company-slug>/compreg
+       takhlees/<company-slug>/documents
+   The slug is the company name lowercased with non-alphanumerics collapsed to
+   single hyphens, so "Cairo Logistics Co." -> "cairo-logistics-co". Cloudinary
+   folder names must avoid `/` and most punctuation, hence the strict mapping. */
+const slugifyCompanyName = (name) =>
+    String(name ?? "")
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^\p{L}\p{N}]+/gu, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || "unnamed";
+
+/* Root Cloudinary folder that already exists in the account. Every new
+   upload lands underneath it as: <ROOT>/<company-slug>/<sub>. */
+const ROOT_FOLDER = "takhlees production";
+
+export const companyFolder = (companyName, sub) => {
+    const slug = slugifyCompanyName(companyName);
+    const allowed = new Set(["logo", "compreg", "documents"]);
+    if (!allowed.has(sub)) {
+        throw new Error(`companyFolder: unknown sub "${sub}". Use one of: ${[...allowed].join(", ")}.`);
+    }
+    return `${ROOT_FOLDER}/${slug}/${sub}`;
+};
+
 /* Pull the public_id out of a Cloudinary secure_url. Cloudinary URLs
    look like:
      https://res.cloudinary.com/<cloud>/image/upload/[<transforms>/]v123/<folder>/<name>.<ext>

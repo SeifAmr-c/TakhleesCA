@@ -1,4 +1,6 @@
 import db from '../../Database/connection.js';
+import Application from '../../Database/mongo/application.mongo.js';
+import { mirror } from '../../Database/mongo/dual_write.js';
 
 const runQuery = (sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -48,6 +50,18 @@ export const createPayment = async (req, res, next) => {
             [Amount, Gateway, ApplicationID]
         );
 
+        await mirror(`payment.create mysqlPaymentId=${result.insertId}`, () =>
+            Application.updateOne(
+                { mysqlApplicationId: ApplicationID },
+                { $push: { payments: {
+                    mysqlPaymentId: result.insertId,
+                    PaymentDate: new Date(),
+                    Amount: Number(Amount),
+                    PaymentGateway: Gateway,
+                } } }
+            )
+        );
+
         return res.status(201).json({
             ok: true,
             message: 'Payment recorded.',
@@ -87,6 +101,12 @@ export const deletePayment = (req, res) => {
 
         db.query("DELETE FROM payment WHERE PaymentID = ?", [PaymentID], function (err, result) {
             if (err) throw err;
+            mirror(`payment.delete mysqlPaymentId=${PaymentID}`, () =>
+                Application.updateOne(
+                    { 'payments.mysqlPaymentId': Number(PaymentID) },
+                    { $pull: { payments: { mysqlPaymentId: Number(PaymentID) } } }
+                )
+            );
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + PaymentID + "] deleted Successfully" });
             console.log("Delete Request Received for record [" + PaymentID + "] received");
         });
@@ -140,6 +160,16 @@ export const updatePayment = (req, res) => {
             [PaymentDate, Amount, PaymentGateway, ApplicationID, PaymentID],
             function (err, result) {
                 if (err) throw err;
+                mirror(`payment.update mysqlPaymentId=${PaymentID}`, () =>
+                    Application.updateOne(
+                        { 'payments.mysqlPaymentId': Number(PaymentID) },
+                        { $set: {
+                            'payments.$.PaymentDate': PaymentDate ? new Date(PaymentDate) : null,
+                            'payments.$.Amount': Number(Amount),
+                            'payments.$.PaymentGateway': PaymentGateway,
+                        } }
+                    )
+                );
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + PaymentID + "] is Updated Successfully" });
                 console.log("Record Id [" + PaymentID + "] is Updated Successfully");
             }

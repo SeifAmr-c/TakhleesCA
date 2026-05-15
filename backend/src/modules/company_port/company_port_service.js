@@ -1,4 +1,11 @@
 import db from '../../Database/connection.js';
+import Company from '../../Database/mongo/company.mongo.js';
+import { mirror } from '../../Database/mongo/dual_write.js';
+
+const runQuery = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
+    });
 
 export const createCompanyPort = (req, res) => {
     console.log("Post Request Received");
@@ -28,6 +35,20 @@ export const createCompanyPort = (req, res) => {
                 [CompanyID, PortID],
                 function (err) {
                     if (err) throw err;
+                    mirror(`companyport.create mysqlCompanyId=${CompanyID} mysqlPortId=${PortID}`, async () => {
+                        const [port] = await runQuery(
+                            'SELECT PortName, PortType FROM port WHERE PortID = ? LIMIT 1',
+                            [PortID]
+                        );
+                        return Company.updateOne(
+                            { mysqlCompanyId: Number(CompanyID) },
+                            { $addToSet: { ports: {
+                                mysqlPortId: Number(PortID),
+                                PortName: port?.PortName ?? null,
+                                PortType: port?.PortType ?? null,
+                            } } }
+                        );
+                    });
                     res.status(201).json({
                         "Status": "OK",
                         "Message": `Record Added Successfully (CompanyID=${CompanyID}, PortID=${PortID})`
@@ -104,6 +125,12 @@ export const deleteCompanyPort = (req, res) => {
                 [CompanyID, PortID],
                 function (err) {
                     if (err) throw err;
+                    mirror(`companyport.delete mysqlCompanyId=${CompanyID} mysqlPortId=${PortID}`, () =>
+                        Company.updateOne(
+                            { mysqlCompanyId: Number(CompanyID) },
+                            { $pull: { ports: { mysqlPortId: Number(PortID) } } }
+                        )
+                    );
                     res.status(200).json({
                         "Status": "OK",
                         "Message": `Link (CompanyID=${CompanyID}, PortID=${PortID}) deleted Successfully`

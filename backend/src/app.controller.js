@@ -17,6 +17,7 @@ import paymentRouter from "./modules/payment/payment_controller.js";
 import reviewRouter from "./modules/review/review_controller.js";
 import supportTicketRouter from "./modules/support_ticket/support_ticket_controller.js";
 import adminRouter from "./modules/admin/admin_controller.js";
+import mobileApplicationRouter from "./modules/mobile_application/mobile_application_controller.js";
 
 export const bootstrap = () => {
   const app = express();
@@ -91,6 +92,10 @@ export const bootstrap = () => {
   app.use("/review", reviewRouter);
   app.use("/supportticket", supportTicketRouter);
   app.use("/admin", adminRouter);
+  /* Mongo-backed routes used exclusively by the mobile app. The matching
+     /application/* routes (MySQL) remain so the web/admin dashboard is
+     unaffected. */
+  app.use("/mobile/application", mobileApplicationRouter);
 
   // -----------------------------
   // 404 Handler

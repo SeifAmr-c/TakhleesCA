@@ -227,19 +227,23 @@ async function authedGet(path) {
 
 /* The backend identifies the company from the session, not from a
    query string, so the id argument is informational only — we still
-   keep the signature so the call sites don't change. */
+   keep the signature so the call sites don't change.
+
+   Mobile reads from MongoDB exclusively. /mobile/application/* is the
+   Mongo-backed twin of /application/* (which remains on MySQL for the
+   web/admin dashboard). */
 export async function listCompanyApplications(companyId) {
   if (!companyId) {
     throw new Error('Missing companyId.');
   }
-  return authedGet('/application/company-list');
+  return authedGet('/mobile/application/company-list');
 }
 
 export async function listClientApplications(clientId) {
   if (!clientId) {
     throw new Error('Missing clientId.');
   }
-  return authedGet('/application/client-list');
+  return authedGet('/mobile/application/client-list');
 }
 
 export async function completeViaQr(qrPayload) {

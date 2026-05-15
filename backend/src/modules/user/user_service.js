@@ -1,5 +1,8 @@
 import db from '../../Database/connection.js';
 import bcrypt from 'bcrypt';
+import User from '../../Database/mongo/user.mongo.js';
+import Application from '../../Database/mongo/application.mongo.js';
+import { mirror } from '../../Database/mongo/dual_write.js';
 
 const SALT_ROUNDS = 10;
 
@@ -115,6 +118,10 @@ export const deleteUser = async (req, res, next) => {
         conn.release();
     }
 
+    await mirror(`user.delete mysqlUserId=${uid}`, () =>
+        User.deleteOne({ mysqlUserId: uid })
+    );
+
     res.status(200).json({ "Status": "OK", "Message": "UserID [" + uid + "] deleted successfully" });
     console.log("Delete request processed for UserID [" + uid + "]");
 };
@@ -167,6 +174,16 @@ export const deleteProfile = async (req, res, next) => {
         } finally {
             conn.release();
         }
+
+        await mirror(`user.deleteProfile mysqlUserId=${uid}`, async () => {
+            await User.deleteOne({ mysqlUserId: uid });
+            /* Application FK was nulled in MySQL for historical apps; do the
+               same in Mongo so client snapshots stop pointing at a ghost. */
+            await Application.updateMany(
+                { mysqlClientId: uid },
+                { $set: { mysqlClientId: null, client: null } }
+            );
+        });
 
         req.session.destroy((err) => {
             if (err) return next(err);
@@ -290,6 +307,21 @@ export const updateProfile = async (req, res, next) => {
     if (!updateRes.affectedRows) {
       return res.status(404).json({ ok: false, message: "User not found." });
     }
+
+    /* Dual-write the User document + fan-out client snapshot into every
+       Application this user has filed. */
+    await mirror(`user.updateProfile mysqlUserId=${uid}`, () =>
+      User.updateOne(
+        { mysqlUserId: uid },
+        { $set: { FirstName, LastName, Email } }
+      )
+    );
+    await mirror(`application.refreshClientSnap mysqlClientId=${uid}`, () =>
+      Application.updateMany(
+        { mysqlClientId: uid },
+        { $set: { 'client.FirstName': FirstName, 'client.LastName': LastName } }
+      )
+    );
 
     const rows = await runQuery(`${userSelectSql} WHERE u.UserID = ? LIMIT 1`, [uid]);
     return res.status(200).json({
@@ -502,6 +534,27 @@ export const register = async (req, res, next) => {
     }
 
     const userRows = await runQuery(`${userSelectSql} WHERE u.UserID = ? LIMIT 1`, [userId]);
+
+    /* Dual-write to MongoDB. MySQL is already committed above, so any Mongo
+       failure here must NOT roll back the client-facing response. Log loudly
+       and move on — a backfill script can reconcile orphans later. */
+    try {
+      await User.create({
+        mysqlUserId: userId,
+        FirstName,
+        LastName,
+        Email,
+        Password: hashedPassword,
+        Type,
+        client: Type === 'C'
+          ? { PhoneNumber: String(PhoneNumber), NationalID: String(NationalID), Address }
+          : null,
+        admin: Type === 'A' ? { LastLogin: new Date() } : null,
+      });
+      console.log(`[mongo dual-write] inserted user mysqlUserId=${userId}`);
+    } catch (mongoErr) {
+      console.error(`[mongo dual-write FAILED] mysqlUserId=${userId}:`, mongoErr.message);
+    }
 
     return res.status(201).json({
       ok: true,

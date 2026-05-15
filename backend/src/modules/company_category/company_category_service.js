@@ -1,4 +1,11 @@
 import db from '../../Database/connection.js';
+import Company from '../../Database/mongo/company.mongo.js';
+import { mirror } from '../../Database/mongo/dual_write.js';
+
+const runQuery = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
+    });
 
 export const createCompanyCategory = (req, res) => {
     console.log("Post Request Received");
@@ -34,6 +41,20 @@ export const createCompanyCategory = (req, res) => {
                 [CompanyID, CategoryID, Price],
                 function (err) {
                     if (err) throw err;
+                    mirror(`companycategory.create mysqlCompanyId=${CompanyID} mysqlCategoryId=${CategoryID}`, async () => {
+                        const [cat] = await runQuery(
+                            'SELECT Type FROM category WHERE CategoryID = ? LIMIT 1',
+                            [CategoryID]
+                        );
+                        return Company.updateOne(
+                            { mysqlCompanyId: Number(CompanyID) },
+                            { $addToSet: { categories: {
+                                mysqlCategoryId: Number(CategoryID),
+                                Type: cat?.Type ?? null,
+                                Price: Number(Price),
+                            } } }
+                        );
+                    });
                     res.status(201).json({
                         "Status": "OK",
                         "Message": `Record Added Successfully (CompanyID=${CompanyID}, CategoryID=${CategoryID})`
@@ -114,6 +135,13 @@ export const updateCompanyCategory = (req, res) => {
                 [Price, CompanyID, CategoryID],
                 function (err) {
                     if (err) throw err;
+                    mirror(`companycategory.update mysqlCompanyId=${CompanyID} mysqlCategoryId=${CategoryID}`, () =>
+                        /* Positional-$ updates the matching subdoc only. */
+                        Company.updateOne(
+                            { mysqlCompanyId: Number(CompanyID), 'categories.mysqlCategoryId': Number(CategoryID) },
+                            { $set: { 'categories.$.Price': Number(Price) } }
+                        )
+                    );
                     res.status(200).json({
                         "Status": "OK",
                         "Message": `Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) is Updated Successfully`
@@ -152,6 +180,12 @@ export const deleteCompanyCategory = (req, res) => {
                 [CompanyID, CategoryID],
                 function (err) {
                     if (err) throw err;
+                    mirror(`companycategory.delete mysqlCompanyId=${CompanyID} mysqlCategoryId=${CategoryID}`, () =>
+                        Company.updateOne(
+                            { mysqlCompanyId: Number(CompanyID) },
+                            { $pull: { categories: { mysqlCategoryId: Number(CategoryID) } } }
+                        )
+                    );
                     res.status(200).json({
                         "Status": "OK",
                         "Message": `Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) deleted Successfully`

@@ -1,4 +1,8 @@
 import db from '../../Database/connection.js';
+import Port from '../../Database/mongo/port.mongo.js';
+import Company from '../../Database/mongo/company.mongo.js';
+import Application from '../../Database/mongo/application.mongo.js';
+import { mirror } from '../../Database/mongo/dual_write.js';
 
 const allowedPortTypes = ['Air', 'Sea'];
 
@@ -24,8 +28,12 @@ export const createPort = (req, res) => {
         [PortName, PortType, EstDate],
         function (err, result) {
             if (err) throw err;
-            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added " + result.insertId);
+            const insertId = result.insertId;
+            mirror(`port.create mysqlPortId=${insertId}`, () =>
+                Port.create({ mysqlPortId: insertId, PortName, PortType, EstDate })
+            );
+            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + insertId });
+            console.log("Record Added " + insertId);
         }
     );
 };
@@ -65,6 +73,9 @@ export const deletePort = (req, res) => {
 
         db.query("DELETE FROM port WHERE PortID = ?", [PortID], function (err, result) {
             if (err) throw err;
+            mirror(`port.delete mysqlPortId=${PortID}`, () =>
+                Port.deleteOne({ mysqlPortId: Number(PortID) })
+            );
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + PortID + "] deleted Successfully" });
             console.log("Delete Request Received for record [" + PortID + "] received");
         });
@@ -124,6 +135,26 @@ export const updatePort = (req, res) => {
             [PortName, PortType, EstDate, PortID],
             function (err, result) {
                 if (err) throw err;
+                mirror(`port.update mysqlPortId=${PortID}`, async () => {
+                    await Port.updateOne(
+                        { mysqlPortId: Number(PortID) },
+                        { $set: { PortName, PortType, EstDate }, $setOnInsert: { mysqlPortId: Number(PortID) } },
+                        { upsert: true }
+                    );
+                    /* Fan-out: refresh snapshots inside Company.ports[] and
+                       every Application that pinned this port. */
+                    await Company.updateMany(
+                        { 'ports.mysqlPortId': Number(PortID) },
+                        { $set: {
+                            'ports.$.PortName': PortName,
+                            'ports.$.PortType': PortType,
+                        } }
+                    );
+                    await Application.updateMany(
+                        { mysqlPortId: Number(PortID) },
+                        { $set: { 'port.PortName': PortName, 'port.PortType': PortType } }
+                    );
+                });
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + PortID + "] is Updated Successfully" });
                 console.log("Record Id [" + PortID + "] is Updated Successfully");
             }

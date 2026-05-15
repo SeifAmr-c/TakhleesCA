@@ -1,6 +1,8 @@
 import db from '../../Database/connection.js';
 import crypto from 'crypto';
-import { uploadToCloudinary } from '../../config/cloudinary.js';
+import { uploadToCloudinary, companyFolder } from '../../config/cloudinary.js';
+import Application from '../../Database/mongo/application.mongo.js';
+import { mirror } from '../../Database/mongo/dual_write.js';
 
 const runQuery = (sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -9,6 +11,34 @@ const runQuery = (sql, params = []) =>
             resolve(result);
         });
     });
+
+/* Build the four denormalized snapshot blobs the Mongo Application doc needs.
+   Reads from MySQL because MySQL is the source of truth during the migration. */
+const fetchSnapshots = async ({ CompanyID, ClientID, CategoryID, PortID }) => {
+    const [companyRow] = CompanyID
+        ? await runQuery('SELECT Name, LogoUrl FROM company WHERE CompanyID = ? LIMIT 1', [CompanyID])
+        : [null];
+    const [clientUserRow] = ClientID
+        ? await runQuery(
+            `SELECT u.FirstName, u.LastName
+               FROM user u WHERE u.UserID = ? LIMIT 1`,
+            [ClientID]
+        )
+        : [null];
+    const [categoryRow] = CategoryID
+        ? await runQuery('SELECT Type FROM category WHERE CategoryID = ? LIMIT 1', [CategoryID])
+        : [null];
+    const [portRow] = PortID
+        ? await runQuery('SELECT PortName, PortType FROM port WHERE PortID = ? LIMIT 1', [PortID])
+        : [null];
+
+    return {
+        company:  companyRow    ? { Name: companyRow.Name, LogoUrl: companyRow.LogoUrl ?? null } : null,
+        client:   clientUserRow ? { FirstName: clientUserRow.FirstName, LastName: clientUserRow.LastName } : null,
+        category: categoryRow   ? { Type: categoryRow.Type } : null,
+        port:     portRow       ? { PortName: portRow.PortName, PortType: portRow.PortType } : null,
+    };
+};
 
 const ALLOWED_PAYMENT_TYPES = ['FULL', 'PARTIAL'];
 const ALLOWED_DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Shipping Document'];
@@ -93,6 +123,7 @@ export const createApplication = async (req, res, next) => {
         );
 
         const ApplicationID = result.insertId;
+        const SubmissionDate = new Date();
 
         /* Document fan-out. Files arrive with indexed field names like
            "Document_0" through "Document_3"; the matching DocType arrives
@@ -101,6 +132,14 @@ export const createApplication = async (req, res, next) => {
         const files = Array.isArray(req.files) ? req.files : [];
         const uploadedDocs = [];
         if (files.length) {
+            /* Resolve the company name once so every doc upload for this
+               application lands in the same per-company folder. */
+            const [companyRow] = await runQuery(
+                'SELECT Name FROM company WHERE CompanyID = ? LIMIT 1',
+                [CompanyID]
+            );
+            const docFolder = companyFolder(companyRow?.Name, 'documents');
+
             const tasks = files.map(async (file) => {
                 const match = /^Document_(\d+)$/.exec(file.fieldname);
                 if (!match) return null;
@@ -112,18 +151,45 @@ export const createApplication = async (req, res, next) => {
                         { status: 400 }
                     );
                 }
-                const uploaded = await uploadToCloudinary(file.buffer, 'takhlees/documents');
+                const uploaded = await uploadToCloudinary(file.buffer, docFolder);
                 return { DocType, Path: uploaded.secure_url };
             });
             const settled = (await Promise.all(tasks)).filter(Boolean);
             for (const doc of settled) {
-                await runQuery(
+                const docRes = await runQuery(
                     'INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), ?, ?, ?)',
                     [doc.DocType, 'Pending', doc.Path, ApplicationID]
                 );
-                uploadedDocs.push(doc);
+                uploadedDocs.push({ ...doc, mysqlDocumentId: docRes.insertId });
             }
         }
+
+        /* Dual-write Application + embedded documents in a single doc. */
+        await mirror(`application.create mysqlApplicationId=${ApplicationID}`, async () => {
+            const snaps = await fetchSnapshots({ CompanyID, ClientID, CategoryID, PortID });
+            return Application.create({
+                mysqlApplicationId: ApplicationID,
+                PaymentType,
+                Status: 'Pending',
+                SubmissionDate,
+                TrackingNumber,
+                DeliveryAddress,
+                ACID,
+                mysqlCompanyId:  CompanyID,
+                mysqlClientId:   ClientID,
+                mysqlCategoryId: CategoryID,
+                mysqlPortId:     PortID,
+                ...snaps,
+                documents: uploadedDocs.map((d) => ({
+                    mysqlDocumentId: d.mysqlDocumentId,
+                    DocType: d.DocType,
+                    UploadDate: new Date(),
+                    VerficationStatus: 'Pending',
+                    Path: d.Path,
+                })),
+                payments: [],
+            });
+        });
 
         return res.status(201).json({
             ok: true,
@@ -299,6 +365,10 @@ export const cancelApplication = async (req, res, next) => {
             return res.status(400).json({ ok: false, message: "Application cannot be cancelled." });
         }
 
+        await mirror(`application.cancel mysqlApplicationId=${ApplicationID}`, () =>
+            Application.deleteOne({ mysqlApplicationId: ApplicationID })
+        );
+
         return res.status(200).json({ ok: true, message: "Application cancelled successfully." });
     } catch (err) {
         return next(err);
@@ -319,6 +389,9 @@ export const deleteApplication = (req, res) => {
 
         db.query("DELETE FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
             if (err) throw err;
+            mirror(`application.delete mysqlApplicationId=${ApplicationID}`, () =>
+                Application.deleteOne({ mysqlApplicationId: Number(ApplicationID) })
+            );
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] deleted Successfully" });
             console.log("Delete Request Received for record [" + ApplicationID + "] received");
         });
@@ -410,6 +483,22 @@ export const completeViaQr = async (req, res, next) => {
         );
 
         await conn.commit();
+
+        const completionDate = new Date();
+        await mirror(`application.completeViaQr mysqlApplicationId=${app.ApplicationID}`, () =>
+            Application.updateOne(
+                { mysqlApplicationId: app.ApplicationID },
+                {
+                    $set: {
+                        Status: 'Completed',
+                        CompletionDate: completionDate,
+                        CompletionToken: null,
+                        'documents.$[].VerficationStatus': 'Accepted',
+                    },
+                }
+            )
+        );
+
         return res.status(200).json({
             ok: true,
             message: 'Shipment marked as completed.',
@@ -522,6 +611,38 @@ export const updateApplication = async (req, res, next) => {
         }
 
         await conn.commit();
+
+        await mirror(`application.update mysqlApplicationId=${ApplicationID}`, async () => {
+            /* Refresh denormalized snapshots only if a FK actually changed.
+               Otherwise just $set the core fields — cheaper. */
+            const fkChanged =
+                Number(existing.CompanyID)  !== Number(CompanyID) ||
+                Number(existing.ClientID)   !== Number(ClientID) ||
+                Number(existing.CategoryID) !== Number(CategoryID) ||
+                Number(existing.PortID)     !== Number(PortID);
+            const snaps = fkChanged ? await fetchSnapshots({ CompanyID, ClientID, CategoryID, PortID }) : null;
+
+            const $set = {
+                PaymentType,
+                Status,
+                SubmissionDate: SubmissionDate ? new Date(SubmissionDate) : null,
+                TrackingNumber,
+                DeliveryAddress,
+                CompletionDate: CompletionDate ? new Date(CompletionDate) : null,
+                CompletionToken,
+                mysqlCompanyId:  CompanyID,
+                mysqlClientId:   ClientID,
+                mysqlCategoryId: CategoryID,
+                mysqlPortId:     PortID,
+                ...(snaps ?? {}),
+                ...(isCompleting ? { 'documents.$[].VerficationStatus': 'Accepted' } : {}),
+            };
+            return Application.updateOne(
+                { mysqlApplicationId: Number(ApplicationID) },
+                { $set }
+            );
+        });
+
         return res.status(200).json({
             Status: "OK",
             Message: "Record Id [" + ApplicationID + "] is Updated Successfully",
