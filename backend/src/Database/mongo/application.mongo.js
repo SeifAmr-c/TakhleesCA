@@ -1,11 +1,10 @@
 import mongoose from 'mongoose';
 
-/* Embedded subdocs — Document and Payment are always read with their parent
-   Application and are never queried independently by the mobile app, so they
-   become arrays inside Application rather than separate collections. */
+/* Documents and Payments are always read with their parent Application
+   and never queried independently, so they live as embedded arrays. */
 const DocumentSubSchema = new mongoose.Schema(
     {
-        mysqlDocumentId: { type: Number, index: true },
+        DocumentID: { type: Number, required: true, index: true },
         DocType: {
             type: String,
             required: true,
@@ -25,7 +24,7 @@ const DocumentSubSchema = new mongoose.Schema(
 
 const PaymentSubSchema = new mongoose.Schema(
     {
-        mysqlPaymentId: { type: Number, index: true },
+        PaymentID: { type: Number, required: true, index: true },
         PaymentDate: { type: Date, default: Date.now },
         Amount: { type: Number, required: true, min: 0 },
         PaymentGateway: { type: String, required: true, enum: ['Credit Card', 'Bank Transfer'] },
@@ -33,10 +32,8 @@ const PaymentSubSchema = new mongoose.Schema(
     { _id: false }
 );
 
-/* Denormalized snapshot subdocs — these mirror the LEFT JOINs the MySQL list
-   query currently does. Names rarely change; when they do, the parent service
-   (Company/Category/Port/User update) fans out an updateMany() onto every
-   matching application so these stay fresh. */
+/* Denormalized snapshots so the list view renders without per-row lookups.
+   Refreshed via fan-out updateMany when the referenced parent doc changes. */
 const ClientSnapSchema = new mongoose.Schema(
     { FirstName: String, LastName: String },
     { _id: false }
@@ -59,7 +56,7 @@ const PortSnapSchema = new mongoose.Schema(
 
 const ApplicationSchema = new mongoose.Schema(
     {
-        mysqlApplicationId: { type: Number, index: true, unique: true, sparse: true },
+        ApplicationID: { type: Number, index: true, unique: true },
 
         PaymentType: { type: String, required: true, enum: ['FULL', 'PARTIAL'] },
         Status: {
@@ -75,30 +72,23 @@ const ApplicationSchema = new mongoose.Schema(
         ACID: { type: String, required: true },
         CompletionToken: { type: String, default: null, index: true, sparse: true },
 
-        /* Bridge IDs so the mobile read routes can look up by MySQL ID
-           without needing the Mongo ObjectId. */
-        mysqlCompanyId:  { type: Number, default: null, index: true },
-        mysqlClientId:   { type: Number, default: null, index: true },
-        mysqlCategoryId: { type: Number, default: null },
-        mysqlPortId:     { type: Number, default: null },
+        CompanyID:  { type: Number, default: null, index: true },
+        ClientID:   { type: Number, default: null, index: true },
+        CategoryID: { type: Number, default: null },
+        PortID:     { type: Number, default: null },
 
-        /* Denormalized join snapshots — kept in sync by fan-out updates. */
         client:   { type: ClientSnapSchema,   default: null },
         company:  { type: CompanySnapSchema,  default: null },
         category: { type: CategorySnapSchema, default: null },
         port:     { type: PortSnapSchema,     default: null },
 
-        /* Embedded child arrays. */
         documents: { type: [DocumentSubSchema], default: [] },
         payments:  { type: [PaymentSubSchema],  default: [] },
     },
     { timestamps: true }
 );
 
-/* Compound index that backs the mobile list queries:
-   - company-list: filter by mysqlCompanyId + Status, sort by _id desc
-   - client-list:  filter by mysqlClientId, sort by _id desc */
-ApplicationSchema.index({ mysqlCompanyId: 1, Status: 1, _id: -1 });
-ApplicationSchema.index({ mysqlClientId: 1, _id: -1 });
+ApplicationSchema.index({ CompanyID: 1, Status: 1, _id: -1 });
+ApplicationSchema.index({ ClientID: 1, _id: -1 });
 
 export default mongoose.model('Application', ApplicationSchema);

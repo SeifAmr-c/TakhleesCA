@@ -1,79 +1,88 @@
-import db from '../../Database/connection.js';
 import crypto from 'crypto';
 import { uploadToCloudinary, companyFolder } from '../../config/cloudinary.js';
 import Application from '../../Database/mongo/application.mongo.js';
-import { mirror } from '../../Database/mongo/dual_write.js';
-
-const runQuery = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.query(sql, params, (err, result) => {
-            if (err) return reject(err);
-            resolve(result);
-        });
-    });
-
-/* Build the four denormalized snapshot blobs the Mongo Application doc needs.
-   Reads from MySQL because MySQL is the source of truth during the migration. */
-const fetchSnapshots = async ({ CompanyID, ClientID, CategoryID, PortID }) => {
-    const [companyRow] = CompanyID
-        ? await runQuery('SELECT Name, LogoUrl FROM company WHERE CompanyID = ? LIMIT 1', [CompanyID])
-        : [null];
-    const [clientUserRow] = ClientID
-        ? await runQuery(
-            `SELECT u.FirstName, u.LastName
-               FROM user u WHERE u.UserID = ? LIMIT 1`,
-            [ClientID]
-        )
-        : [null];
-    const [categoryRow] = CategoryID
-        ? await runQuery('SELECT Type FROM category WHERE CategoryID = ? LIMIT 1', [CategoryID])
-        : [null];
-    const [portRow] = PortID
-        ? await runQuery('SELECT PortName, PortType FROM port WHERE PortID = ? LIMIT 1', [PortID])
-        : [null];
-
-    return {
-        company:  companyRow    ? { Name: companyRow.Name, LogoUrl: companyRow.LogoUrl ?? null } : null,
-        client:   clientUserRow ? { FirstName: clientUserRow.FirstName, LastName: clientUserRow.LastName } : null,
-        category: categoryRow   ? { Type: categoryRow.Type } : null,
-        port:     portRow       ? { PortName: portRow.PortName, PortType: portRow.PortType } : null,
-    };
-};
+import Company from '../../Database/mongo/company.mongo.js';
+import User from '../../Database/mongo/user.mongo.js';
+import Category from '../../Database/mongo/category.mongo.js';
+import Port from '../../Database/mongo/port.mongo.js';
+import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
+import { nextId } from '../../Database/mongo/counters.js';
 
 const ALLOWED_PAYMENT_TYPES = ['FULL', 'PARTIAL'];
 const ALLOWED_DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Shipping Document'];
 
-/* Server-generated tracking number. Format: TKL-<8 hex chars>-<6 hex chars>.
-   The composite is collision-resistant in practice; we still re-roll on
-   the rare uniqueness violation. */
 const generateTrackingNumber = () =>
     `TKL-${crypto.randomBytes(4).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
-/* The CompletionToken is the shared secret of the QR handshake — the
-   ONLY caller allowed to see it is the client who owns the row. Anyone
-   else (company, admin, unauthenticated would-be readers) must get a
-   payload with CompletionToken stripped. We delete the key entirely
-   rather than null-it so it cannot be re-introduced via spread. */
-const sanitizeApplicationRow = (row, req) => {
-    if (!row || typeof row !== 'object') return row;
+/* Build the four denormalized snapshot blobs from the referenced parents.
+   Used at insert and on FK changes; reads small targeted projections. */
+const fetchSnapshots = async ({ CompanyID, ClientID, CategoryID, PortID }) => {
+    const [companyDoc, clientDoc, categoryDoc, portDoc] = await Promise.all([
+        CompanyID  != null ? Company.findOne({ CompanyID }).select({ Name: 1, LogoUrl: 1 }).lean()   : null,
+        ClientID   != null ? User.findOne({ UserID: ClientID }).select({ FirstName: 1, LastName: 1 }).lean() : null,
+        CategoryID != null ? Category.findOne({ CategoryID }).select({ Type: 1 }).lean()             : null,
+        PortID     != null ? Port.findOne({ PortID }).select({ PortName: 1, PortType: 1 }).lean()    : null,
+    ]);
+    return {
+        company:  companyDoc  ? { Name: companyDoc.Name, LogoUrl: companyDoc.LogoUrl ?? null } : null,
+        client:   clientDoc   ? { FirstName: clientDoc.FirstName, LastName: clientDoc.LastName } : null,
+        category: categoryDoc ? { Type: categoryDoc.Type } : null,
+        port:     portDoc     ? { PortName: portDoc.PortName, PortType: portDoc.PortType } : null,
+    };
+};
+
+/* CompletionToken is the QR-handshake shared secret; only its owning
+   client may read it. Strip from any other caller. */
+const sanitizeApplication = (doc, req) => {
+    if (!doc || typeof doc !== 'object') return doc;
     const session = req?.session;
     const callerIsOwnerClient =
         session?.role === 'client' &&
         session?.userId != null &&
-        row.ClientID != null &&
-        Number(session.userId) === Number(row.ClientID);
-    if (callerIsOwnerClient) return row;
-    const { CompletionToken: _omit, ...rest } = row;
+        doc.ClientID != null &&
+        Number(session.userId) === Number(doc.ClientID);
+    if (callerIsOwnerClient) return doc;
+    const { CompletionToken: _omit, ...rest } = doc;
     return rest;
 };
+const sanitizeApplications = (docs, req) =>
+    Array.isArray(docs) ? docs.map((d) => sanitizeApplication(d, req)) : docs;
 
-const sanitizeApplicationRows = (rows, req) =>
-    Array.isArray(rows) ? rows.map((row) => sanitizeApplicationRow(row, req)) : rows;
+/* Shape a Mongo Application doc into the row format the dashboards
+   already render. Mirrors the column set the SQL list query returned:
+   denormalized client/company/category/port names + total Amount. */
+const shapeListRow = (d, { includeToken = false } = {}) => {
+    const Amount = (d.payments ?? []).reduce((s, p) => s + Number(p.Amount || 0), 0);
+    const row = {
+        ApplicationID:   d.ApplicationID,
+        TrackingNumber:  d.TrackingNumber,
+        Status:          d.Status,
+        PaymentType:     d.PaymentType,
+        SubmissionDate:  d.SubmissionDate,
+        CompletionDate:  d.CompletionDate,
+        DeliveryAddress: d.DeliveryAddress,
+        ACID:            d.ACID,
+        CompanyID:       d.CompanyID,
+        ClientID:        d.ClientID,
+        CategoryID:      d.CategoryID,
+        PortID:          d.PortID,
+        ClientName:      d.client ? `${d.client.FirstName ?? ''} ${d.client.LastName ?? ''}`.trim() : null,
+        CategoryName:    d.category?.Type ?? null,
+        PortName:        d.port?.PortName ?? null,
+        PortType:        d.port?.PortType ?? null,
+        CompanyName:     d.company?.Name ?? null,
+        CompanyLogoUrl:  d.company?.LogoUrl ?? null,
+        Amount,
+    };
+    if (includeToken) {
+        row.CompletionToken = d.CompletionToken;
+        row.QrPayload = d.CompletionToken ? `${d.TrackingNumber}:${d.CompletionToken}` : null;
+    }
+    return row;
+};
 
 export const createApplication = async (req, res, next) => {
     try {
-        /* The application is filed by the logged-in client. The signed-in
-           client's UserID is also their ClientID (single-table inheritance). */
         const ClientID = req.session?.userId;
         if (!ClientID) {
             return res.status(401).json({ ok: false, message: 'You must be signed in to file an application.' });
@@ -97,16 +106,11 @@ export const createApplication = async (req, res, next) => {
             return res.status(400).json({ ok: false, message: 'ACID must be exactly 19 digits.' });
         }
 
-        /* Server-side defaults for the columns the form doesn't (and shouldn't)
-           supply: SubmissionDate (now), TrackingNumber (generated), Status (Pending). */
         let TrackingNumber;
         for (let attempt = 0; attempt < 5; attempt += 1) {
             const candidate = generateTrackingNumber();
-            const existing = await runQuery(
-                'SELECT 1 FROM application WHERE TrackingNumber = ? LIMIT 1',
-                [candidate]
-            );
-            if (existing.length === 0) {
+            const exists = await Application.exists({ TrackingNumber: candidate });
+            if (!exists) {
                 TrackingNumber = candidate;
                 break;
             }
@@ -115,30 +119,13 @@ export const createApplication = async (req, res, next) => {
             return res.status(500).json({ ok: false, message: 'Could not allocate a unique tracking number.' });
         }
 
-        const result = await runQuery(
-            `INSERT INTO application
-                (PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, ACID, CompanyID, CategoryID, ClientID, PortID)
-             VALUES (?, NULL, NOW(), ?, 'Pending', ?, ?, ?, ?, ?, ?)`,
-            [PaymentType, TrackingNumber, DeliveryAddress, ACID, CompanyID, CategoryID, ClientID, PortID]
-        );
-
-        const ApplicationID = result.insertId;
-        const SubmissionDate = new Date();
-
-        /* Document fan-out. Files arrive with indexed field names like
-           "Document_0" through "Document_3"; the matching DocType arrives
-           as "DocType_0".."DocType_3" in req.body. We upload each file to
-           Cloudinary in parallel, then insert one document row per file. */
+        /* Stream every uploaded document to Cloudinary in parallel,
+           then attach them to the Application as embedded subdocs. */
         const files = Array.isArray(req.files) ? req.files : [];
         const uploadedDocs = [];
         if (files.length) {
-            /* Resolve the company name once so every doc upload for this
-               application lands in the same per-company folder. */
-            const [companyRow] = await runQuery(
-                'SELECT Name FROM company WHERE CompanyID = ? LIMIT 1',
-                [CompanyID]
-            );
-            const docFolder = companyFolder(companyRow?.Name, 'documents');
+            const companyDoc = await Company.findOne({ CompanyID }).select({ Name: 1 }).lean();
+            const docFolder = companyFolder(companyDoc?.Name, 'documents');
 
             const tasks = files.map(async (file) => {
                 const match = /^Document_(\d+)$/.exec(file.fieldname);
@@ -156,39 +143,33 @@ export const createApplication = async (req, res, next) => {
             });
             const settled = (await Promise.all(tasks)).filter(Boolean);
             for (const doc of settled) {
-                const docRes = await runQuery(
-                    'INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), ?, ?, ?)',
-                    [doc.DocType, 'Pending', doc.Path, ApplicationID]
-                );
-                uploadedDocs.push({ ...doc, mysqlDocumentId: docRes.insertId });
+                const DocumentID = await nextId('document');
+                uploadedDocs.push({
+                    DocumentID,
+                    DocType: doc.DocType,
+                    UploadDate: new Date(),
+                    VerficationStatus: 'Pending',
+                    Path: doc.Path,
+                });
             }
         }
 
-        /* Dual-write Application + embedded documents in a single doc. */
-        await mirror(`application.create mysqlApplicationId=${ApplicationID}`, async () => {
-            const snaps = await fetchSnapshots({ CompanyID, ClientID, CategoryID, PortID });
-            return Application.create({
-                mysqlApplicationId: ApplicationID,
-                PaymentType,
-                Status: 'Pending',
-                SubmissionDate,
-                TrackingNumber,
-                DeliveryAddress,
-                ACID,
-                mysqlCompanyId:  CompanyID,
-                mysqlClientId:   ClientID,
-                mysqlCategoryId: CategoryID,
-                mysqlPortId:     PortID,
-                ...snaps,
-                documents: uploadedDocs.map((d) => ({
-                    mysqlDocumentId: d.mysqlDocumentId,
-                    DocType: d.DocType,
-                    UploadDate: new Date(),
-                    VerficationStatus: 'Pending',
-                    Path: d.Path,
-                })),
-                payments: [],
-            });
+        const ApplicationID = await nextId('application');
+        const SubmissionDate = new Date();
+        const snaps = await fetchSnapshots({ CompanyID, ClientID, CategoryID, PortID });
+
+        await Application.create({
+            ApplicationID,
+            PaymentType,
+            Status: 'Pending',
+            SubmissionDate,
+            TrackingNumber,
+            DeliveryAddress,
+            ACID,
+            CompanyID, ClientID, CategoryID, PortID,
+            ...snaps,
+            documents: uploadedDocs,
+            payments: [],
         });
 
         return res.status(201).json({
@@ -198,7 +179,7 @@ export const createApplication = async (req, res, next) => {
                 ApplicationID,
                 TrackingNumber,
                 Status: 'Pending',
-                Documents: uploadedDocs,
+                Documents: uploadedDocs.map((d) => ({ DocumentID: d.DocumentID, DocType: d.DocType, Path: d.Path })),
             },
         });
     } catch (err) {
@@ -206,144 +187,61 @@ export const createApplication = async (req, res, next) => {
     }
 };
 
-/* Mobile company dashboard: list applications assigned to the signed-in
-   company. Only returns rows with Status in ('Pending','Completed') so
-   the screen excludes Accepted/Rejected applications. */
-export const listCompanyApplications = (req, res, next) => {
-    const CompanyID = req.session?.companyId;
-    if (!CompanyID) {
-        return res.status(401).json({ ok: false, message: 'Company sign-in required.' });
+/* Company dashboard list — Pending + Completed only, newest first. */
+export const listCompanyApplications = async (req, res, next) => {
+    try {
+        const CompanyID = req.session?.companyId;
+        if (!CompanyID) {
+            return res.status(401).json({ ok: false, message: 'Company sign-in required.' });
+        }
+        const docs = await Application
+            .find({ CompanyID, Status: { $in: ['Pending', 'Completed'] } })
+            .sort({ ApplicationID: -1 })
+            .lean();
+        return res.json(docs.map((d) => shapeListRow(d, { includeToken: false })));
+    } catch (err) {
+        return next(err);
     }
-
-    const sql = `
-        SELECT
-            a.ApplicationID, a.TrackingNumber, a.Status, a.PaymentType,
-            a.SubmissionDate, a.CompletionDate, a.DeliveryAddress, a.ACID,
-            a.CompanyID, a.ClientID, a.CategoryID, a.PortID,
-            CONCAT(u.FirstName, ' ', u.LastName) AS ClientName,
-            cat.Type    AS CategoryName,
-            p.PortName  AS PortName,
-            p.PortType  AS PortType,
-            co.Name     AS CompanyName,
-            co.LogoUrl  AS CompanyLogoUrl,
-            COALESCE((SELECT SUM(pay.Amount) FROM payment pay WHERE pay.ApplicationID = a.ApplicationID), 0) AS Amount
-        FROM application a
-        LEFT JOIN client cl    ON cl.ClientID    = a.ClientID
-        LEFT JOIN user u       ON u.UserID       = cl.ClientID
-        LEFT JOIN category cat ON cat.CategoryID = a.CategoryID
-        LEFT JOIN port p       ON p.PortID       = a.PortID
-        LEFT JOIN company co   ON co.CompanyID   = a.CompanyID
-        WHERE a.CompanyID = ? AND a.Status IN ('Pending', 'Completed')
-        ORDER BY a.ApplicationID DESC
-    `;
-
-    db.query(sql, [CompanyID], (err, result) => {
-        if (err) return next(err);
-        return res.json(result);
-    });
 };
 
-/* Mobile client tracking screen: list the signed-in client's own
-   applications. Caller is always the owner (filter is the session's
-   userId), so CompletionToken is safe to expose — the phone needs it
-   to render the QR the company will scan. QrPayload is the exact
-   format completeViaQr expects ("TrackingNumber:Token"); it is null
-   until the application enters 'In Progress' and the token is minted. */
-export const listClientApplications = (req, res, next) => {
-    const ClientID = req.session?.userId;
-    if (!ClientID) {
-        return res.status(401).json({ ok: false, message: 'Authentication required.' });
+/* Client tracking screen — owner is the session user, so CompletionToken
+   is safe to include for the QR render. */
+export const listClientApplications = async (req, res, next) => {
+    try {
+        const ClientID = req.session?.userId;
+        if (!ClientID) {
+            return res.status(401).json({ ok: false, message: 'Authentication required.' });
+        }
+        const docs = await Application
+            .find({ ClientID })
+            .sort({ ApplicationID: -1 })
+            .lean();
+        return res.json(docs.map((d) => shapeListRow(d, { includeToken: true })));
+    } catch (err) {
+        return next(err);
     }
-
-    const sql = `
-        SELECT
-            a.ApplicationID, a.TrackingNumber, a.Status, a.PaymentType,
-            a.SubmissionDate, a.CompletionDate, a.DeliveryAddress, a.ACID,
-            a.CompanyID, a.ClientID, a.CategoryID, a.PortID,
-            a.CompletionToken,
-            CASE
-                WHEN a.CompletionToken IS NULL OR a.CompletionToken = '' THEN NULL
-                ELSE CONCAT(a.TrackingNumber, ':', a.CompletionToken)
-            END AS QrPayload,
-            cat.Type    AS CategoryName,
-            p.PortName  AS PortName,
-            p.PortType  AS PortType,
-            co.Name     AS CompanyName,
-            co.LogoUrl  AS CompanyLogoUrl,
-            COALESCE((SELECT SUM(pay.Amount) FROM payment pay WHERE pay.ApplicationID = a.ApplicationID), 0) AS Amount
-        FROM application a
-        LEFT JOIN category cat ON cat.CategoryID = a.CategoryID
-        LEFT JOIN port p       ON p.PortID       = a.PortID
-        LEFT JOIN company co   ON co.CompanyID   = a.CompanyID
-        WHERE a.ClientID = ?
-        ORDER BY a.ApplicationID DESC
-    `;
-
-    db.query(sql, [ClientID], (err, result) => {
-        if (err) return next(err);
-        return res.json(result);
-    });
 };
 
-export const getApplication = (req, res) => {
-    const ApplicationID = req.query.ApplicationID;
-    const CompanyID = req.query.CompanyID;
-    const ClientID = req.query.ClientID;
+export const getApplication = async (req, res, next) => {
+    try {
+        const { ApplicationID, CompanyID, ClientID } = req.query;
 
-    if (ApplicationID !== undefined && ApplicationID !== '' && ApplicationID !== '%') {
-        db.query(
-            "SELECT * FROM application WHERE ApplicationID = ?",
-            [ApplicationID],
-            function (err, result) {
-                if (err) throw err;
-                res.json(sanitizeApplicationRows(result, req));
-            }
-        );
-        return;
+        if (ApplicationID !== undefined && ApplicationID !== '' && ApplicationID !== '%') {
+            const doc = await Application.findOne({ ApplicationID: Number(ApplicationID) }).lean();
+            return res.json(doc ? [sanitizeApplication(doc, req)] : []);
+        }
+
+        const filter = {};
+        if (CompanyID) filter.CompanyID = Number(CompanyID);
+        if (ClientID)  filter.ClientID  = Number(ClientID);
+
+        const docs = await Application.find(filter).sort({ ApplicationID: -1 }).lean();
+        return res.json(sanitizeApplications(docs.map((d) => ({ ...d, ...shapeListRow(d, { includeToken: false }) })), req));
+    } catch (err) {
+        return next(err);
     }
-
-    /* List view enriched with everything the dashboards need so they
-       don't have to make N+1 follow-up requests:
-         - ClientName  : joined from User via Client.ClientID -> User.UserID
-         - CategoryName: Category.Type
-         - PortName, PortType
-         - CompanyName : Company.Name
-         - Amount      : sum of Payments rows for the application (NULL -> 0) */
-    const where = [];
-    const params = [];
-    if (CompanyID) { where.push("a.CompanyID = ?"); params.push(CompanyID); }
-    if (ClientID)  { where.push("a.ClientID = ?");  params.push(ClientID);  }
-
-    const sql = `
-        SELECT
-            a.*,
-            CONCAT(u.FirstName, ' ', u.LastName) AS ClientName,
-            cat.Type     AS CategoryName,
-            p.PortName   AS PortName,
-            p.PortType   AS PortType,
-            co.Name      AS CompanyName,
-            co.LogoUrl   AS CompanyLogoUrl,
-            COALESCE((SELECT SUM(pay.Amount) FROM payment pay WHERE pay.ApplicationID = a.ApplicationID), 0) AS Amount
-        FROM application a
-        LEFT JOIN client cl   ON cl.ClientID   = a.ClientID
-        LEFT JOIN user u      ON u.UserID      = cl.ClientID
-        LEFT JOIN category cat ON cat.CategoryID = a.CategoryID
-        LEFT JOIN port p      ON p.PortID      = a.PortID
-        LEFT JOIN company co  ON co.CompanyID  = a.CompanyID
-        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-        ORDER BY a.ApplicationID DESC
-    `;
-
-    db.query(sql, params, function (err, result) {
-        if (err) throw err;
-        res.json(sanitizeApplicationRows(result, req));
-    });
 };
 
-/* DELETE /application/:id/cancel  (requires client session)
-   Client-initiated cancellation. Only Pending rows belonging to the
-   signed-in client can be cancelled; anything in progress or further
-   along must be handled by the company side. */
 export const cancelApplication = async (req, res, next) => {
     try {
         const ClientID = req.session?.userId;
@@ -356,147 +254,104 @@ export const cancelApplication = async (req, res, next) => {
             return res.status(400).json({ ok: false, message: "Invalid application id." });
         }
 
-        const result = await runQuery(
-            "DELETE FROM application WHERE ApplicationID = ? AND ClientID = ? AND Status = 'Pending'",
-            [ApplicationID, ClientID]
-        );
-
-        if (!result.affectedRows) {
+        const result = await Application.deleteOne({
+            ApplicationID,
+            ClientID,
+            Status: 'Pending',
+        });
+        if (!result.deletedCount) {
             return res.status(400).json({ ok: false, message: "Application cannot be cancelled." });
         }
-
-        await mirror(`application.cancel mysqlApplicationId=${ApplicationID}`, () =>
-            Application.deleteOne({ mysqlApplicationId: ApplicationID })
-        );
-
         return res.status(200).json({ ok: true, message: "Application cancelled successfully." });
     } catch (err) {
         return next(err);
     }
 };
 
-export const deleteApplication = (req, res) => {
-    const ApplicationID = req.query.ApplicationID;
-
-    db.query("SELECT ApplicationID FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
+export const deleteApplication = async (req, res, next) => {
+    try {
+        const id = Number(req.query.ApplicationID);
+        const result = await Application.deleteOne({ ApplicationID: id });
+        if (!result.deletedCount) {
             return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + ApplicationID + "] does not exist or has already been deleted."
+                Status: "Error",
+                Message: `Record Id [${id}] does not exist or has already been deleted.`,
             });
         }
-
-        db.query("DELETE FROM application WHERE ApplicationID = ?", [ApplicationID], function (err, result) {
-            if (err) throw err;
-            mirror(`application.delete mysqlApplicationId=${ApplicationID}`, () =>
-                Application.deleteOne({ mysqlApplicationId: Number(ApplicationID) })
-            );
-            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ApplicationID + "] deleted Successfully" });
-            console.log("Delete Request Received for record [" + ApplicationID + "] received");
-        });
-    });
+        return res.status(200).json({ Status: "OK", Message: `Record Id [${id}] deleted Successfully` });
+    } catch (err) {
+        return next(err);
+    }
 };
 
-export const searchApplication = (req, res) => {
-    const keyword = req.query.keyword;
-    const keyvalue = req.query.keyvalue;
-    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-
-    const allowedColumns = ['ApplicationID', 'PaymentType', 'TrackingNumber', 'Status', 'CompanyID', 'CategoryID', 'ClientID', 'PortID'];
-    if (!allowedColumns.includes(keyword)) {
-        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
-    }
-    if (!keyvalue) {
-        return res.status(400).json({ error: 'keyvalue is required' });
-    }
-
-    const sql = `SELECT * FROM application WHERE ${keyword} = ? ORDER BY ApplicationID ${sort}`;
-    db.query(sql, [keyvalue], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        res.json(sanitizeApplicationRows(result, req));
-    });
-};
-
-/* QR handshake: the company physically scans the QR rendered on the
-   client's screen. The payload is `TrackingNumber:CompletionToken`; we
-   verify the token belongs to the scanning company and that the app is
-   currently 'In Progress', then mark it 'Completed' and burn the token. */
-export const completeViaQr = async (req, res, next) => {
-    const CompanyID = req.session?.companyId;
-    if (!CompanyID) {
-        return res.status(401).json({ ok: false, message: 'Company sign-in required.' });
-    }
-
-    const qrPayload = String(req.body?.qrPayload ?? '').trim();
-    if (!qrPayload) {
-        return res.status(400).json({ ok: false, message: 'qrPayload is required.' });
-    }
-
-    const sepIdx = qrPayload.indexOf(':');
-    if (sepIdx <= 0 || sepIdx === qrPayload.length - 1) {
-        return res.status(400).json({ ok: false, message: 'qrPayload must be in the format "TrackingNumber:Token".' });
-    }
-    const trackingNumber = qrPayload.slice(0, sepIdx).trim();
-    const token = qrPayload.slice(sepIdx + 1).trim();
-    if (!trackingNumber || !token) {
-        return res.status(400).json({ ok: false, message: 'qrPayload must contain both a tracking number and a token.' });
-    }
-
-    const conn = await db.pool.getConnection();
+export const searchApplication = async (req, res, next) => {
     try {
-        await conn.beginTransaction();
+        const { keyword, keyvalue } = req.query;
+        const sort = req.query.sort?.toUpperCase() === 'DESC' ? -1 : 1;
 
-        const [rows] = await conn.query(
-            "SELECT * FROM application WHERE CompletionToken = ? LIMIT 1",
-            [token]
-        );
-        if (rows.length === 0) {
-            await conn.rollback();
+        const allowedColumns = ['ApplicationID', 'PaymentType', 'TrackingNumber', 'Status', 'CompanyID', 'CategoryID', 'ClientID', 'PortID'];
+        if (!allowedColumns.includes(keyword)) {
+            return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+        }
+        if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
+
+        const numericKeys = new Set(['ApplicationID', 'CompanyID', 'CategoryID', 'ClientID', 'PortID']);
+        const value = numericKeys.has(keyword) ? Number(keyvalue) : keyvalue;
+
+        const docs = await Application.find({ [keyword]: value }).sort({ ApplicationID: sort }).lean();
+        return res.json(sanitizeApplications(docs, req));
+    } catch (err) {
+        return next(err);
+    }
+};
+
+/* QR handshake — the company scans the QR rendered on the client's
+   screen. Payload is `TrackingNumber:CompletionToken`. */
+export const completeViaQr = async (req, res, next) => {
+    try {
+        const CompanyID = req.session?.companyId;
+        if (!CompanyID) {
+            return res.status(401).json({ ok: false, message: 'Company sign-in required.' });
+        }
+
+        const qrPayload = String(req.body?.qrPayload ?? '').trim();
+        if (!qrPayload) {
+            return res.status(400).json({ ok: false, message: 'qrPayload is required.' });
+        }
+        const sepIdx = qrPayload.indexOf(':');
+        if (sepIdx <= 0 || sepIdx === qrPayload.length - 1) {
+            return res.status(400).json({ ok: false, message: 'qrPayload must be in the format "TrackingNumber:Token".' });
+        }
+        const trackingNumber = qrPayload.slice(0, sepIdx).trim();
+        const token = qrPayload.slice(sepIdx + 1).trim();
+        if (!trackingNumber || !token) {
+            return res.status(400).json({ ok: false, message: 'qrPayload must contain both a tracking number and a token.' });
+        }
+
+        const app = await Application.findOne({ CompletionToken: token });
+        if (!app) {
             return res.status(404).json({ ok: false, message: 'No active shipment matches this QR code.' });
         }
-        const app = rows[0];
-
-        if (String(app.TrackingNumber) !== trackingNumber) {
-            await conn.rollback();
+        if (app.TrackingNumber !== trackingNumber) {
             return res.status(400).json({ ok: false, message: 'QR payload tracking number does not match the token.' });
         }
         if (Number(app.CompanyID) !== Number(CompanyID)) {
-            await conn.rollback();
             return res.status(403).json({ ok: false, message: 'This shipment does not belong to your company.' });
         }
-        if (String(app.Status) !== 'In Progress') {
-            await conn.rollback();
+        if (app.Status !== 'In Progress') {
             return res.status(409).json({ ok: false, message: `Shipment is "${app.Status}", not "In Progress".` });
         }
 
-        await conn.query(
-            "UPDATE application SET Status = 'Completed', CompletionDate = NOW(), CompletionToken = NULL WHERE ApplicationID = ?",
-            [app.ApplicationID]
-        );
-        await conn.query(
-            "UPDATE document SET VerficationStatus = 'Accepted' WHERE ApplicationID = ?",
-            [app.ApplicationID]
-        );
-
-        await conn.commit();
-
-        const completionDate = new Date();
-        await mirror(`application.completeViaQr mysqlApplicationId=${app.ApplicationID}`, () =>
-            Application.updateOne(
-                { mysqlApplicationId: app.ApplicationID },
-                {
-                    $set: {
-                        Status: 'Completed',
-                        CompletionDate: completionDate,
-                        CompletionToken: null,
-                        'documents.$[].VerficationStatus': 'Accepted',
-                    },
-                }
-            )
+        await Application.updateOne(
+            { ApplicationID: app.ApplicationID },
+            {
+                $set: {
+                    Status: 'Completed',
+                    CompletionDate: new Date(),
+                    CompletionToken: null,
+                    'documents.$[].VerficationStatus': 'Accepted',
+                },
+            }
         );
 
         return res.status(200).json({
@@ -509,52 +364,40 @@ export const completeViaQr = async (req, res, next) => {
             },
         });
     } catch (err) {
-        try { await conn.rollback(); } catch { /* ignore */ }
         return next(err);
-    } finally {
-        conn.release();
     }
 };
 
 export const updateApplication = async (req, res, next) => {
-    const ApplicationID = req.query.ApplicationID;
-    const conn = await db.pool.getConnection();
     try {
-        await conn.beginTransaction();
-
-        const [rows] = await conn.query(
-            "SELECT * FROM application WHERE ApplicationID = ?",
-            [ApplicationID]
-        );
-        if (rows.length === 0) {
-            await conn.rollback();
+        const ApplicationID = Number(req.query.ApplicationID);
+        const existing = await Application.findOne({ ApplicationID });
+        if (!existing) {
             return res.status(404).json({
                 Status: "Error",
-                Message: "Record Id [" + ApplicationID + "] does not exist or has already been deleted. Update aborted.",
+                Message: `Record Id [${ApplicationID}] does not exist or has already been deleted. Update aborted.`,
             });
         }
 
-        const existing        = rows[0];
         const PaymentType     = req.body.PaymentType     !== undefined ? req.body.PaymentType     : existing.PaymentType;
         const SubmissionDate  = req.body.SubmissionDate  !== undefined ? req.body.SubmissionDate  : existing.SubmissionDate;
         const TrackingNumber  = req.body.TrackingNumber  !== undefined ? req.body.TrackingNumber  : existing.TrackingNumber;
         const Status          = req.body.Status          !== undefined ? req.body.Status          : existing.Status;
         const DeliveryAddress = req.body.DeliveryAddress !== undefined ? req.body.DeliveryAddress : existing.DeliveryAddress;
-        const CompanyID       = req.body.CompanyID       !== undefined ? req.body.CompanyID       : existing.CompanyID;
-        const ClientID        = req.body.ClientID        !== undefined ? req.body.ClientID        : existing.ClientID;
-        const CategoryID      = req.body.CategoryID      !== undefined ? req.body.CategoryID      : existing.CategoryID;
-        const PortID          = req.body.PortID          !== undefined ? req.body.PortID          : existing.PortID;
+        const CompanyID       = req.body.CompanyID       !== undefined ? Number(req.body.CompanyID)  : existing.CompanyID;
+        const ClientID        = req.body.ClientID        !== undefined ? Number(req.body.ClientID)   : existing.ClientID;
+        const CategoryID      = req.body.CategoryID      !== undefined ? Number(req.body.CategoryID) : existing.CategoryID;
+        const PortID          = req.body.PortID          !== undefined ? Number(req.body.PortID)     : existing.PortID;
 
         const newStatus = String(Status);
         const isCompleting = newStatus === 'Completed';
-        /* Revenue tracking only fires on the transition INTO Accepted —
-           re-saving an application that's already Accepted must not
-           double-insert a CompanyPayment row. */
-        const isAccepting = newStatus === 'Accepted' && String(existing.Status) !== 'Accepted';
-        /* The QR handshake token is minted on the first transition into
-           'In Progress'. We don't re-roll on subsequent saves so the token
-           the client is currently displaying stays valid until completion. */
-        const isStartingProgress = newStatus === 'In Progress' && String(existing.Status) !== 'In Progress';
+        /* Revenue tracking only fires on the transition INTO Accepted;
+           re-saving an already-Accepted app must not double-insert. */
+        const isAccepting = newStatus === 'Accepted' && existing.Status !== 'Accepted';
+        /* QR token is minted on the first transition INTO In Progress
+           and reused on subsequent saves so the currently-displayed QR
+           stays valid until completion. */
+        const isStartingProgress = newStatus === 'In Progress' && existing.Status !== 'In Progress';
         const CompletionDate = req.body.CompletionDate !== undefined
             ? req.body.CompletionDate
             : (isCompleting ? new Date() : existing.CompletionDate);
@@ -562,95 +405,61 @@ export const updateApplication = async (req, res, next) => {
             ? crypto.randomUUID()
             : existing.CompletionToken;
 
-        await conn.query(
-            "UPDATE application SET `PaymentType` = ?, `CompletionDate` = ?, `SubmissionDate` = ?, `TrackingNumber` = ?, `Status` = ?, `DeliveryAddress` = ?, `CompletionToken` = ?, `CompanyID` = ?, `CategoryID` = ?, `ClientID` = ?, `PortID` = ? WHERE ApplicationID = ?",
-            [PaymentType, CompletionDate, SubmissionDate, TrackingNumber, Status, DeliveryAddress, CompletionToken, CompanyID, CategoryID, ClientID, PortID, ApplicationID]
-        );
+        const fkChanged =
+            Number(existing.CompanyID)  !== Number(CompanyID) ||
+            Number(existing.ClientID)   !== Number(ClientID) ||
+            Number(existing.CategoryID) !== Number(CategoryID) ||
+            Number(existing.PortID)     !== Number(PortID);
+        const snaps = fkChanged ? await fetchSnapshots({ CompanyID, ClientID, CategoryID, PortID }) : null;
 
-        if (isCompleting) {
-            await conn.query(
-                "UPDATE document SET VerficationStatus = 'Accepted' WHERE ApplicationID = ?",
-                [ApplicationID]
-            );
-        }
+        const $set = {
+            PaymentType,
+            Status: newStatus,
+            SubmissionDate: SubmissionDate ? new Date(SubmissionDate) : null,
+            TrackingNumber,
+            DeliveryAddress,
+            CompletionDate: CompletionDate ? new Date(CompletionDate) : null,
+            CompletionToken,
+            CompanyID, ClientID, CategoryID, PortID,
+            ...(snaps ?? {}),
+            ...(isCompleting ? { 'documents.$[].VerficationStatus': 'Accepted' } : {}),
+        };
+        await Application.updateOne({ ApplicationID }, { $set });
 
         /* On accept: book Takhlees' platform revenue into CompanyPayment.
-           Formula: 1600 (fixed listing fee) + Amount * Comm / 100.
-           Runs inside the same transaction so the financial row can't
-           drift from the application's status. */
+           Formula: 1600 + Amount * Comm / 100. */
         if (isAccepting) {
-            const [paymentRows] = await conn.query(
-                "SELECT PaymentID, Amount FROM payment WHERE ApplicationID = ? ORDER BY PaymentID DESC LIMIT 1",
-                [ApplicationID]
-            );
-            if (paymentRows.length === 0) {
-                throw Object.assign(
-                    new Error('Cannot accept an application with no payment on record.'),
-                    { status: 409 }
-                );
+            const apDoc = await Application.findOne({ ApplicationID }).lean();
+            const lastPayment = (apDoc?.payments ?? []).at(-1);
+            if (!lastPayment) {
+                const e = new Error('Cannot accept an application with no payment on record.');
+                e.status = 409;
+                throw e;
             }
-            const { PaymentID, Amount: paymentAmount } = paymentRows[0];
-
-            const [companyRows] = await conn.query(
-                "SELECT Comm FROM company WHERE CompanyID = ? LIMIT 1",
-                [CompanyID]
-            );
-            if (companyRows.length === 0) {
-                throw Object.assign(
-                    new Error('Accepting company not found.'),
-                    { status: 404 }
-                );
+            const company = await Company.findOne({ CompanyID }).select({ Comm: 1, Name: 1 }).lean();
+            if (!company) {
+                const e = new Error('Accepting company not found.');
+                e.status = 404;
+                throw e;
             }
-            const comm = Number(companyRows[0].Comm);
-            const revenue = 1600 + (Number(paymentAmount) * (comm / 100));
-
-            await conn.query(
-                "INSERT INTO companypayment (PaymentDate, Amount, CompanyID, PaymentID) VALUES (NOW(), ?, ?, ?)",
-                [revenue, CompanyID, PaymentID]
-            );
+            const comm = Number(company.Comm) || 0;
+            const revenue = 1600 + (Number(lastPayment.Amount) * (comm / 100));
+            const CompanyPaymentID = await nextId('company_payment');
+            await CompanyPayment.create({
+                CompanyPaymentID,
+                PaymentDate: new Date(),
+                Amount: revenue,
+                CompanyID,
+                PaymentID: lastPayment.PaymentID,
+                company: { Name: company.Name },
+            });
         }
-
-        await conn.commit();
-
-        await mirror(`application.update mysqlApplicationId=${ApplicationID}`, async () => {
-            /* Refresh denormalized snapshots only if a FK actually changed.
-               Otherwise just $set the core fields — cheaper. */
-            const fkChanged =
-                Number(existing.CompanyID)  !== Number(CompanyID) ||
-                Number(existing.ClientID)   !== Number(ClientID) ||
-                Number(existing.CategoryID) !== Number(CategoryID) ||
-                Number(existing.PortID)     !== Number(PortID);
-            const snaps = fkChanged ? await fetchSnapshots({ CompanyID, ClientID, CategoryID, PortID }) : null;
-
-            const $set = {
-                PaymentType,
-                Status,
-                SubmissionDate: SubmissionDate ? new Date(SubmissionDate) : null,
-                TrackingNumber,
-                DeliveryAddress,
-                CompletionDate: CompletionDate ? new Date(CompletionDate) : null,
-                CompletionToken,
-                mysqlCompanyId:  CompanyID,
-                mysqlClientId:   ClientID,
-                mysqlCategoryId: CategoryID,
-                mysqlPortId:     PortID,
-                ...(snaps ?? {}),
-                ...(isCompleting ? { 'documents.$[].VerficationStatus': 'Accepted' } : {}),
-            };
-            return Application.updateOne(
-                { mysqlApplicationId: Number(ApplicationID) },
-                { $set }
-            );
-        });
 
         return res.status(200).json({
             Status: "OK",
-            Message: "Record Id [" + ApplicationID + "] is Updated Successfully",
+            Message: `Record Id [${ApplicationID}] is Updated Successfully`,
         });
     } catch (err) {
-        try { await conn.rollback(); } catch { /* ignore */ }
         return next(err);
-    } finally {
-        conn.release();
     }
 };

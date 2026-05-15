@@ -1,100 +1,107 @@
-import db from '../../Database/connection.js';
+import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
+import Company from '../../Database/mongo/company.mongo.js';
+import { nextId } from '../../Database/mongo/counters.js';
 
-export const createCompanyPayment = (req, res) => {
-    console.log("Post Request Received");
-    db.query("INSERT INTO companypayment (`PaymentDate`,`Amount`,`CompanyID`,`PaymentID`) VALUES (?,?,?,?)",
-        [req.body.PaymentDate, req.body.Amount, req.body.CompanyID, req.body.PaymentID], function (err, result) {
-            if (err) throw err;
-            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added " + result.insertId);
-        });
-};
+export const createCompanyPayment = async (req, res, next) => {
+  try {
+    const { PaymentDate, Amount, CompanyID, PaymentID } = req.body;
+    const CompanyPaymentID = await nextId('company_payment');
 
-export const getCompanyPayment = (req, res) => {
-    const CompanyPaymentID = req.query.CompanyPaymentID;
-    if (CompanyPaymentID == '%') {
-        db.query("SELECT * FROM companypayment where CompanyPaymentID LIKE ?", [CompanyPaymentID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
-    } else {
-        db.query("SELECT * FROM companypayment where CompanyPaymentID = ?", [CompanyPaymentID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+    let companySnap = null;
+    if (CompanyID) {
+      const c = await Company.findOne({ CompanyID: Number(CompanyID) }).select({ Name: 1 }).lean();
+      if (c) companySnap = { Name: c.Name };
     }
-};
 
-export const deleteCompanyPayment = (req, res) => {
-    const CompanyPaymentID = req.query.CompanyPaymentID;
-
-    db.query("SELECT CompanyPaymentID FROM companypayment WHERE CompanyPaymentID = ?", [CompanyPaymentID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
-            return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + CompanyPaymentID + "] does not exist or has already been deleted."
-            });
-        }
-
-        db.query("DELETE FROM companypayment WHERE CompanyPaymentID = ?", [CompanyPaymentID], function (err, result) {
-            if (err) throw err;
-            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyPaymentID + "] deleted Successfully" });
-            console.log("Delete Request Received for record [" + CompanyPaymentID + "] received");
-        });
+    await CompanyPayment.create({
+      CompanyPaymentID,
+      PaymentDate: PaymentDate ? new Date(PaymentDate) : new Date(),
+      Amount: Number(Amount),
+      CompanyID: CompanyID != null ? Number(CompanyID) : null,
+      PaymentID: Number(PaymentID),
+      company: companySnap,
     });
+
+    return res.status(201).json({ Status: "OK", Message: `Record Added Successfully with Id ${CompanyPaymentID}` });
+  } catch (err) {
+    return next(err);
+  }
 };
 
-export const searchCompanyPayment = (req, res) => {
-    const keyword = req.query.keyword;
-    const keyvalue = req.query.keyvalue;
-    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+export const getCompanyPayment = async (req, res, next) => {
+  try {
+    const { CompanyPaymentID } = req.query;
+    if (CompanyPaymentID === '%' || CompanyPaymentID === undefined) {
+      const rows = await CompanyPayment.find().sort({ CompanyPaymentID: 1 }).lean();
+      return res.json(rows);
+    }
+    const rows = await CompanyPayment.find({ CompanyPaymentID: Number(CompanyPaymentID) }).lean();
+    return res.json(rows);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const deleteCompanyPayment = async (req, res, next) => {
+  try {
+    const id = Number(req.query.CompanyPaymentID);
+    const result = await CompanyPayment.deleteOne({ CompanyPaymentID: id });
+    if (!result.deletedCount) {
+      return res.status(404).json({
+        Status: "Error",
+        Message: `Record Id [${id}] does not exist or has already been deleted.`,
+      });
+    }
+    return res.status(200).json({ Status: "OK", Message: `Record Id [${id}] deleted Successfully` });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const searchCompanyPayment = async (req, res, next) => {
+  try {
+    const { keyword, keyvalue } = req.query;
+    const sort = req.query.sort?.toUpperCase() === 'DESC' ? -1 : 1;
 
     const allowedColumns = ['CompanyPaymentID', 'PaymentDate', 'Amount', 'CompanyID', 'PaymentID'];
     if (!allowedColumns.includes(keyword)) {
-        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+      return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
     }
-    if (!keyvalue) {
-        return res.status(400).json({ error: 'keyvalue is required' });
-    }
+    if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
 
-    const sql = `SELECT * FROM companypayment WHERE ${keyword} = ? ORDER BY CompanyPaymentID ${sort}`;
-    db.query(sql, [keyvalue], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        res.json(result);
-    });
+    let value;
+    if (keyword === 'PaymentDate') value = new Date(keyvalue);
+    else if (keyword === 'CompanyPaymentID' || keyword === 'Amount' || keyword === 'CompanyID' || keyword === 'PaymentID') {
+      value = Number(keyvalue);
+    } else value = keyvalue;
+
+    const rows = await CompanyPayment.find({ [keyword]: value }).sort({ CompanyPaymentID: sort }).lean();
+    return res.json(rows);
+  } catch (err) {
+    return next(err);
+  }
 };
 
-export const updateCompanyPayment = (req, res) => {
-    console.log("PUT Request Received");
-    const CompanyPaymentID = req.query.CompanyPaymentID;
+export const updateCompanyPayment = async (req, res, next) => {
+  try {
+    const id = Number(req.query.CompanyPaymentID);
+    const existing = await CompanyPayment.findOne({ CompanyPaymentID: id });
+    if (!existing) {
+      return res.status(404).json({
+        Status: "Error",
+        Message: `Record Id [${id}] does not exist or has already been deleted. Update aborted.`,
+      });
+    }
 
-    db.query("SELECT * FROM companypayment WHERE CompanyPaymentID = ?", [CompanyPaymentID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
-            return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + CompanyPaymentID + "] does not exist or has already been deleted. Update aborted."
-            });
-        }
+    const $set = {};
+    if (req.body.PaymentDate !== undefined) $set.PaymentDate = new Date(req.body.PaymentDate);
+    if (req.body.Amount      !== undefined) $set.Amount      = Number(req.body.Amount);
+    if (req.body.CompanyID   !== undefined) $set.CompanyID   = req.body.CompanyID == null ? null : Number(req.body.CompanyID);
+    if (req.body.PaymentID   !== undefined) $set.PaymentID   = Number(req.body.PaymentID);
 
-        const existing    = result[0];
-        const PaymentDate = req.body.PaymentDate !== undefined ? req.body.PaymentDate : existing.PaymentDate;
-        const Amount      = req.body.Amount      !== undefined ? req.body.Amount      : existing.Amount;
-        const CompanyID   = req.body.CompanyID   !== undefined ? req.body.CompanyID   : existing.CompanyID;
-        const PaymentID   = req.body.PaymentID   !== undefined ? req.body.PaymentID   : existing.PaymentID;
-
-        db.query(
-            "UPDATE companypayment SET `PaymentDate` = ?, `Amount` = ?, `CompanyID` = ?, `PaymentID` = ? WHERE CompanyPaymentID = ?",
-            [PaymentDate, Amount, CompanyID, PaymentID, CompanyPaymentID],
-            function (err, result) {
-                if (err) throw err;
-                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyPaymentID + "] is Updated Successfully" });
-                console.log("Record Id [" + CompanyPaymentID + "] is Updated Successfully");
-            }
-        );
-    });
+    await CompanyPayment.updateOne({ CompanyPaymentID: id }, { $set });
+    return res.status(200).json({ Status: "OK", Message: `Record Id [${id}] is Updated Successfully` });
+  } catch (err) {
+    return next(err);
+  }
 };

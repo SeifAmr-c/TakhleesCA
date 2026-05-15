@@ -1,101 +1,109 @@
-import db from '../../Database/connection.js';
+import SupportTicket from '../../Database/mongo/support_ticket.mongo.js';
+import User from '../../Database/mongo/user.mongo.js';
+import { nextId } from '../../Database/mongo/counters.js';
 
-export const createSupportTicket = (req, res) => {
-    console.log("Post Request Received");
-    db.query("INSERT INTO supportticket (`Issue`,`Resolved`,`AdminID`,`ClientID`) VALUES (?,?,?,?)",
-        [req.body.Issue, req.body.Resolved, req.body.AdminID, req.body.ClientID], function (err, result) {
-            if (err) throw err;
-            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added " + result.insertId);
-        });
-};
+export const createSupportTicket = async (req, res, next) => {
+    try {
+        const Issue = req.body.Issue;
+        const Resolved = !!req.body.Resolved;
+        const AdminID = req.body.AdminID != null ? Number(req.body.AdminID) : null;
+        const ClientID = Number(req.body.ClientID);
 
-export const getSupportTicket = (req, res) => {
-    const TicketID = req.query.TicketID;
-    if (TicketID == '%') {
-        db.query("SELECT * FROM supportticket where TicketID LIKE ?", [TicketID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
+        const [adminUser, clientUser] = await Promise.all([
+            AdminID ? User.findOne({ UserID: AdminID }).select({ FirstName: 1, LastName: 1 }).lean() : null,
+            User.findOne({ UserID: ClientID }).select({ FirstName: 1, LastName: 1, Email: 1 }).lean(),
+        ]);
+
+        const TicketID = await nextId('support_ticket');
+        await SupportTicket.create({
+            TicketID,
+            Issue,
+            Resolved,
+            AdminID,
+            ClientID,
+            admin:  adminUser  ? { FirstName: adminUser.FirstName, LastName: adminUser.LastName } : null,
+            client: clientUser ? { FirstName: clientUser.FirstName, LastName: clientUser.LastName, Email: clientUser.Email } : null,
         });
-    } else {
-        db.query("SELECT * FROM supportticket where TicketID = ?", [TicketID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+
+        return res.status(201).json({ Status: "OK", Message: `Record Added Successfully with Id ${TicketID}` });
+    } catch (err) {
+        return next(err);
     }
 };
 
-export const deleteSupportTicket = (req, res) => {
-    const TicketID = req.query.TicketID;
+export const getSupportTicket = async (req, res, next) => {
+    try {
+        const { TicketID } = req.query;
+        if (TicketID === '%' || TicketID === undefined) {
+            const rows = await SupportTicket.find().sort({ TicketID: 1 }).lean();
+            return res.json(rows);
+        }
+        const rows = await SupportTicket.find({ TicketID: Number(TicketID) }).lean();
+        return res.json(rows);
+    } catch (err) {
+        return next(err);
+    }
+};
 
-    db.query("SELECT TicketID FROM supportticket WHERE TicketID = ?", [TicketID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
+export const deleteSupportTicket = async (req, res, next) => {
+    try {
+        const tid = Number(req.query.TicketID);
+        const result = await SupportTicket.deleteOne({ TicketID: tid });
+        if (!result.deletedCount) {
             return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + TicketID + "] does not exist or has already been deleted."
+                Status: "Error",
+                Message: `Record Id [${tid}] does not exist or has already been deleted.`,
+            });
+        }
+        return res.status(200).json({ Status: "OK", Message: `Record Id [${tid}] deleted Successfully` });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const searchSupportTicket = async (req, res, next) => {
+    try {
+        const { keyword, keyvalue } = req.query;
+        const sort = req.query.sort?.toUpperCase() === 'DESC' ? -1 : 1;
+
+        const allowedColumns = ['TicketID', 'Issue', 'Resolved', 'AdminID', 'ClientID'];
+        if (!allowedColumns.includes(keyword)) {
+            return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+        }
+        if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
+
+        let value;
+        if (keyword === 'TicketID' || keyword === 'AdminID' || keyword === 'ClientID') value = Number(keyvalue);
+        else if (keyword === 'Resolved') value = keyvalue === 'true' || keyvalue === '1' || keyvalue === true;
+        else value = keyvalue;
+
+        const rows = await SupportTicket.find({ [keyword]: value }).sort({ TicketID: sort }).lean();
+        return res.json(rows);
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const updateSupportTicket = async (req, res, next) => {
+    try {
+        const tid = Number(req.query.TicketID);
+        const existing = await SupportTicket.findOne({ TicketID: tid });
+        if (!existing) {
+            return res.status(404).json({
+                Status: "Error",
+                Message: `Record Id [${tid}] does not exist or has already been deleted. Update aborted.`,
             });
         }
 
-        // ── Record exists → proceed with DELETE ──────────────────────────────
-        db.query("DELETE FROM supportticket WHERE TicketID = ?", [TicketID], function (err, result) {
-            if (err) throw err;
-            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + TicketID + "] deleted Successfully" });
-            console.log("Delete Request Received for record [" + TicketID + "] received");
-        });
-    });
-};
+        const $set = {};
+        if (req.body.Issue    !== undefined) $set.Issue    = req.body.Issue;
+        if (req.body.Resolved !== undefined) $set.Resolved = !!req.body.Resolved;
+        if (req.body.AdminID  !== undefined) $set.AdminID  = req.body.AdminID == null ? null : Number(req.body.AdminID);
+        if (req.body.ClientID !== undefined) $set.ClientID = Number(req.body.ClientID);
 
-export const searchSupportTicket = (req, res) => {
-    const keyword = req.query.keyword;
-    const keyvalue = req.query.keyvalue;
-    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-
-    const allowedColumns = ['TicketID', 'Issue', 'Resolved', 'AdminID', 'ClientID'];
-    if (!allowedColumns.includes(keyword)) {
-        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+        await SupportTicket.updateOne({ TicketID: tid }, { $set });
+        return res.status(200).json({ Status: "OK", Message: `Record Id [${tid}] is Updated Successfully` });
+    } catch (err) {
+        return next(err);
     }
-    if (!keyvalue) {
-        return res.status(400).json({ error: 'keyvalue is required' });
-    }
-
-    const sql = `SELECT * FROM supportticket WHERE ${keyword} = ? ORDER BY TicketID ${sort}`;
-    db.query(sql, [keyvalue], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        res.json(result);
-    });
-};
-
-export const updateSupportTicket = (req, res) => {
-    console.log("PUT Request Received");
-    const TicketID = req.query.TicketID;
-
-    db.query("SELECT * FROM supportticket WHERE TicketID = ?", [TicketID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
-            return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + TicketID + "] does not exist or has already been deleted. Update aborted."
-            });
-        }
-
-        const existing = result[0];
-        const Issue    = req.body.Issue    !== undefined ? req.body.Issue    : existing.Issue;
-        const Resolved = req.body.Resolved !== undefined ? req.body.Resolved : existing.Resolved;
-        const AdminID  = req.body.AdminID  !== undefined ? req.body.AdminID  : existing.AdminID;
-        const ClientID = req.body.ClientID !== undefined ? req.body.ClientID : existing.ClientID;
-
-        db.query(
-            "UPDATE supportticket SET `Issue` = ?, `Resolved` = ?, `AdminID` = ?, `ClientID` = ? WHERE TicketID = ?",
-            [Issue, Resolved, AdminID, ClientID, TicketID],
-            function (err, result) {
-                if (err) throw err;
-                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + TicketID + "] is Updated Successfully" });
-                console.log("Record Id [" + TicketID + "] is Updated Successfully");
-            }
-        );
-    });
 };

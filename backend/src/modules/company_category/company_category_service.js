@@ -1,221 +1,210 @@
-import db from '../../Database/connection.js';
 import Company from '../../Database/mongo/company.mongo.js';
-import { mirror } from '../../Database/mongo/dual_write.js';
+import Category from '../../Database/mongo/category.mongo.js';
 
-const runQuery = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
-    });
+/* CompanyCategory was the SQL join table holding (CompanyID, CategoryID, Price).
+   In Mongo it is folded into Company.categories[]. These handlers operate on
+   that embedded array but preserve the legacy join-table API shape. */
 
-export const createCompanyCategory = (req, res) => {
-    console.log("Post Request Received");
+export const createCompanyCategory = async (req, res, next) => {
+  try {
     const { CompanyID, CategoryID, Price } = req.body;
-
     if (!CompanyID || !CategoryID) {
-        return res.status(400).json({
-            "Status": "Error",
-            "Message": "CompanyID and CategoryID are required."
-        });
+      return res.status(400).json({
+        Status: "Error",
+        Message: "CompanyID and CategoryID are required.",
+      });
     }
     if (Price === undefined || Price === null || isNaN(Number(Price))) {
-        return res.status(400).json({
-            "Status": "Error",
-            "Message": "Price is required and must be a number."
-        });
+      return res.status(400).json({
+        Status: "Error",
+        Message: "Price is required and must be a number.",
+      });
+    }
+    const cid = Number(CompanyID);
+    const catId = Number(CategoryID);
+
+    const company = await Company.findOne({ CompanyID: cid });
+    if (!company) {
+      return res.status(404).json({ Status: "Error", Message: `Company [${cid}] not found.` });
+    }
+    if ((company.categories || []).some((c) => c.CategoryID === catId)) {
+      return res.status(409).json({
+        Status: "Error",
+        Message: `Link between CompanyID [${cid}] and CategoryID [${catId}] already exists.`,
+      });
     }
 
-    db.query(
-        "SELECT 1 FROM companycategory WHERE CompanyID = ? AND CategoryID = ?",
-        [CompanyID, CategoryID],
-        function (err, existing) {
-            if (err) throw err;
-            if (existing.length > 0) {
-                return res.status(409).json({
-                    "Status": "Error",
-                    "Message": `Link between CompanyID [${CompanyID}] and CategoryID [${CategoryID}] already exists.`
-                });
-            }
-
-            db.query(
-                "INSERT INTO companycategory (`CompanyID`, `CategoryID`, `Price`) VALUES (?, ?, ?)",
-                [CompanyID, CategoryID, Price],
-                function (err) {
-                    if (err) throw err;
-                    mirror(`companycategory.create mysqlCompanyId=${CompanyID} mysqlCategoryId=${CategoryID}`, async () => {
-                        const [cat] = await runQuery(
-                            'SELECT Type FROM category WHERE CategoryID = ? LIMIT 1',
-                            [CategoryID]
-                        );
-                        return Company.updateOne(
-                            { mysqlCompanyId: Number(CompanyID) },
-                            { $addToSet: { categories: {
-                                mysqlCategoryId: Number(CategoryID),
-                                Type: cat?.Type ?? null,
-                                Price: Number(Price),
-                            } } }
-                        );
-                    });
-                    res.status(201).json({
-                        "Status": "OK",
-                        "Message": `Record Added Successfully (CompanyID=${CompanyID}, CategoryID=${CategoryID})`
-                    });
-                    console.log(`Record Added (CompanyID=${CompanyID}, CategoryID=${CategoryID})`);
-                }
-            );
-        }
+    const cat = await Category.findOne({ CategoryID: catId }).lean();
+    await Company.updateOne(
+      { CompanyID: cid },
+      { $push: { categories: {
+        CategoryID: catId,
+        Type: cat?.Type ?? null,
+        Price: Number(Price),
+      } } }
     );
+
+    return res.status(201).json({
+      Status: "OK",
+      Message: `Record Added Successfully (CompanyID=${cid}, CategoryID=${catId})`,
+    });
+  } catch (err) {
+    return next(err);
+  }
 };
 
-export const getCompanyCategory = (req, res) => {
+export const getCompanyCategory = async (req, res, next) => {
+  try {
     const { CompanyID, CategoryID } = req.query;
 
     if (CompanyID && CategoryID) {
-        db.query(
-            "SELECT * FROM companycategory WHERE CompanyID = ? AND CategoryID = ?",
-            [CompanyID, CategoryID],
-            function (err, result) {
-                if (err) throw err;
-                res.json(result);
-            }
-        );
-    } else if (CompanyID) {
-        db.query(
-            "SELECT cc.*, cat.Type FROM companycategory cc JOIN category cat ON cc.CategoryID = cat.CategoryID WHERE cc.CompanyID = ?",
-            [CompanyID],
-            function (err, result) {
-                if (err) throw err;
-                res.json(result);
-            }
-        );
-    } else if (CategoryID) {
-        db.query(
-            "SELECT cc.*, c.Name AS CompanyName FROM companycategory cc JOIN company c ON cc.CompanyID = c.CompanyID WHERE cc.CategoryID = ?",
-            [CategoryID],
-            function (err, result) {
-                if (err) throw err;
-                res.json(result);
-            }
-        );
-    } else {
-        db.query("SELECT * FROM companycategory", function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+      const cid = Number(CompanyID);
+      const catId = Number(CategoryID);
+      const company = await Company.findOne({ CompanyID: cid }, { categories: 1 }).lean();
+      const sub = (company?.categories || []).find((c) => c.CategoryID === catId);
+      return res.json(sub
+        ? [{ CompanyID: cid, CategoryID: catId, Price: sub.Price, Type: sub.Type }]
+        : []
+      );
     }
-};
-
-export const updateCompanyCategory = (req, res) => {
-    console.log("PUT Request Received");
-    const { CompanyID, CategoryID } = req.query;
-
-    if (!CompanyID || !CategoryID) {
-        return res.status(400).json({
-            "Status": "Error",
-            "Message": "CompanyID and CategoryID query params are required."
-        });
+    if (CompanyID) {
+      const cid = Number(CompanyID);
+      const company = await Company.findOne({ CompanyID: cid }, { categories: 1 }).lean();
+      const rows = (company?.categories || []).map((c) => ({
+        CompanyID: cid,
+        CategoryID: c.CategoryID,
+        Price: c.Price,
+        Type: c.Type,
+      }));
+      return res.json(rows);
+    }
+    if (CategoryID) {
+      const catId = Number(CategoryID);
+      const companies = await Company.find(
+        { 'categories.CategoryID': catId },
+        { CompanyID: 1, Name: 1, categories: 1 }
+      ).lean();
+      const rows = companies.map((c) => {
+        const sub = (c.categories || []).find((cc) => cc.CategoryID === catId);
+        return {
+          CompanyID: c.CompanyID,
+          CategoryID: catId,
+          Price: sub?.Price ?? null,
+          CompanyName: c.Name,
+        };
+      });
+      return res.json(rows);
     }
 
-    db.query(
-        "SELECT * FROM companycategory WHERE CompanyID = ? AND CategoryID = ?",
-        [CompanyID, CategoryID],
-        function (err, result) {
-            if (err) throw err;
-            if (result.length === 0) {
-                return res.status(404).json({
-                    "Status": "Error",
-                    "Message": `Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) does not exist. Update aborted.`
-                });
-            }
-
-            const existing = result[0];
-            const Price = req.body.Price !== undefined ? req.body.Price : existing.Price;
-
-            db.query(
-                "UPDATE companycategory SET `Price` = ? WHERE CompanyID = ? AND CategoryID = ?",
-                [Price, CompanyID, CategoryID],
-                function (err) {
-                    if (err) throw err;
-                    mirror(`companycategory.update mysqlCompanyId=${CompanyID} mysqlCategoryId=${CategoryID}`, () =>
-                        /* Positional-$ updates the matching subdoc only. */
-                        Company.updateOne(
-                            { mysqlCompanyId: Number(CompanyID), 'categories.mysqlCategoryId': Number(CategoryID) },
-                            { $set: { 'categories.$.Price': Number(Price) } }
-                        )
-                    );
-                    res.status(200).json({
-                        "Status": "OK",
-                        "Message": `Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) is Updated Successfully`
-                    });
-                    console.log(`Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) is Updated Successfully`);
-                }
-            );
-        }
+    const all = await Company.find({}, { CompanyID: 1, categories: 1 }).lean();
+    const rows = all.flatMap((c) =>
+      (c.categories || []).map((cc) => ({
+        CompanyID: c.CompanyID,
+        CategoryID: cc.CategoryID,
+        Price: cc.Price,
+      }))
     );
+    return res.json(rows);
+  } catch (err) {
+    return next(err);
+  }
 };
 
-export const deleteCompanyCategory = (req, res) => {
+export const updateCompanyCategory = async (req, res, next) => {
+  try {
     const { CompanyID, CategoryID } = req.query;
-
     if (!CompanyID || !CategoryID) {
-        return res.status(400).json({
-            "Status": "Error",
-            "Message": "CompanyID and CategoryID query params are required."
-        });
+      return res.status(400).json({
+        Status: "Error",
+        Message: "CompanyID and CategoryID query params are required.",
+      });
     }
+    const cid = Number(CompanyID);
+    const catId = Number(CategoryID);
 
-    db.query(
-        "SELECT 1 FROM companycategory WHERE CompanyID = ? AND CategoryID = ?",
-        [CompanyID, CategoryID],
-        function (err, result) {
-            if (err) throw err;
-            if (result.length === 0) {
-                return res.status(404).json({
-                    "Status": "Error",
-                    "Message": `Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) does not exist or has already been deleted.`
-                });
-            }
-
-            db.query(
-                "DELETE FROM companycategory WHERE CompanyID = ? AND CategoryID = ?",
-                [CompanyID, CategoryID],
-                function (err) {
-                    if (err) throw err;
-                    mirror(`companycategory.delete mysqlCompanyId=${CompanyID} mysqlCategoryId=${CategoryID}`, () =>
-                        Company.updateOne(
-                            { mysqlCompanyId: Number(CompanyID) },
-                            { $pull: { categories: { mysqlCategoryId: Number(CategoryID) } } }
-                        )
-                    );
-                    res.status(200).json({
-                        "Status": "OK",
-                        "Message": `Link (CompanyID=${CompanyID}, CategoryID=${CategoryID}) deleted Successfully`
-                    });
-                    console.log(`Delete Request Received for link (CompanyID=${CompanyID}, CategoryID=${CategoryID})`);
-                }
-            );
-        }
+    const result = await Company.updateOne(
+      { CompanyID: cid, 'categories.CategoryID': catId },
+      { $set: { 'categories.$.Price': Number(req.body.Price) } }
     );
+    if (!result.matchedCount) {
+      return res.status(404).json({
+        Status: "Error",
+        Message: `Link (CompanyID=${cid}, CategoryID=${catId}) does not exist. Update aborted.`,
+      });
+    }
+    return res.status(200).json({
+      Status: "OK",
+      Message: `Link (CompanyID=${cid}, CategoryID=${catId}) is Updated Successfully`,
+    });
+  } catch (err) {
+    return next(err);
+  }
 };
 
-export const searchCompanyCategory = (req, res) => {
-    const keyword = req.query.keyword;
-    const keyvalue = req.query.keyvalue;
-    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+export const deleteCompanyCategory = async (req, res, next) => {
+  try {
+    const { CompanyID, CategoryID } = req.query;
+    if (!CompanyID || !CategoryID) {
+      return res.status(400).json({
+        Status: "Error",
+        Message: "CompanyID and CategoryID query params are required.",
+      });
+    }
+    const cid = Number(CompanyID);
+    const catId = Number(CategoryID);
 
+    const result = await Company.updateOne(
+      { CompanyID: cid, 'categories.CategoryID': catId },
+      { $pull: { categories: { CategoryID: catId } } }
+    );
+    if (!result.matchedCount) {
+      return res.status(404).json({
+        Status: "Error",
+        Message: `Link (CompanyID=${cid}, CategoryID=${catId}) does not exist or has already been deleted.`,
+      });
+    }
+    return res.status(200).json({
+      Status: "OK",
+      Message: `Link (CompanyID=${cid}, CategoryID=${catId}) deleted Successfully`,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const searchCompanyCategory = async (req, res, next) => {
+  try {
+    const { keyword, keyvalue } = req.query;
     const allowedColumns = ['CompanyID', 'CategoryID', 'Price'];
     if (!allowedColumns.includes(keyword)) {
-        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+      return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
     }
-    if (!keyvalue) {
-        return res.status(400).json({ error: 'keyvalue is required' });
-    }
+    if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
 
-    const sql = `SELECT * FROM companycategory WHERE ${keyword} = ? ORDER BY CompanyID ${sort}, CategoryID ${sort}`;
-    db.query(sql, [keyvalue], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        res.json(result);
-    });
+    const value = Number(keyvalue);
+    if (keyword === 'CompanyID') {
+      const c = await Company.findOne({ CompanyID: value }, { categories: 1 }).lean();
+      return res.json((c?.categories || []).map((cc) => ({
+        CompanyID: value, CategoryID: cc.CategoryID, Price: cc.Price,
+      })));
+    }
+    if (keyword === 'CategoryID') {
+      const cs = await Company.find({ 'categories.CategoryID': value }, { CompanyID: 1, categories: 1 }).lean();
+      return res.json(cs.map((c) => {
+        const sub = (c.categories || []).find((cc) => cc.CategoryID === value);
+        return { CompanyID: c.CompanyID, CategoryID: value, Price: sub?.Price ?? null };
+      }));
+    }
+    /* keyword === 'Price' */
+    const cs = await Company.find({ 'categories.Price': value }, { CompanyID: 1, categories: 1 }).lean();
+    const rows = [];
+    for (const c of cs) {
+      for (const cc of (c.categories || [])) {
+        if (cc.Price === value) rows.push({ CompanyID: c.CompanyID, CategoryID: cc.CategoryID, Price: cc.Price });
+      }
+    }
+    return res.json(rows);
+  } catch (err) {
+    return next(err);
+  }
 };

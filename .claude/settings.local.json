@@ -29,7 +29,13 @@
       "Bash(npx expo *)",
       "Bash(git *)",
       "Bash(xxd \"C:/Users/seifa/Desktop/node MySQL/mobile/secrets/AuthKey_2TJ98T7SXQ.p8\")",
-      "Bash(npx --yes expo install react-native-qrcode-svg react-native-svg)"
+      "Bash(npx --yes expo install react-native-qrcode-svg react-native-svg)",
+      "Bash(ls node_modules/connect-mongo)",
+      "Bash(ls node_modules/express-mysql-session)",
+      "Bash(npm uninstall *)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 8096 //F)",
+      "Bash(taskkill //PID 25008 //F)"
     ]
   }
 }

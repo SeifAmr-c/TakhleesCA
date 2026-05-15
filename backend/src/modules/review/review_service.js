@@ -1,154 +1,168 @@
-import db from '../../Database/connection.js';
+import Review from '../../Database/mongo/review.mongo.js';
+import Application from '../../Database/mongo/application.mongo.js';
+import User from '../../Database/mongo/user.mongo.js';
+import Category from '../../Database/mongo/category.mongo.js';
+import { nextId } from '../../Database/mongo/counters.js';
 
-export const getReviewAverages = (req, res) => {
-    db.query(
-        `SELECT a.CompanyID,
-                ROUND(AVG(r.Rating), 1) AS AverageRating,
-                COUNT(r.ReviewID) AS ReviewCount
-         FROM review r
-         JOIN application a ON r.ApplicationID = a.ApplicationID
-         GROUP BY a.CompanyID`,
-        function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        }
-    );
-};
-
-export const getClientReviewedApplications = (req, res) => {
-    const { ClientID } = req.query;
-    if (!ClientID) {
-        return res.status(400).json({ error: 'ClientID is required' });
-    }
-    db.query(
-        `SELECT r.ApplicationID
-         FROM review r
-         JOIN application a ON r.ApplicationID = a.ApplicationID
-         WHERE a.ClientID = ?`,
-        [ClientID],
-        function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        }
-    );
-};
-
-export const getCompanyReviews = (req, res) => {
-    const { CompanyID } = req.query;
-    if (!CompanyID) {
-        return res.status(400).json({ error: 'CompanyID is required' });
-    }
-    db.query(
-        'SELECT r.ReviewID, r.Review, r.Rating, r.ApplicationID, r.CategoryID,' +
-        ' u.FirstName, u.LastName' +
-        ' FROM review r' +
-        ' JOIN application a ON r.ApplicationID = a.ApplicationID' +
-        ' JOIN `user` u ON a.ClientID = u.UserID' +
-        ' WHERE a.CompanyID = ?' +
-        ' ORDER BY r.ReviewID DESC',
-        [CompanyID],
-        function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        }
-    );
-};
-
-export const createReview = (req, res) => {
-    console.log("Post Request Received");
-    db.query("INSERT INTO review (`Review`,`Rating`,`ApplicationID`,`CategoryID`) VALUES (?,?,?,?)",
-        [req.body.Review, req.body.Rating, req.body.ApplicationID, req.body.CategoryID], function (err, result) {
-            if (err) throw err;
-            res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + result.insertId });
-            console.log("Record Added " + result.insertId);
-        });
-};
-
-export const getReview = (req, res) => {
-    const ReviewID = req.query.ReviewID;
-    if (ReviewID == '%') {
-        db.query("SELECT * FROM review where ReviewID LIKE ?", [ReviewID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
-    } else {
-        db.query("SELECT * FROM review where ReviewID = ?", [ReviewID], function (err, result) {
-            if (err) throw err;
-            res.json(result);
-        });
+export const getReviewAverages = async (req, res, next) => {
+    try {
+        const rows = await Review.aggregate([
+            { $match: { CompanyID: { $ne: null } } },
+            { $group: { _id: '$CompanyID', avg: { $avg: '$Rating' }, count: { $sum: 1 } } },
+            { $project: {
+                _id: 0,
+                CompanyID: '$_id',
+                AverageRating: { $round: ['$avg', 1] },
+                ReviewCount: '$count',
+            } },
+        ]);
+        return res.json(rows);
+    } catch (err) {
+        return next(err);
     }
 };
 
-export const deleteReview = (req, res) => {
-    const ReviewID = req.query.ReviewID;
+export const getClientReviewedApplications = async (req, res, next) => {
+    try {
+        const { ClientID } = req.query;
+        if (!ClientID) {
+            return res.status(400).json({ error: 'ClientID is required' });
+        }
+        const rows = await Review.find({ ClientID: Number(ClientID) }).select({ ApplicationID: 1, _id: 0 }).lean();
+        return res.json(rows);
+    } catch (err) {
+        return next(err);
+    }
+};
 
-    db.query("SELECT ReviewID FROM review WHERE ReviewID = ?", [ReviewID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
+export const getCompanyReviews = async (req, res, next) => {
+    try {
+        const { CompanyID } = req.query;
+        if (!CompanyID) {
+            return res.status(400).json({ error: 'CompanyID is required' });
+        }
+        const rows = await Review.find({ CompanyID: Number(CompanyID) }).sort({ ReviewID: -1 }).lean();
+        return res.json(rows.map((r) => ({
+            ReviewID: r.ReviewID,
+            Review: r.Review,
+            Rating: r.Rating,
+            ApplicationID: r.ApplicationID,
+            CategoryID: r.CategoryID,
+            FirstName: r.client?.FirstName ?? null,
+            LastName: r.client?.LastName ?? null,
+        })));
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const createReview = async (req, res, next) => {
+    try {
+        const ApplicationID = Number(req.body.ApplicationID);
+        const CategoryID = Number(req.body.CategoryID);
+        const Rating = Number(req.body.Rating);
+        const ReviewText = req.body.Review ?? null;
+
+        /* Pull CompanyID/ClientID and the denormalized snapshots from
+           the parent Application so per-company review aggregates and
+           UI lists don't need a separate join on every read. */
+        const app = await Application.findOne({ ApplicationID }).select({
+            CompanyID: 1, ClientID: 1, client: 1,
+        }).lean();
+
+        let categorySnap = null;
+        if (CategoryID) {
+            const cat = await Category.findOne({ CategoryID }).select({ Type: 1 }).lean();
+            if (cat) categorySnap = { Type: cat.Type };
+        }
+
+        const ReviewID = await nextId('review');
+        await Review.create({
+            ReviewID,
+            Review: ReviewText,
+            Rating,
+            ApplicationID,
+            CategoryID,
+            CompanyID: app?.CompanyID ?? null,
+            ClientID:  app?.ClientID  ?? null,
+            client:    app?.client ?? null,
+            category:  categorySnap,
+        });
+
+        return res.status(201).json({ Status: "OK", Message: `Record Added Successfully with Id ${ReviewID}` });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const getReview = async (req, res, next) => {
+    try {
+        const { ReviewID } = req.query;
+        if (ReviewID === '%' || ReviewID === undefined) {
+            const rows = await Review.find().sort({ ReviewID: 1 }).lean();
+            return res.json(rows);
+        }
+        const rows = await Review.find({ ReviewID: Number(ReviewID) }).lean();
+        return res.json(rows);
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const deleteReview = async (req, res, next) => {
+    try {
+        const rid = Number(req.query.ReviewID);
+        const result = await Review.deleteOne({ ReviewID: rid });
+        if (!result.deletedCount) {
             return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + ReviewID + "] does not exist or has already been deleted."
+                Status: "Error",
+                Message: `Record Id [${rid}] does not exist or has already been deleted.`,
+            });
+        }
+        return res.status(200).json({ Status: "OK", Message: `Record Id [${rid}] deleted Successfully` });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const searchReview = async (req, res, next) => {
+    try {
+        const { keyword, keyvalue } = req.query;
+        const sort = req.query.sort?.toUpperCase() === 'DESC' ? -1 : 1;
+
+        const allowedColumns = ['ReviewID', 'Rating', 'ApplicationID', 'CategoryID'];
+        if (!allowedColumns.includes(keyword)) {
+            return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+        }
+        if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
+
+        const rows = await Review.find({ [keyword]: Number(keyvalue) }).sort({ ReviewID: sort }).lean();
+        return res.json(rows);
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const updateReview = async (req, res, next) => {
+    try {
+        const rid = Number(req.query.ReviewID);
+        const existing = await Review.findOne({ ReviewID: rid });
+        if (!existing) {
+            return res.status(404).json({
+                Status: "Error",
+                Message: `Record Id [${rid}] does not exist or has already been deleted. Update aborted.`,
             });
         }
 
-        db.query("DELETE FROM review WHERE ReviewID = ?", [ReviewID], function (err, result) {
-            if (err) throw err;
-            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ReviewID + "] deleted Successfully" });
-            console.log("Delete Request Received for record [" + ReviewID + "] received");
-        });
-    });
-};
+        const $set = {};
+        if (req.body.Review        !== undefined) $set.Review        = req.body.Review;
+        if (req.body.Rating        !== undefined) $set.Rating        = Number(req.body.Rating);
+        if (req.body.ApplicationID !== undefined) $set.ApplicationID = Number(req.body.ApplicationID);
+        if (req.body.CategoryID    !== undefined) $set.CategoryID    = Number(req.body.CategoryID);
 
-export const searchReview = (req, res) => {
-    const keyword = req.query.keyword;
-    const keyvalue = req.query.keyvalue;
-    const sort = req.query.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-
-    const allowedColumns = ['ReviewID', 'Rating', 'ApplicationID', 'CategoryID'];
-    if (!allowedColumns.includes(keyword)) {
-        return res.status(400).json({ error: `Invalid keyword. Allowed: ${allowedColumns.join(', ')}` });
+        await Review.updateOne({ ReviewID: rid }, { $set });
+        return res.status(200).json({ Status: "OK", Message: `Record Id [${rid}] is Updated Successfully` });
+    } catch (err) {
+        return next(err);
     }
-    if (!keyvalue) {
-        return res.status(400).json({ error: 'keyvalue is required' });
-    }
-
-    const sql = `SELECT * FROM review WHERE ${keyword} = ? ORDER BY ReviewID ${sort}`;
-    db.query(sql, [keyvalue], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-        res.json(result);
-    });
-};
-
-export const updateReview = (req, res) => {
-    console.log("PUT Request Received");
-    const ReviewID = req.query.ReviewID;
-
-    db.query("SELECT * FROM review WHERE ReviewID = ?", [ReviewID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
-            return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + ReviewID + "] does not exist or has already been deleted. Update aborted."
-            });
-        }
-
-        const existing      = result[0];
-        const Review        = req.body.Review        !== undefined ? req.body.Review        : existing.Review;
-        const Rating        = req.body.Rating        !== undefined ? req.body.Rating        : existing.Rating;
-        const ApplicationID = req.body.ApplicationID !== undefined ? req.body.ApplicationID : existing.ApplicationID;
-        const CategoryID    = req.body.CategoryID    !== undefined ? req.body.CategoryID    : existing.CategoryID;
-
-        db.query(
-            "UPDATE review SET `Review` = ?, `Rating` = ?, `ApplicationID` = ?, `CategoryID` = ? WHERE ReviewID = ?",
-            [Review, Rating, ApplicationID, CategoryID, ReviewID],
-            function (err, result) {
-                if (err) throw err;
-                res.status(200).json({ "Status": "OK", "Message": "Record Id [" + ReviewID + "] is Updated Successfully" });
-                console.log("Record Id [" + ReviewID + "] is Updated Successfully");
-            }
-        );
-    });
 };
