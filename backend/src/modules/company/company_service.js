@@ -5,9 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { uploadToCloudinary, destroyCloudinaryAsset, companyFolder } from '../../config/cloudinary.js';
-import Company from '../../Database/mongo/company.mongo.js';
-import Application from '../../Database/mongo/application.mongo.js';
-import { mirror } from '../../Database/mongo/dual_write.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/logo.png');
@@ -93,19 +90,6 @@ export const createCompany = async (req, res, next) => {
         );
 
         const insertId = result.insertId;
-
-        await mirror(`company.create mysqlCompanyId=${insertId}`, () =>
-            Company.create({
-                mysqlCompanyId: insertId,
-                Name, ContactEmail, FoundingDate,
-                Password: hashedPassword,
-                Comm: Number(Comm),
-                RegistrationDate, TaxNumber, VerficationStatus,
-                ComReg, Governorate, Address, About, LogoUrl,
-                ports: [],
-                categories: [],
-            })
-        );
 
         return res.status(201).json({
             Status: "OK",
@@ -288,10 +272,6 @@ export const deleteCompanyProfile = async (req, res, next) => {
             conn.release();
         }
 
-        await mirror(`company.deleteProfile mysqlCompanyId=${CompanyID}`, () =>
-            Company.deleteOne({ mysqlCompanyId: Number(CompanyID) })
-        );
-
         req.session.destroy((err) => {
             if (err) return next(err);
             res.clearCookie('connect.sid');
@@ -316,9 +296,6 @@ export const deleteCompany = (req, res) => {
 
         db.query("DELETE FROM company WHERE CompanyID = ?", [CompanyID], function (err, result) {
             if (err) throw err;
-            mirror(`company.delete mysqlCompanyId=${CompanyID}`, () =>
-                Company.deleteOne({ mysqlCompanyId: Number(CompanyID) })
-            );
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] deleted Successfully" });
             console.log("Delete Request Received for record [" + CompanyID + "] received");
         });
@@ -411,26 +388,6 @@ export const updateCompanyProfile = async (req, res, next) => {
             [Governorate, Address, ContactEmail, About, LogoUrl, CompanyID]
         );
 
-        await mirror(`company.updateProfile mysqlCompanyId=${CompanyID}`, () =>
-            Company.updateOne(
-                { mysqlCompanyId: Number(CompanyID) },
-                { $set: { Governorate, Address, ContactEmail, About, LogoUrl } }
-            )
-        );
-
-        /* Fan-out: every Application that snapshots this company's
-           Name/LogoUrl needs the snapshot refreshed. Name doesn't change
-           here but LogoUrl can, so we $set both for consistency. */
-        await mirror(`application.refreshCompanySnap mysqlCompanyId=${CompanyID}`, () =>
-            Application.updateMany(
-                { mysqlCompanyId: Number(CompanyID) },
-                { $set: {
-                    'company.Name': existing.Name,
-                    'company.LogoUrl': LogoUrl,
-                } }
-            )
-        );
-
         const updated = await runQuery(
             "SELECT CompanyID, Name, ContactEmail, FoundingDate, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About, LogoUrl FROM company WHERE CompanyID = ?",
             [CompanyID]
@@ -495,29 +452,6 @@ export const updateCompanyPricing = async (req, res, next) => {
             "SELECT CompanyID, CategoryID, Price FROM companycategory WHERE CompanyID = ?",
             [CompanyID]
         );
-
-        /* Mirror to Mongo: rebuild the embedded categories[] array from the
-           full MySQL state (joining Category.Type for the denormalized name).
-           Doing this as one $set is cheaper and less error-prone than trying
-           to compute the diff. */
-        await mirror(`company.updatePricing mysqlCompanyId=${CompanyID}`, async () => {
-            const denorm = await runQuery(
-                `SELECT cc.CategoryID, cc.Price, cat.Type
-                   FROM companycategory cc
-                   JOIN category cat ON cat.CategoryID = cc.CategoryID
-                  WHERE cc.CompanyID = ?`,
-                [CompanyID]
-            );
-            const categories = denorm.map((r) => ({
-                mysqlCategoryId: r.CategoryID,
-                Type: r.Type,
-                Price: Number(r.Price),
-            }));
-            return Company.updateOne(
-                { mysqlCompanyId: Number(CompanyID) },
-                { $set: { categories } }
-            );
-        });
 
         return res.status(200).json({
             ok: true,
@@ -956,16 +890,6 @@ export const updateCompany = (req, res) => {
             [Name, ContactEmail, FoundingDate, Password, Comm, RegistrationDate, TaxNumber, VerficationStatus, ComReg, Governorate, Address, About, CompanyID],
             function (err, result) {
                 if (err) throw err;
-                mirror(`company.updateAdmin mysqlCompanyId=${CompanyID}`, () =>
-                    Company.updateOne(
-                        { mysqlCompanyId: Number(CompanyID) },
-                        { $set: {
-                            Name, ContactEmail, FoundingDate, Password,
-                            Comm: Number(Comm), RegistrationDate, TaxNumber,
-                            VerficationStatus, ComReg, Governorate, Address, About,
-                        } }
-                    )
-                );
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CompanyID + "] is Updated Successfully" });
                 console.log("Record Id [" + CompanyID + "] is Updated Successfully");
             }

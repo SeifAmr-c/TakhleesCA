@@ -1,8 +1,4 @@
 import db from '../../Database/connection.js';
-import Category from '../../Database/mongo/category.mongo.js';
-import Company from '../../Database/mongo/company.mongo.js';
-import Application from '../../Database/mongo/application.mongo.js';
-import { mirror } from '../../Database/mongo/dual_write.js';
 
 export const createCategory = (req, res) => {
     console.log("Post Request Received");
@@ -11,9 +7,6 @@ export const createCategory = (req, res) => {
         [Type], function (err, result) {
             if (err) throw err;
             const insertId = result.insertId;
-            mirror(`category.create mysqlCategoryId=${insertId}`, () =>
-                Category.create({ mysqlCategoryId: insertId, Type })
-            );
             res.status(201).json({ "Status": "OK", "Message": "Record Added Successfully with Id " + insertId });
             console.log("Record Added " + insertId);
         });
@@ -54,9 +47,6 @@ export const deleteCategory = (req, res) => {
 
         db.query("DELETE FROM category WHERE CategoryID = ?", [CategoryID], function (err, result) {
             if (err) throw err;
-            mirror(`category.delete mysqlCategoryId=${CategoryID}`, () =>
-                Category.deleteOne({ mysqlCategoryId: Number(CategoryID) })
-            );
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] deleted Successfully" });
             console.log("Delete Request Received for record [" + CategoryID + "] received");
         });
@@ -107,21 +97,6 @@ export const updateCategory = (req, res) => {
             [Type, CategoryID],
             function (err, result) {
                 if (err) throw err;
-                mirror(`category.update mysqlCategoryId=${CategoryID}`, async () => {
-                    await Category.updateOne(
-                        { mysqlCategoryId: Number(CategoryID) },
-                        { $set: { Type }, $setOnInsert: { mysqlCategoryId: Number(CategoryID) } },
-                        { upsert: true }
-                    );
-                    await Company.updateMany(
-                        { 'categories.mysqlCategoryId': Number(CategoryID) },
-                        { $set: { 'categories.$.Type': Type } }
-                    );
-                    await Application.updateMany(
-                        { mysqlCategoryId: Number(CategoryID) },
-                        { $set: { 'category.Type': Type } }
-                    );
-                });
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + CategoryID + "] is Updated Successfully" });
                 console.log("Record Id [" + CategoryID + "] is Updated Successfully");
             }

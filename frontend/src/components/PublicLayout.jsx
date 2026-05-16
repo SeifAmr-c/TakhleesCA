@@ -90,6 +90,7 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                 <a href="#companies-section" onClick={scrollToSection("companies-section")}>
                   Companies
                 </a>
+                <NavLink to="/admin/commissions">Commissions</NavLink>
                 <a href="#support-section" onClick={scrollToSection("support-section")}>
                   Support
                 </a>

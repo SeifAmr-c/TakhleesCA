@@ -23,6 +23,7 @@ import CompanyDashboard from "./pages/company/CompanyDashboard.jsx";
 import CompanyProfileEdit from "./pages/company/CompanyProfileEdit.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import AdminProfileEdit from "./pages/admin/AdminProfileEdit.jsx";
+import AdminCommissions from "./pages/admin/AdminCommissions.jsx";
 
 import ScrollToTop from "./components/ScrollToTop.jsx";
 
@@ -66,6 +67,7 @@ function App() {
         <Route path="/company/profile" element={<CompanyProfileEdit />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/profile" element={<RequireAuth><AdminProfileEdit /></RequireAuth>} />
+        <Route path="/admin/commissions" element={<RequireAuth><AdminCommissions /></RequireAuth>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

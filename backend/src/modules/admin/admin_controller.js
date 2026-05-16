@@ -10,6 +10,7 @@ router.get("/export-report", requireAdmin, adminService.generateExecutiveReport)
 router.get("/companies/pending", requireAdmin, adminService.listPendingCompanies);
 router.get("/companies/verified", requireAdmin, adminService.listVerifiedCompanies);
 router.put("/companies/:id/verify", requireAdmin, adminService.verifyCompany);
+router.put("/companies/:id/commission", requireAdmin, adminService.updateCompanyCommission);
 
 router.get("/tickets/pending", requireAdmin, adminService.listPendingTickets);
 router.get("/tickets/resolved", requireAdmin, adminService.listResolvedTickets);

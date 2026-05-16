@@ -17,12 +17,28 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+/* Global auto-logout: any 401 from the backend means the session
+   expired (or was never present). Clear the cached auth blob and bounce
+   to /login so the next render shows the sign-in screen without the
+   user having to click anything. Skip the redirect if the user is
+   already on an auth page or the login POST itself returned 401 — the
+   login form needs to surface that error inline. */
+const AUTH_PATHS = ["/login", "/register", "/company/login", "/company/register"];
+const LOGIN_ENDPOINTS = ["/user/login", "/company/login"];
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      clearAuth();
-      window.location.href = "/login";
+      const requestUrl = error?.config?.url || "";
+      const isLoginCall = LOGIN_ENDPOINTS.some((p) => requestUrl.includes(p));
+      if (!isLoginCall) {
+        clearAuth();
+        const onAuthPage = AUTH_PATHS.includes(window.location.pathname);
+        if (!onAuthPage) {
+          window.location.href = "/login";
+        }
+      }
     }
     return Promise.reject(error);
   }

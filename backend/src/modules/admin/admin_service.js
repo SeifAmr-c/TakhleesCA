@@ -150,6 +150,53 @@ export const verifyCompany = async (req, res, next) => {
   }
 };
 
+/* PUT /admin/companies/:id/commission
+   Body: { Comm: number }  — percentage with up to 2 decimal places.
+   Schema: company.Comm is DECIMAL(4,2), so the valid range is [0, 99.99]. */
+export const updateCompanyCommission = async (req, res, next) => {
+  try {
+    const companyId = Number(req.params.id);
+    if (!Number.isInteger(companyId) || companyId < 1) {
+      return res.status(400).json({ ok: false, message: "Invalid company id." });
+    }
+
+    const rawComm = req.body?.Comm;
+    const Comm = Number(rawComm);
+    if (rawComm === undefined || rawComm === null || rawComm === "" || !Number.isFinite(Comm)) {
+      return res.status(400).json({ ok: false, message: "Comm must be a number." });
+    }
+    if (Comm < 0 || Comm > 99.99) {
+      return res.status(400).json({ ok: false, message: "Comm must be between 0 and 99.99." });
+    }
+
+    const existing = await runQuery(
+      "SELECT CompanyID FROM company WHERE CompanyID = ? LIMIT 1",
+      [companyId]
+    );
+    if (!existing.length) {
+      return res.status(404).json({ ok: false, message: `Company [${companyId}] not found.` });
+    }
+
+    await runQuery(
+      "UPDATE company SET Comm = ? WHERE CompanyID = ?",
+      [Comm, companyId]
+    );
+
+    const updated = await runQuery(
+      `SELECT ${COMPANY_COLS} FROM company WHERE CompanyID = ?`,
+      [companyId]
+    );
+
+    return res.json({
+      ok: true,
+      message: `Company [${companyId}] commission updated to ${Comm}%.`,
+      data: { company: updated[0] },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 const TICKET_SELECT_SQL = `
   SELECT
     t.TicketID, t.Issue, t.Resolved, t.AdminID, t.ClientID,

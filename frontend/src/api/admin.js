@@ -40,6 +40,13 @@ export const verifyCompany = async (companyId, body = { status: "Verified" }) =>
   return data;
 };
 
+// PUT /admin/companies/:id/commission  body: { Comm: number }
+//   200: { ok: true, data: { company } }
+export const updateCompanyCommission = async (companyId, Comm) => {
+  const { data } = await api.put(`/admin/companies/${companyId}/commission`, { Comm });
+  return data;
+};
+
 // ── Support tickets (admin only) ───────────────────────────────
 // GET /admin/tickets/pending  → { ok, count, data: [...] }
 export const getPendingTickets = async () => {

@@ -4,11 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repo layout
 
-The repo is a monorepo with three siblings at the root:
+The repo is a monorepo with two siblings at the root:
 
 - `backend/` — Node.js + Express + MySQL API (this CLAUDE.md is about this app).
 - `frontend/` — React (CRA) web client. Its `package.json` sets `"proxy": "http://localhost:3000"` so dev requests forward to the backend.
-- `mobile/` — Expo / React Native app for companies.
 
 All backend commands must be run from inside `backend/` (that's where `package.json` and `.env` live).
 

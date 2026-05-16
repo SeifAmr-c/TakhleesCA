@@ -1,7 +1,5 @@
 import db from '../../Database/connection.js';
 import { uploadToCloudinary, companyFolder } from '../../config/cloudinary.js';
-import Application from '../../Database/mongo/application.mongo.js';
-import { mirror } from '../../Database/mongo/dual_write.js';
 
 const runQuery = (sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -50,19 +48,6 @@ export const createDocumentWithFile = async (req, res, next) => {
         const result = await runQuery(
             'INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), ?, ?, ?)',
             [DocType, 'Pending', filePath, ApplicationID]
-        );
-
-        await mirror(`document.createWithFile mysqlDocumentId=${result.insertId}`, () =>
-            Application.updateOne(
-                { mysqlApplicationId: ApplicationID },
-                { $push: { documents: {
-                    mysqlDocumentId: result.insertId,
-                    DocType,
-                    UploadDate: new Date(),
-                    VerficationStatus: 'Pending',
-                    Path: filePath,
-                } } }
-            )
         );
 
         return res.status(201).json({
@@ -129,19 +114,6 @@ export const createDocument = async (req, res, next) => {
             [DocType, VerficationStatus, Path, ApplicationID]
         );
 
-        await mirror(`document.create mysqlDocumentId=${result.insertId}`, () =>
-            Application.updateOne(
-                { mysqlApplicationId: ApplicationID },
-                { $push: { documents: {
-                    mysqlDocumentId: result.insertId,
-                    DocType,
-                    UploadDate: new Date(),
-                    VerficationStatus,
-                    Path,
-                } } }
-            )
-        );
-
         return res.status(201).json({
             ok: true,
             message: 'Document metadata recorded.',
@@ -181,12 +153,6 @@ export const deleteDocument = (req, res) => {
 
         db.query("DELETE FROM document WHERE DocumentID = ?", [DocumentID], function (err, result) {
             if (err) throw err;
-            mirror(`document.delete mysqlDocumentId=${DocumentID}`, () =>
-                Application.updateOne(
-                    { 'documents.mysqlDocumentId': Number(DocumentID) },
-                    { $pull: { documents: { mysqlDocumentId: Number(DocumentID) } } }
-                )
-            );
             res.status(200).json({ "Status": "OK", "Message": "Record Id [" + DocumentID + "] deleted Successfully" });
             console.log("Delete Request Received for record [" + DocumentID + "] received");
         });
@@ -241,18 +207,6 @@ export const updateDocument = (req, res) => {
             [DocType, UploadDate, VerficationStatus, Path, ApplicationID, DocumentID],
             function (err, result) {
                 if (err) throw err;
-                mirror(`document.update mysqlDocumentId=${DocumentID}`, () =>
-                    /* Positional-$ scoped to the matching subdoc. */
-                    Application.updateOne(
-                        { 'documents.mysqlDocumentId': Number(DocumentID) },
-                        { $set: {
-                            'documents.$.DocType': DocType,
-                            'documents.$.UploadDate': UploadDate ? new Date(UploadDate) : null,
-                            'documents.$.VerficationStatus': VerficationStatus,
-                            'documents.$.Path': Path,
-                        } }
-                    )
-                );
                 res.status(200).json({ "Status": "OK", "Message": "Record Id [" + DocumentID + "] is Updated Successfully" });
                 console.log("Record Id [" + DocumentID + "] is Updated Successfully");
             }
