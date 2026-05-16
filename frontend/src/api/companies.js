@@ -48,6 +48,14 @@ export const verifyCompany = async (companyId, status) => {
   return data;
 };
 
+// Backend contract (PUT /company/:id/commission, requires admin session):
+//   body: { Comm: number 0..100 }
+//   200:  { ok: true, data: { CompanyID, Comm } }
+export const updateCompanyCommission = async (companyId, comm) => {
+  const { data } = await api.put(`/company/${companyId}/commission`, { Comm: Number(comm) });
+  return data;
+};
+
 // Backend contract (PUT /company/profile, requires company session):
 //   Plain JSON body: { Governorate?, Address?, ContactEmail?, About? }
 //   OR FormData with the same fields plus optional `logo` File for the

@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
@@ -590,31 +589,6 @@ function CompanyDashboard() {
             value={totals.activeJobs}
             sub={`${totals.inProgress} in progress · ${totals.completed} completed`}
           />
-        </div>
-      </Reveal>
-
-      {/* Profile & pricing CTA */}
-      <Reveal as="section" style={{ marginBottom: 36 }}>
-        <div
-          className="card card-pad-lg"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <span className="eyebrow" style={{ color: "var(--accent-dark)" }}>Profile & pricing</span>
-            <h2 className="h3" style={{ fontSize: 20, marginTop: 4 }}>Edit profile and category prices</h2>
-            <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
-              Update your governorate, address, contact email, about-us copy, and the price clients pay per category.
-            </p>
-          </div>
-          <Link to="/company/profile" className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
-            Open editor <Icon name="arrow_right" size={14} />
-          </Link>
         </div>
       </Reveal>
 

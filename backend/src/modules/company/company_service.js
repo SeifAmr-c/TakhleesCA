@@ -735,6 +735,36 @@ export const recommendCompanies = async (req, res, next) => {
   }
 };
 
+/* Admin-only: update strictly the Comm percentage for a given CompanyID.
+   No other field on the Company doc is touched. Comm is not embedded in
+   any snapshot, so no fan-out is required. */
+export const updateCompanyCommission = async (req, res, next) => {
+  try {
+    const cid = Number(req.params.id);
+    if (!Number.isInteger(cid) || cid <= 0) {
+      return res.status(400).json({ ok: false, message: "Valid CompanyID is required." });
+    }
+
+    const Comm = Number(req.body?.Comm);
+    if (!Number.isFinite(Comm) || Comm < 0 || Comm > 100) {
+      return res.status(400).json({ ok: false, message: "Comm must be a number between 0 and 100." });
+    }
+
+    const result = await Company.updateOne({ CompanyID: cid }, { $set: { Comm } });
+    if (!result.matchedCount) {
+      return res.status(404).json({ ok: false, message: `Company [${cid}] not found.` });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: `Commission updated for company ${cid}.`,
+      data: { CompanyID: cid, Comm },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 export const updateCompany = async (req, res, next) => {
   try {
     const cid = Number(req.query.CompanyID);
