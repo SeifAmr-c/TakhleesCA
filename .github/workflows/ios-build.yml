@@ -43,4 +43,7 @@ jobs:
         run: printf '%s' "$ASC_API_KEY_P8" > AuthKey_2TJ98T7SXQ.p8
 
       - name: Build and submit to TestFlight
+        env:
+          # TODO: replace with your actual LAN IPv4 before pushing
+          EXPO_PUBLIC_API_URL: http://192.168.1.8:3000
         run: eas build --platform ios --profile production --auto-submit --non-interactive
