@@ -5,6 +5,7 @@ import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
+import ConfirmModal from "../../components/ConfirmModal.jsx";
 import { listApplications, cancelApplication } from "../../api/applications.js";
 import { submitReview, checkApplicationReviewed } from "../../api/reviews.js";
 import { useAuth } from "../../api/authState.js";
@@ -240,6 +241,12 @@ function Tracking() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [cancellingId, setCancellingId] = useState(null);
   const [cancelError, setCancelError] = useState("");
+  /* Target row pending a cancellation confirmation. While non-null
+     the ConfirmModal is open; on confirm we kick off the API call. */
+  const [cancelTarget, setCancelTarget] = useState(null);
+  /* Briefly hold the modal open in its success state so the user
+     sees the affirmation before it dismisses and the list refreshes. */
+  const [cancelSuccess, setCancelSuccess] = useState(false);
 
   const [qrTarget, setQrTarget] = useState(null);
   const [reviewTarget, setReviewTarget] = useState(null);
@@ -301,23 +308,40 @@ function Tracking() {
     return () => { active = false; };
   }, [clientId, location.search, refreshTick]);
 
-  const handleCancelApplication = async (row) => {
+  /* The row's Cancel button only opens the confirm modal; the API call
+     fires from confirmCancelApplication once the user confirms. */
+  const handleCancelApplication = (row) => {
     setCancelError("");
-    if (!window.confirm("Cancel this application? This cannot be undone.")) return;
+    setCancelTarget(row);
+  };
+
+  const confirmCancelApplication = async () => {
+    if (!cancelTarget) return;
+    const row = cancelTarget;
     setCancellingId(row.ApplicationID);
     try {
       const res = await cancelApplication(row.ApplicationID);
       if (res?.ok) {
-        setRefreshTick((n) => n + 1);
+        /* Hold the modal open in its success state for 2s before
+           closing it and refreshing the list. */
+        setCancelSuccess(true);
+        setCancellingId(null);
+        setTimeout(() => {
+          setCancelSuccess(false);
+          setCancelTarget(null);
+          setRefreshTick((n) => n + 1);
+        }, 2000);
       } else {
         setCancelError(res?.message || "Couldn't cancel this application.");
+        setCancellingId(null);
+        setCancelTarget(null);
       }
     } catch (err) {
       setCancelError(
         err?.response?.data?.message || "Couldn't cancel this application."
       );
-    } finally {
       setCancellingId(null);
+      setCancelTarget(null);
     }
   };
 
@@ -643,6 +667,22 @@ function Tracking() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={Boolean(cancelTarget)}
+        title={cancelSuccess ? "Application cancelled" : "Cancel Application"}
+        message="Are you sure you want to cancel this application? This action cannot be undone."
+        confirmLabel="Cancel Application"
+        cancelLabel="Keep Application"
+        variant="danger"
+        busy={cancellingId != null}
+        isSuccess={cancelSuccess}
+        successMessage="Application cancelled successfully."
+        onConfirm={confirmCancelApplication}
+        onCancel={() => {
+          if (cancellingId == null && !cancelSuccess) setCancelTarget(null);
+        }}
+      />
     </PublicLayout>
   );
 }
