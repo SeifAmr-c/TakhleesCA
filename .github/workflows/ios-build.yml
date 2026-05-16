@@ -3,7 +3,7 @@ name: iOS Build & Submit to TestFlight
 on:
   push:
     branches:
-      - main
+      - seif
     paths:
       - 'mobile/**'
       - '.github/workflows/ios-build.yml'
