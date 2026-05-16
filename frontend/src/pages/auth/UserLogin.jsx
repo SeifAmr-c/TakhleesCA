@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, NavLink, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { login } from "../../api/auth.js";
 import { setAuth } from "../../api/authState.js";
 import Icon from "../../components/Icon.jsx";
@@ -25,6 +25,8 @@ function UserLogin() {
   const emailRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const expired = useMemo(() => searchParams.get("expired") === "1", [searchParams]);
 
   useEffect(() => { emailRef.current?.focus(); }, []);
 
@@ -78,6 +80,11 @@ function UserLogin() {
           <h1 className={styles.title}>Welcome back</h1>
           <p className={styles.subtitle}>Sign in to track shipments and manage applications.</p>
 
+          {expired && !error && (
+            <div className="banner-error" role="alert">
+              <Icon name="bell" size={16} />Your session has expired. Please sign in again.
+            </div>
+          )}
           {error && <div className="banner-error" role="alert"><Icon name="bell" size={16} />{error}</div>}
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>

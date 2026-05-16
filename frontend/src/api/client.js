@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearAuth } from "./authState";
+import { clearAuth, getAuth } from "./authState";
 
 // In dev, CRA's `proxy` field in package.json forwards relative URLs
 // (like `/user/login`) to the Node backend on :3000, so the browser
@@ -21,8 +21,15 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
+      const auth = getAuth();
+      const kind = auth?.kind;
       clearAuth();
-      window.location.href = "/login";
+      if (auth) {
+        const loginPath = kind === "company" ? "/company/login" : "/login";
+        if (window.location.pathname !== loginPath) {
+          window.location.replace(`${loginPath}?expired=1`);
+        }
+      }
     }
     return Promise.reject(error);
   }
