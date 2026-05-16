@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Takhlees",
+    "slug": "takhlees-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0C1A2C"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "eg.takhlees.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow Takhlees to scan completion QR codes."
+      }
+    },
+    "android": {
+      "package": "eg.takhlees.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0C1A2C"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1ec2649a-eae3-4312-945e-d83332748cd3"
+      }
+    },
+    "owner": "seifamrattia",
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Takhlees to scan completion QR codes."
+        }
+      ]
+    ]
+  }
+}
