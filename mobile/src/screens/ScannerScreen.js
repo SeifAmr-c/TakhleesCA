@@ -9,19 +9,24 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { completeViaQr } from '../api';
-import { brand } from '../theme';
+import { brand, colors } from '../theme';
 
 const ACCENT = brand.tabActive;
+const SUCCESS = colors.signalGo;
 
 export default function ScannerScreen({ session, onSignOut }) {
   const company = session?.company ?? null;
+  const navigation = useNavigation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [lastResult, setLastResult] = useState(null);
+  /* Drives the in-screen success/error panel. When non-null the camera
+     reticle gets dimmed and the panel takes over the bottom area with
+     navigation + retry actions. */
+  const [scanOutcome, setScanOutcome] = useState(null);
   const lockRef = useRef(false);
   /* Tab-blur ghost scans: while the Scanner tab is animating out the
      camera can still fire onBarcodeScanned with a partial frame, which
@@ -46,19 +51,14 @@ export default function ScannerScreen({ session, onSignOut }) {
 
     try {
       const result = await completeViaQr(payload);
-      setLastResult({
+      setScanOutcome({
         ok: true,
         tracking: result?.data?.TrackingNumber ?? payload.split(':')[0],
+        applicationId: result?.data?.ApplicationID ?? null,
       });
-      Alert.alert(
-        'Shipment Completed!',
-        `Tracking #${result?.data?.TrackingNumber ?? '—'} marked as completed.`,
-        [{ text: 'Scan another', onPress: resumeScanning }],
-        { cancelable: false }
-      );
     } catch (e) {
       const userMessage = 'Scan failed. Please contact the system admin.';
-      setLastResult({ ok: false, message: userMessage });
+      setScanOutcome({ ok: false, message: userMessage });
       Alert.alert(
         'Scan failed',
         userMessage,
@@ -72,7 +72,19 @@ export default function ScannerScreen({ session, onSignOut }) {
 
   function resumeScanning() {
     lockRef.current = false;
+    setScanOutcome(null);
     setScanning(true);
+  }
+
+  /* Switching tabs nukes the success panel so it isn't waiting for the
+     user when they next come back to the scanner. ApplicationsScreen's
+     focus listener refetches the list, so the just-completed shipment
+     shows up as Completed without needing a manual pull-to-refresh. */
+  function returnToApplications() {
+    lockRef.current = false;
+    setScanOutcome(null);
+    setScanning(true);
+    navigation.navigate('Applications');
   }
 
   function handleSignOut() {
@@ -104,6 +116,8 @@ export default function ScannerScreen({ session, onSignOut }) {
     );
   }
 
+  const showSuccessPanel = scanOutcome?.ok === true;
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
@@ -131,15 +145,39 @@ export default function ScannerScreen({ session, onSignOut }) {
         </Pressable>
       </View>
 
-      <View style={styles.reticleWrap} pointerEvents="none">
-        <View style={styles.reticle} />
-        <Text style={styles.reticleHint}>
-          Align the client's QR code inside the frame
-        </Text>
-      </View>
+      {showSuccessPanel ? null : (
+        <View style={styles.reticleWrap} pointerEvents="none">
+          <View style={styles.reticle} />
+          <Text style={styles.reticleHint}>
+            Align the client's QR code inside the frame
+          </Text>
+        </View>
+      )}
 
       <View style={styles.bottomBar} pointerEvents="box-none">
-        {submitting ? (
+        {showSuccessPanel ? (
+          <View style={styles.successCard}>
+            <View style={styles.successBadge}>
+              <Text style={styles.successBadgeText}>✓</Text>
+            </View>
+            <Text style={styles.successTitle}>Shipment Completed</Text>
+            <Text style={styles.successSubtitle} numberOfLines={2}>
+              Tracking #{scanOutcome.tracking} is now marked complete.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={returnToApplications}
+            >
+              <Text style={styles.primaryBtnText}>Return to Application Page</Text>
+            </Pressable>
+            <Pressable style={styles.ghostBtn} onPress={resumeScanning} hitSlop={8}>
+              <Text style={styles.ghostBtnText}>Scan another</Text>
+            </Pressable>
+          </View>
+        ) : submitting ? (
           <View style={styles.statusPill}>
             <ActivityIndicator color="#2A1A05" />
             <Text style={styles.statusText}>Completing shipment…</Text>
@@ -153,17 +191,9 @@ export default function ScannerScreen({ session, onSignOut }) {
             Camera is live. Point at a QR to complete the shipment.
           </Text>
         )}
-        {lastResult && !submitting ? (
-          <Text
-            style={[
-              styles.lastResult,
-              { color: lastResult.ok ? ACCENT : '#FCA5A5' },
-            ]}
-            numberOfLines={2}
-          >
-            {lastResult.ok
-              ? `Last completed: #${lastResult.tracking}`
-              : `Last error: ${lastResult.message}`}
+        {scanOutcome && !scanOutcome.ok && !submitting ? (
+          <Text style={[styles.lastResult, { color: '#FCA5A5' }]} numberOfLines={2}>
+            Last error: {scanOutcome.message}
           </Text>
         ) : null}
       </View>
@@ -242,7 +272,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 14,
-    minWidth: 200,
+    minWidth: 220,
     alignItems: 'center',
   },
   primaryBtnText: { color: '#2A1A05', fontWeight: '700', fontSize: 16 },
@@ -260,4 +290,44 @@ const styles = StyleSheet.create({
   statusText: { color: '#2A1A05', fontWeight: '700' },
   idleHint: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
   lastResult: { fontSize: 12 },
+  successCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 16,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+    gap: 10,
+  },
+  successBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: SUCCESS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  successBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 28,
+  },
+  successTitle: {
+    color: colors.harbor900,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  successSubtitle: {
+    color: colors.steel700,
+    fontSize: 13,
+    textAlign: 'center',
+    maxWidth: 280,
+    marginBottom: 6,
+  },
+  ghostBtn: { paddingVertical: 6, paddingHorizontal: 12 },
+  ghostBtnText: { color: colors.steel700, fontWeight: '600', fontSize: 13 },
 });

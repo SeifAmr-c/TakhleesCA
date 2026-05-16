@@ -257,6 +257,50 @@ function Tracking() {
   const [reviewError, setReviewError] = useState("");
   const [reviewedIds, setReviewedIds] = useState(new Set());
 
+  /* Silent 3s polling so the dashboard reflects the company's QR scan
+     (Status → Completed) without a manual reload. Runs in parallel to
+     the main loader below; intentionally does NOT touch loading state
+     or refetch reviewed flags — only the list shape changes between
+     polls, and we only update state if the list actually moved so
+     React doesn't re-render the row tree on every tick. */
+  useEffect(() => {
+    if (!clientId) return undefined;
+    let active = true;
+    const tick = async () => {
+      try {
+        const data = await listApplications({ ClientID: clientId });
+        if (!active) return;
+        const list = Array.isArray(data) ? data : data?.data || [];
+        const shaped = list.map(shapeApplication);
+        setApplications((prev) => {
+          if (prev.length !== shaped.length) return shaped;
+          for (let i = 0; i < shaped.length; i += 1) {
+            const a = prev[i];
+            const b = shaped[i];
+            if (
+              a.ApplicationID !== b.ApplicationID ||
+              a.Status !== b.Status ||
+              a.CompletionToken !== b.CompletionToken ||
+              a.TrackingNumber !== b.TrackingNumber
+            ) {
+              return shaped;
+            }
+          }
+          return prev;
+        });
+      } catch {
+        /* Swallow poll errors — the visible UI is driven by the main
+           loader's error banner; a transient blip mid-poll shouldn't
+           replace the rendered list with an error state. */
+      }
+    };
+    const id = setInterval(tick, 3000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [clientId]);
+
   useEffect(() => {
     if (!clientId) {
       setLoading(false);

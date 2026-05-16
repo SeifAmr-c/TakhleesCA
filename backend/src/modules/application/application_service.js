@@ -391,9 +391,12 @@ export const updateApplication = async (req, res, next) => {
 
         const newStatus = String(Status);
         const isCompleting = newStatus === 'Completed';
-        /* Revenue tracking only fires on the transition INTO Accepted;
-           re-saving an already-Accepted app must not double-insert. */
-        const isAccepting = newStatus === 'Accepted' && existing.Status !== 'Accepted';
+        /* Revenue tracking fires once, on the first transition into an
+           active state. The schema enum allows both 'In Progress' and
+           'Accepted' for that state; the frontend uses 'In Progress',
+           so gating on 'Accepted' alone never triggered. */
+        const ACTIVE_STATES = new Set(['In Progress', 'Accepted']);
+        const isAccepting = ACTIVE_STATES.has(newStatus) && !ACTIVE_STATES.has(existing.Status);
         /* QR token is minted on the first transition INTO In Progress
            and reused on subsequent saves so the currently-displayed QR
            stays valid until completion. */

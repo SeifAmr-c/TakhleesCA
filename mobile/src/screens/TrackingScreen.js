@@ -16,12 +16,7 @@ import BrandHeader from '../components/BrandHeader';
 import { listClientApplications } from '../api';
 import { brand, colors, statusPalette } from '../theme';
 
-const STEPS = ['Pending', 'In Progress', 'Completed', 'Accepted'];
-
-/* Steps that should render the "done" dot in green rather than the
-   in-motion amber. Reaching Completed or Accepted means the leg of the
-   journey is fulfilled and gets the signalGo treatment. */
-const GREEN_STEPS = new Set(['Completed', 'Accepted']);
+const STEPS = ['Accepted', 'In Progress', 'Completed'];
 
 function formatDate(value) {
   if (!value) return null;
@@ -34,20 +29,28 @@ function formatDate(value) {
   });
 }
 
+/* Three-stage stepper. Pending is intentionally absent — the shipment
+   only enters the visible journey once a company accepts it. Past
+   stages render green (signalGo), the current stage renders amber
+   (safety = "in motion"), and reaching Completed flips every dot to
+   green to signal the whole leg is done. */
 function ProgressDots({ status }) {
   const normalized = String(status || '').toLowerCase();
-  const idx = STEPS.findIndex((s) => s.toLowerCase() === normalized);
-  const stoppedAt = idx >= 0 ? idx : -1;
+  const isCompleted = normalized === 'completed';
+  let currentIdx;
+  if (isCompleted) currentIdx = STEPS.length - 1;
+  else if (normalized === 'in progress') currentIdx = 1;
+  else if (normalized === 'accepted') currentIdx = 0;
+  else currentIdx = -1; /* Pending or unknown — nothing reached yet. */
+
   return (
     <View style={styles.dots}>
       {STEPS.map((label, i) => {
-        const reached = stoppedAt >= i;
-        const isGreenStep = GREEN_STEPS.has(label);
-        const dotStyle = reached
-          ? isGreenStep
-            ? styles.dotCompleted
-            : styles.dotActive
-          : styles.dotMuted;
+        let dotStyle;
+        if (isCompleted || i < currentIdx) dotStyle = styles.dotCompleted;
+        else if (i === currentIdx) dotStyle = styles.dotActive;
+        else dotStyle = styles.dotMuted;
+        const reached = isCompleted || i <= currentIdx;
         return (
           <View key={label} style={styles.dotWrap}>
             <View style={[styles.dot, dotStyle]} />

@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import BrandHeader from '../components/BrandHeader';
 import { listCompanyApplications } from '../api';
 import { brand, colors, statusPalette } from '../theme';
@@ -114,6 +115,15 @@ export default function ApplicationsScreen({ session, onSignOut }) {
   useEffect(() => {
     load(false);
   }, [load]);
+
+  /* Silent refetch each time the tab gains focus so a freshly-scanned
+     QR completion shows up as Completed without a manual pull-to-refresh
+     when the user returns from the Scanner. */
+  useFocusEffect(
+    useCallback(() => {
+      load(true);
+    }, [load])
+  );
 
   const companyName = session?.company?.Name || null;
 
