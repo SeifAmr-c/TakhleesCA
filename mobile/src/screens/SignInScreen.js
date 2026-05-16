@@ -14,8 +14,35 @@ import {
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
+import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { loginCompany, loginUser } from '../api';
 import { brand, colors } from '../theme';
+
+function EyeIcon({ open, size = 20, color = 'rgba(255,255,255,0.85)' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={1.8} />
+      {!open && (
+        <Line
+          x1="4"
+          y1="4"
+          x2="20"
+          y2="20"
+          stroke={color}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+        />
+      )}
+    </Svg>
+  );
+}
 
 const ROLES = [
   { key: 'company', label: 'Company' },
@@ -26,6 +53,7 @@ export default function SignInScreen({ onSignedIn }) {
   const [role, setRole] = useState('company');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const passwordRef = useRef(null);
@@ -136,20 +164,34 @@ export default function SignInScreen({ onSignedIn }) {
             />
 
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              ref={passwordRef}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password"
-              returnKeyType="go"
-              onSubmitEditing={handleSubmit}
-              placeholder="Your password"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              style={styles.input}
-              editable={!submitting}
-            />
+            <View style={styles.passwordWrap}>
+              <TextInput
+                ref={passwordRef}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="password"
+                returnKeyType="go"
+                onSubmitEditing={handleSubmit}
+                placeholder="Your password"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                style={[styles.input, styles.passwordInput]}
+                editable={!submitting}
+              />
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                style={({ pressed }) => [
+                  styles.eyeButton,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <EyeIcon open={showPassword} />
+              </Pressable>
+            </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -267,6 +309,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
+  },
+  passwordWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 46,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 8,
+    top: 0,
+    bottom: 0,
+    width: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   error: {
     color: '#FCA5A5',

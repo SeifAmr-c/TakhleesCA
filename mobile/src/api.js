@@ -225,25 +225,23 @@ async function authedGet(path) {
   return body;
 }
 
-/* The backend identifies the company from the session, not from a
-   query string, so the id argument is informational only — we still
-   keep the signature so the call sites don't change.
-
-   Mobile reads from MongoDB exclusively. /mobile/application/* is the
-   Mongo-backed twin of /application/* (which remains on MySQL for the
-   web/admin dashboard). */
+/* Both endpoints live under /application on this MongoDB-only branch
+   (the dual-write /mobile/application/* twin is gone). Company list
+   matches the web frontend's pattern exactly: GET /application?CompanyID=<id>.
+   Client list uses /application/client-list because the screen needs
+   `QrPayload`, which only that endpoint includes (includeToken: true). */
 export async function listCompanyApplications(companyId) {
   if (!companyId) {
     throw new Error('Missing companyId.');
   }
-  return authedGet('/mobile/application/company-list');
+  return authedGet(`/application?CompanyID=${encodeURIComponent(companyId)}`);
 }
 
 export async function listClientApplications(clientId) {
   if (!clientId) {
     throw new Error('Missing clientId.');
   }
-  return authedGet('/mobile/application/client-list');
+  return authedGet('/application/client-list');
 }
 
 export async function completeViaQr(qrPayload) {
