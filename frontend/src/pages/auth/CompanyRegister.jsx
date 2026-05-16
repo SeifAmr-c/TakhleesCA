@@ -320,10 +320,10 @@ function CompanyRegister() {
                   height: 112,
                   borderRadius: "50%",
                   border: "2px dashed var(--line-strong, #cbd5e1)",
-                  background: logoPreview ? "transparent" : "var(--surface-2, #f8fafc)",
-                  backgroundImage: logoPreview ? `url(${logoPreview})` : "none",
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
+                  /* Always render against a clean white backdrop so
+                     transparent PNGs don't pick up whatever sits behind
+                     the button. */
+                  backgroundColor: "#ffffff",
                   display: "grid",
                   placeItems: "center",
                   cursor: "pointer",
@@ -332,7 +332,20 @@ function CompanyRegister() {
                   overflow: "hidden",
                 }}
               >
-                {!logoPreview && (
+                {logoPreview ? (
+                  <img
+                    src={logoPreview}
+                    alt="Company logo preview"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      backgroundColor: "#ffffff",
+                    }}
+                  />
+                ) : (
                   <span style={{ display: "grid", placeItems: "center", gap: 4, color: "var(--ink-faint, #64748b)" }}>
                     <Icon name="building" size={28} />
                     <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
@@ -657,7 +670,9 @@ function CompanyRegister() {
                   margin: "0 auto",
                   overflow: "hidden",
                   borderRadius: "8px",
-                  backgroundColor: "#f3f4f6",
+                  /* Clean white surface so transparent PNGs don't render
+                     over a dark backdrop and look black. */
+                  backgroundColor: "#ffffff",
                 }}
               >
                 <Cropper
@@ -672,6 +687,11 @@ function CompanyRegister() {
                   onCropChange={setCrop}
                   onZoomChange={setZoom}
                   onCropComplete={onCropComplete}
+                  objectFit="contain"
+                  style={{
+                    containerStyle: { backgroundColor: "#ffffff" },
+                    mediaStyle: { backgroundColor: "#ffffff" },
+                  }}
                 />
               </div>
             </div>

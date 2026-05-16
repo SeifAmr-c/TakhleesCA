@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
+import ConfirmModal from "../../components/ConfirmModal.jsx";
 import { useAuth, setAuth, clearAuth } from "../../api/authState.js";
 import { updateUserProfile, deleteUserAccount, canDeleteUser } from "../../api/auth.js";
 
@@ -34,6 +35,8 @@ function UserProfileEdit() {
   const [success, setSuccess] = useState("");
   const [serverError, setServerError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
   /* hasActiveApplications gates the Delete button. null = still loading
      the flag (button shows disabled with no helper text yet), true =
      blocked, false = safe to delete. */
@@ -132,18 +135,27 @@ function UserProfileEdit() {
 
   /* Account self-deletion. The button is gated upstream by
      hasActiveApplications so this handler never has to surface the
-     server's 400 path. */
-  const handleDeleteAccount = async () => {
-    if (!window.confirm("Are you sure? This cannot be undone.")) return;
+     server's 400 path. The custom modal owns the confirmation step.
+     On success we swap the modal into its success state for 2s so the
+     user can read the affirmation before being kicked to /login. */
+  const confirmDeleteAccount = async () => {
     setDeleting(true);
     try {
       const res = await deleteUserAccount();
       if (res?.ok) {
-        clearAuth();
-        navigate("/login", { replace: true });
+        setDeleteSuccess(true);
+        setDeleting(false);
+        setTimeout(() => {
+          clearAuth();
+          navigate("/login", { replace: true });
+        }, 2000);
+      } else {
+        setDeleting(false);
+        setConfirmOpen(false);
       }
-    } finally {
+    } catch {
       setDeleting(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -295,7 +307,7 @@ function UserProfileEdit() {
                 </p>
                 <button
                   type="button"
-                  onClick={handleDeleteAccount}
+                  onClick={() => setConfirmOpen(true)}
                   disabled={isDisabled}
                   style={{
                     background: isDisabled ? "var(--gray-200, #e5e7eb)" : "var(--signal-stop, #dc2626)",
@@ -323,6 +335,20 @@ function UserProfileEdit() {
           })()}
         </form>
       </div>
+
+      <ConfirmModal
+        open={confirmOpen}
+        title={deleteSuccess ? "Account deleted" : "Delete your account?"}
+        message="Are you sure you want to delete your account? This action cannot be undone."
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        variant="danger"
+        busy={deleting}
+        isSuccess={deleteSuccess}
+        successMessage="Your account has been deleted. Redirecting to the login page..."
+        onConfirm={confirmDeleteAccount}
+        onCancel={() => { if (!deleting && !deleteSuccess) setConfirmOpen(false); }}
+      />
     </PublicLayout>
   );
 }

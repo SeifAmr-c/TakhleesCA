@@ -5,6 +5,7 @@ import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
+import ConfirmModal from "../../components/ConfirmModal.jsx";
 import {
   getCompany,
   updateCompanyProfile,
@@ -238,16 +239,29 @@ function LogoCard({ initial, onSaved }) {
               borderRadius: "50%",
               overflow: "hidden",
               border: "2px solid var(--line-strong, #cbd5e1)",
-              backgroundColor: displayLogo ? "transparent" : "var(--surface-2, #f8fafc)",
-              backgroundImage: displayLogo ? `url(${displayLogo})` : "none",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
+              /* Always render against white so transparent PNG logos
+                 don't pick up the surrounding card colour. */
+              backgroundColor: "#ffffff",
               display: "grid",
               placeItems: "center",
               margin: "0 auto",
+              position: "relative",
             }}
           >
-            {!displayLogo && (
+            {displayLogo ? (
+              <img
+                src={displayLogo}
+                alt="Current company logo"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  backgroundColor: "#ffffff",
+                }}
+              />
+            ) : (
               <Icon name="building" size={36} />
             )}
           </div>
@@ -279,9 +293,12 @@ function LogoCard({ initial, onSaved }) {
               width: "250px",
               height: "250px",
               margin: "20px auto",
-              backgroundColor: "#111",
+              /* White surface so transparent PNGs preview cleanly
+                 instead of rendering on top of a dark backdrop. */
+              backgroundColor: "#ffffff",
               borderRadius: "8px",
               overflow: "hidden",
+              border: "1px solid var(--line, #e5e7eb)",
             }}
           >
             <Cropper
@@ -296,6 +313,11 @@ function LogoCard({ initial, onSaved }) {
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={onCropComplete}
+              objectFit="contain"
+              style={{
+                containerStyle: { backgroundColor: "#ffffff" },
+                mediaStyle: { backgroundColor: "#ffffff" },
+              }}
             />
           </div>
 
@@ -868,6 +890,8 @@ function PortsForm({ companyId }) {
 function DangerZoneCard() {
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [hasActiveApplications, setHasActiveApplications] = useState(null);
 
   useEffect(() => {
@@ -885,17 +909,26 @@ function DangerZoneCard() {
     return () => { active = false; };
   }, []);
 
-  const handleDelete = async () => {
-    if (!window.confirm("Are you sure? This cannot be undone.")) return;
+  /* Success path: flip the modal into its success state, then defer
+     logout + redirect by 2s so the affirmation has time to register. */
+  const confirmDelete = async () => {
     setDeleting(true);
     try {
       const res = await deleteCompanyAccount();
       if (res?.ok) {
-        clearAuth();
-        navigate("/company/login", { replace: true });
+        setDeleteSuccess(true);
+        setDeleting(false);
+        setTimeout(() => {
+          clearAuth();
+          navigate("/company/login", { replace: true });
+        }, 2000);
+      } else {
+        setDeleting(false);
+        setConfirmOpen(false);
       }
-    } finally {
+    } catch {
       setDeleting(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -914,7 +947,7 @@ function DangerZoneCard() {
         </p>
         <button
           type="button"
-          onClick={handleDelete}
+          onClick={() => setConfirmOpen(true)}
           disabled={isDisabled}
           style={{
             background: isDisabled ? "var(--gray-200, #e5e7eb)" : "var(--signal-stop, #dc2626)",
@@ -938,6 +971,20 @@ function DangerZoneCard() {
           </span>
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmOpen}
+        title={deleteSuccess ? "Account deleted" : "Delete your account?"}
+        message="Are you sure you want to delete your account? This action cannot be undone."
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        variant="danger"
+        busy={deleting}
+        isSuccess={deleteSuccess}
+        successMessage="Your account has been deleted. Redirecting to the login page..."
+        onConfirm={confirmDelete}
+        onCancel={() => { if (!deleting && !deleteSuccess) setConfirmOpen(false); }}
+      />
     </div>
   );
 }
