@@ -42,6 +42,9 @@ jobs:
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
         run: printf '%s' "$ASC_API_KEY_P8" > AuthKey_2TJ98T7SXQ.p8
 
+      - name: Whoami sanity check
+        run: eas whoami
+
       - name: Build and submit to TestFlight
         env:
           # TODO: replace with your actual LAN IPv4 before pushing
