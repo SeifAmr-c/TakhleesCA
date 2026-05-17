@@ -20,9 +20,12 @@ const COMPANY_COLS =
   "TaxNumber, VerficationStatus, ComReg, Governorate, Address, About";
 
 // ── GET /admin/stats ────────────────────────────────────────────
-// Returns the top dashboard stats. Revenue formula: for each Completed
-// application that has a payment, the platform takes a flat 1600 fee plus
-// the company's commission percentage on the payment amount.
+// Returns the top dashboard stats. Website revenue is read directly from
+// the CompanyPayment ledger, which is populated when a company accepts an
+// application (the flat 1600 listing fee + per-company commission is
+// snapshotted into companypayment.Amount at that moment). We only count
+// rows whose application is Completed so the figure matches the "earned"
+// definition the rest of the dashboard implies.
 export const getDashboardStats = async (req, res, next) => {
   try {
     const [row] = await runQuery(
@@ -30,10 +33,10 @@ export const getDashboardStats = async (req, res, next) => {
          (SELECT COUNT(*) FROM application) AS TotalRequests,
          (SELECT COUNT(*) FROM application WHERE Status = 'Completed') AS TotalTransactions,
          (
-           SELECT COALESCE(SUM(1600 + ((p.Amount * c.Comm) / 100)), 0)
-           FROM application a
-           JOIN payment p ON a.ApplicationID = p.ApplicationID
-           JOIN company  c ON a.CompanyID    = c.CompanyID
+           SELECT COALESCE(SUM(cp.Amount), 0)
+           FROM companypayment cp
+           JOIN payment     p ON p.PaymentID     = cp.PaymentID
+           JOIN application a ON a.ApplicationID = p.ApplicationID
            WHERE a.Status = 'Completed'
          ) AS TotalWebsiteRevenue
       `
@@ -314,24 +317,25 @@ export const searchTickets = async (req, res, next) => {
    logo + Takhlees header, receipt-style left/right rows, grey footer. */
 export const generateExecutiveReport = async (req, res, next) => {
   try {
-    // Total platform revenue: same formula as /admin/stats — flat 1600 fee
-    // plus the company's commission percentage on each completed payment.
+    // Total platform revenue: read straight from the CompanyPayment ledger,
+    // restricted to applications that ultimately reached 'Completed'. Matches
+    // /admin/stats so the dashboard and the PDF agree.
     const [revRow] = await runQuery(
-      `SELECT COALESCE(SUM(1600 + ((p.Amount * c.Comm) / 100)), 0) AS TotalWebsiteRevenue
-         FROM application a
-         JOIN payment p ON a.ApplicationID = p.ApplicationID
-         JOIN company  c ON a.CompanyID    = c.CompanyID
+      `SELECT COALESCE(SUM(cp.Amount), 0) AS TotalWebsiteRevenue
+         FROM companypayment cp
+         JOIN payment     p ON p.PaymentID     = cp.PaymentID
+         JOIN application a ON a.ApplicationID = p.ApplicationID
         WHERE a.Status = 'Completed'`
     );
     const TotalWebsiteRevenue = Number(revRow?.TotalWebsiteRevenue ?? 0);
 
     const [topCatRow] = await runQuery(
       `SELECT cat.Type AS CategoryName,
-              COALESCE(SUM(1600 + ((p.Amount * comp.Comm) / 100)), 0) AS Revenue
-         FROM application a
-         JOIN payment  p    ON a.ApplicationID = p.ApplicationID
-         JOIN company  comp ON a.CompanyID     = comp.CompanyID
-         JOIN category cat  ON a.CategoryID    = cat.CategoryID
+              COALESCE(SUM(cp.Amount), 0) AS Revenue
+         FROM companypayment cp
+         JOIN payment     p   ON p.PaymentID     = cp.PaymentID
+         JOIN application a   ON a.ApplicationID = p.ApplicationID
+         JOIN category    cat ON cat.CategoryID  = a.CategoryID
         WHERE a.Status = 'Completed'
         GROUP BY cat.CategoryID, cat.Type
         ORDER BY Revenue DESC
@@ -347,11 +351,12 @@ export const generateExecutiveReport = async (req, res, next) => {
 
     const topCompanies = await runQuery(
       `SELECT comp.CompanyID, comp.Name,
-              COUNT(a.ApplicationID) AS CompletedCount,
-              COALESCE(SUM(1600 + ((p.Amount * comp.Comm) / 100)), 0) AS Revenue
+              COUNT(DISTINCT a.ApplicationID) AS CompletedCount,
+              COALESCE(SUM(cp.Amount), 0) AS Revenue
          FROM company comp
-         JOIN application a ON a.CompanyID     = comp.CompanyID
-         JOIN payment     p ON p.ApplicationID = a.ApplicationID
+         JOIN application    a  ON a.CompanyID     = comp.CompanyID
+         JOIN payment        p  ON p.ApplicationID = a.ApplicationID
+         JOIN companypayment cp ON cp.PaymentID    = p.PaymentID
         WHERE a.Status = 'Completed'
         GROUP BY comp.CompanyID, comp.Name
         ORDER BY Revenue DESC, CompletedCount DESC

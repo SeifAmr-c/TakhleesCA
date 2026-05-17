@@ -610,6 +610,44 @@ export const updateApplication = async (req, res, next) => {
             );
         }
 
+        /* On accept (Pending → In Progress): book Takhlees' platform revenue
+           into CompanyPayment. Formula: 1600 (fixed listing fee) + Amount *
+           Comm / 100. Deferred until acceptance so rejected or cancelled
+           applications never produce a revenue row in the first place. The
+           gating on `isStartingProgress` (which already filters out re-saves
+           that stay in 'In Progress') prevents double-booking. */
+        if (isStartingProgress) {
+            const [paymentRows] = await conn.query(
+                "SELECT PaymentID, Amount FROM payment WHERE ApplicationID = ? ORDER BY PaymentID DESC LIMIT 1",
+                [ApplicationID]
+            );
+            if (paymentRows.length === 0) {
+                throw Object.assign(
+                    new Error('Cannot accept an application with no payment on record.'),
+                    { status: 409 }
+                );
+            }
+            const { PaymentID, Amount: paymentAmount } = paymentRows[0];
+
+            const [companyRows] = await conn.query(
+                "SELECT Comm FROM company WHERE CompanyID = ? LIMIT 1",
+                [CompanyID]
+            );
+            if (companyRows.length === 0) {
+                throw Object.assign(
+                    new Error('Accepting company not found.'),
+                    { status: 404 }
+                );
+            }
+            const comm = Number(companyRows[0].Comm) || 0;
+            const revenue = 1600 + (Number(paymentAmount) * comm) / 100;
+
+            await conn.query(
+                "INSERT INTO companypayment (PaymentDate, Amount, CompanyID, PaymentID) VALUES (NOW(), ?, ?, ?)",
+                [revenue, CompanyID, PaymentID]
+            );
+        }
+
         await conn.commit();
 
         return res.status(200).json({
