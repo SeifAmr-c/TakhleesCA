@@ -37,9 +37,9 @@ const fullName = (first, last) =>
   [first, last].filter(Boolean).join(" ").trim();
 
 const formatDate = (input) => {
-  if (!input) return "â€”";
+  if (!input) return "\u2014";
   const d = new Date(input);
-  if (isNaN(d.getTime())) return "â€”";
+  if (isNaN(d.getTime())) return "\u2014";
   return d.toISOString().slice(0, 10);
 };
 
@@ -91,11 +91,11 @@ function PendingCompanyCard({ company, onAccept, busy }) {
               style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <Icon name="email" size={12} /> {company.ContactEmail || "â€”"}
+                <Icon name="email" size={12} /> {company.ContactEmail || "\u2014"}
               </span>
               {company.Governorate && (
                 <>
-                  <span style={{ color: "var(--gray-300)" }}>Â·</span>
+                  <span style={{ color: "var(--gray-300)" }}>{"\u00B7"}</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     <Icon name="pin" size={12} /> {company.Governorate}
                   </span>
@@ -103,7 +103,7 @@ function PendingCompanyCard({ company, onAccept, busy }) {
               )}
               {company.TaxNumber && (
                 <>
-                  <span style={{ color: "var(--gray-300)" }}>Â·</span>
+                  <span style={{ color: "var(--gray-300)" }}>{"\u00B7"}</span>
                   <span>Tax #{company.TaxNumber}</span>
                 </>
               )}
@@ -155,7 +155,7 @@ function PendingCompanyCard({ company, onAccept, busy }) {
             onClick={() => onAccept(company.CompanyID)}
           >
             {busy ? (
-              <ContainerSpinner inline size={14} label="Verifyingâ€¦" />
+              <ContainerSpinner inline size={14} label={"Verifying\u2026"} />
             ) : (
               <><Icon name="check" size={14} /> Accept</>
             )}
@@ -183,9 +183,9 @@ function VerifiedCompanyRow({ company }) {
           {company.Name}
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span>{company.ContactEmail || "â€”"}</span>
-          {company.Governorate && (<><span style={{ color: "var(--gray-300)" }}>Â·</span><span>{company.Governorate}</span></>)}
-          {company.TaxNumber && (<><span style={{ color: "var(--gray-300)" }}>Â·</span><span>Tax #{company.TaxNumber}</span></>)}
+          <span>{company.ContactEmail || "\u2014"}</span>
+          {company.Governorate && (<><span style={{ color: "var(--gray-300)" }}>{"\u00B7"}</span><span>{company.Governorate}</span></>)}
+          {company.TaxNumber && (<><span style={{ color: "var(--gray-300)" }}>{"\u00B7"}</span><span>Tax #{company.TaxNumber}</span></>)}
         </div>
       </div>
       {/* Fixed-width slot so the badge sits in the same column on every row,
@@ -232,8 +232,8 @@ function PendingTicketRow({ ticket, onResolve, busy, isLast }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
-            Ticket #{ticket.TicketID} Â· <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
-            {ticket.ClientEmail ? ` Â· ${ticket.ClientEmail}` : ""}
+            Ticket #{ticket.TicketID} {"\u00B7"} <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+            {ticket.ClientEmail ? ` \u00B7 ${ticket.ClientEmail}` : ""}
           </span>
         </div>
         <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
@@ -247,7 +247,7 @@ function PendingTicketRow({ ticket, onResolve, busy, isLast }) {
         onClick={() => onResolve(ticket.TicketID)}
       >
         {busy ? (
-          <ContainerSpinner inline size={14} label="Resolvingâ€¦" />
+          <ContainerSpinner inline size={14} label={"Resolving\u2026"} />
         ) : (
           <><Icon name="check" size={14} /> Resolve</>
         )}
@@ -287,7 +287,7 @@ function ResolvedTicketRow({ ticket, isLast }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
-            Ticket #{ticket.TicketID} Â· <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+            Ticket #{ticket.TicketID} {"\u00B7"} <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
           </span>
           <span className="badge badge-success" style={{ flexShrink: 0 }}>
             <span className="dot" /> Resolved
@@ -407,7 +407,7 @@ function AdminDashboard() {
     try {
       await verifyCompany(companyId, { status: "Verified" });
       await refreshCompanies();
-      showNotice("Company verified â€” they're now live on the marketplace.");
+      showNotice("Company verified \u2014 they're now live on the marketplace.");
     } catch {
       showNotice("Couldn't verify the company. Please try again.");
     } finally {
@@ -469,7 +469,7 @@ function AdminDashboard() {
           disabled={exporting}
           title="Download a platform-wide executive PDF report"
         >
-          <Icon name="doc" size={14} /> {exporting ? "Generatingâ€¦" : "Export as PDF"}
+          <Icon name="doc" size={14} /> {exporting ? "Generating\u2026" : "Export as PDF"}
         </button>
       }
     >
@@ -525,7 +525,7 @@ function AdminDashboard() {
         </div>
       </Reveal>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPANIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------- COMPANIES ------------- */}
       <div id="companies-section">
         {/* Pending companies */}
         <Reveal as="section" style={{ marginBottom: 36 }}>
@@ -621,7 +621,7 @@ function AdminDashboard() {
         </Reveal>
       </div>
 
-      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SUPPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------- SUPPORT ------------- */}
       <div id="support-section">
         {/* Pending tickets */}
         <Reveal as="section" style={{ marginBottom: 36 }}>
@@ -697,7 +697,7 @@ function AdminDashboard() {
           )}
         </Reveal>
       </div>
-      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ MANAGEMENT CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------- MANAGEMENT CTA ------------- */}
       <Reveal as="section" style={{ marginBottom: 24 }}>
         <div
           className="card card-pad-lg"
