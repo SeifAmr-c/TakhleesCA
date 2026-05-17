@@ -20,12 +20,10 @@ const COMPANY_COLS =
   "TaxNumber, VerficationStatus, ComReg, Governorate, Address, About";
 
 // ── GET /admin/stats ────────────────────────────────────────────
-// Returns the top dashboard stats. Website revenue is read directly from
-// the CompanyPayment ledger, which is populated when a company accepts an
-// application (the flat 1600 listing fee + per-company commission is
-// snapshotted into companypayment.Amount at that moment). We only count
-// rows whose application is Completed so the figure matches the "earned"
-// definition the rest of the dashboard implies.
+// Returns the top dashboard stats. Revenue is read from CompanyPayment
+// (booked at acceptance) but only counted toward the dashboard total
+// once the underlying application reaches 'Completed' — so the figure
+// reflects realized revenue, not in-flight bookings.
 export const getDashboardStats = async (req, res, next) => {
   try {
     const [row] = await runQuery(
@@ -317,9 +315,9 @@ export const searchTickets = async (req, res, next) => {
    logo + Takhlees header, receipt-style left/right rows, grey footer. */
 export const generateExecutiveReport = async (req, res, next) => {
   try {
-    // Total platform revenue: read straight from the CompanyPayment ledger,
-    // restricted to applications that ultimately reached 'Completed'. Matches
-    // /admin/stats so the dashboard and the PDF agree.
+    // Total platform revenue: from the CompanyPayment ledger, scoped to
+    // applications that reached 'Completed'. Matches /admin/stats so the
+    // dashboard and the PDF agree.
     const [revRow] = await runQuery(
       `SELECT COALESCE(SUM(cp.Amount), 0) AS TotalWebsiteRevenue
          FROM companypayment cp
