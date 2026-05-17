@@ -14,6 +14,7 @@ router.put("/companies/:id/commission", requireAdmin, adminService.updateCompany
 
 router.get("/tickets/pending", requireAdmin, adminService.listPendingTickets);
 router.get("/tickets/resolved", requireAdmin, adminService.listResolvedTickets);
+router.get("/tickets/search", requireAdmin, adminService.searchTickets);
 router.put("/tickets/:id/resolve", requireAdmin, adminService.resolveTicket);
 
 export default router;

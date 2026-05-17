@@ -21,6 +21,7 @@ router.get("/client-list", requireAuth, applicationService.listClientApplication
 router.get("/", requireSession, applicationService.getApplication);
 router.get("/search", requireSession, applicationService.searchApplication);
 router.delete("/:id/cancel", requireAuth, applicationService.cancelApplication);
+router.put("/:id/client-edit", requireAuth, applicationUpload.any(), applicationService.editClientApplication);
 router.delete("/", applicationService.deleteApplication);
 router.put("/", applicationService.updateApplication);
 

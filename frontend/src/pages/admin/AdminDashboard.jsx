@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+﻿import React, { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
@@ -37,9 +37,9 @@ const fullName = (first, last) =>
   [first, last].filter(Boolean).join(" ").trim();
 
 const formatDate = (input) => {
-  if (!input) return "—";
+  if (!input) return "â€”";
   const d = new Date(input);
-  if (isNaN(d.getTime())) return "—";
+  if (isNaN(d.getTime())) return "â€”";
   return d.toISOString().slice(0, 10);
 };
 
@@ -91,11 +91,11 @@ function PendingCompanyCard({ company, onAccept, busy }) {
               style={{ fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <Icon name="email" size={12} /> {company.ContactEmail || "—"}
+                <Icon name="email" size={12} /> {company.ContactEmail || "â€”"}
               </span>
               {company.Governorate && (
                 <>
-                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                  <span style={{ color: "var(--gray-300)" }}>Â·</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     <Icon name="pin" size={12} /> {company.Governorate}
                   </span>
@@ -103,7 +103,7 @@ function PendingCompanyCard({ company, onAccept, busy }) {
               )}
               {company.TaxNumber && (
                 <>
-                  <span style={{ color: "var(--gray-300)" }}>·</span>
+                  <span style={{ color: "var(--gray-300)" }}>Â·</span>
                   <span>Tax #{company.TaxNumber}</span>
                 </>
               )}
@@ -155,7 +155,7 @@ function PendingCompanyCard({ company, onAccept, busy }) {
             onClick={() => onAccept(company.CompanyID)}
           >
             {busy ? (
-              <ContainerSpinner inline size={14} label="Verifying…" />
+              <ContainerSpinner inline size={14} label="Verifyingâ€¦" />
             ) : (
               <><Icon name="check" size={14} /> Accept</>
             )}
@@ -179,21 +179,23 @@ function VerifiedCompanyRow({ company }) {
     >
       <div className="avatar">{initials2(company.Name)}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
-            {company.Name}
-          </span>
-          <span className="badge badge-success">
-            <span className="dot" /> Verified
-          </span>
+        <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
+          {company.Name}
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span>{company.ContactEmail || "—"}</span>
-          {company.Governorate && (<><span style={{ color: "var(--gray-300)" }}>·</span><span>{company.Governorate}</span></>)}
-          {company.TaxNumber && (<><span style={{ color: "var(--gray-300)" }}>·</span><span>Tax #{company.TaxNumber}</span></>)}
+          <span>{company.ContactEmail || "â€”"}</span>
+          {company.Governorate && (<><span style={{ color: "var(--gray-300)" }}>Â·</span><span>{company.Governorate}</span></>)}
+          {company.TaxNumber && (<><span style={{ color: "var(--gray-300)" }}>Â·</span><span>Tax #{company.TaxNumber}</span></>)}
         </div>
       </div>
-      <div style={{ textAlign: "right", fontSize: 12, color: "var(--ink-faint)" }}>
+      {/* Fixed-width slot so the badge sits in the same column on every row,
+          regardless of company name length. */}
+      <div style={{ flex: "0 0 120px", display: "flex", justifyContent: "center" }}>
+        <span className="badge badge-success">
+          <span className="dot" /> Verified
+        </span>
+      </div>
+      <div style={{ textAlign: "right", fontSize: 12, color: "var(--ink-faint)", minWidth: 140 }}>
         Joined {formatDate(company.RegistrationDate)}
       </div>
     </li>
@@ -230,8 +232,8 @@ function PendingTicketRow({ ticket, onResolve, busy, isLast }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
-            Ticket #{ticket.TicketID} · <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
-            {ticket.ClientEmail ? ` · ${ticket.ClientEmail}` : ""}
+            Ticket #{ticket.TicketID} Â· <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+            {ticket.ClientEmail ? ` Â· ${ticket.ClientEmail}` : ""}
           </span>
         </div>
         <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
@@ -245,7 +247,7 @@ function PendingTicketRow({ ticket, onResolve, busy, isLast }) {
         onClick={() => onResolve(ticket.TicketID)}
       >
         {busy ? (
-          <ContainerSpinner inline size={14} label="Resolving…" />
+          <ContainerSpinner inline size={14} label="Resolvingâ€¦" />
         ) : (
           <><Icon name="check" size={14} /> Resolve</>
         )}
@@ -285,7 +287,7 @@ function ResolvedTicketRow({ ticket, isLast }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
-            Ticket #{ticket.TicketID} · <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+            Ticket #{ticket.TicketID} Â· <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
           </span>
           <span className="badge badge-success" style={{ flexShrink: 0 }}>
             <span className="dot" /> Resolved
@@ -304,9 +306,12 @@ function ResolvedTicketRow({ ticket, isLast }) {
   );
 }
 
+const VERIFIED_PREVIEW_COUNT = 5;
+
 function AdminDashboard() {
   const [pendingCompanies, setPendingCompanies] = useState([]);
   const [verifiedCompanies, setVerifiedCompanies] = useState([]);
+  const [showAllVerified, setShowAllVerified] = useState(false);
   const [pendingTickets, setPendingTickets] = useState([]);
   const [resolvedTickets, setResolvedTickets] = useState([]);
   const [analytics, setAnalytics] = useState(EMPTY_ANALYTICS);
@@ -317,6 +322,12 @@ function AdminDashboard() {
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
   const location = useLocation();
+
+  const visibleVerified = showAllVerified
+    ? verifiedCompanies
+    : verifiedCompanies.slice(0, VERIFIED_PREVIEW_COUNT);
+  const hasMoreVerified = verifiedCompanies.length > VERIFIED_PREVIEW_COUNT;
+
 
   useEffect(() => {
     if (loading) return;
@@ -385,6 +396,7 @@ function AdminDashboard() {
     return () => { active = false; };
   }, []);
 
+
   const showNotice = (text) => {
     setNotice(text);
     setTimeout(() => setNotice(""), 3500);
@@ -395,7 +407,7 @@ function AdminDashboard() {
     try {
       await verifyCompany(companyId, { status: "Verified" });
       await refreshCompanies();
-      showNotice("Company verified — they're now live on the marketplace.");
+      showNotice("Company verified â€” they're now live on the marketplace.");
     } catch {
       showNotice("Couldn't verify the company. Please try again.");
     } finally {
@@ -457,7 +469,7 @@ function AdminDashboard() {
           disabled={exporting}
           title="Download a platform-wide executive PDF report"
         >
-          <Icon name="doc" size={14} /> {exporting ? "Generating…" : "Export as PDF"}
+          <Icon name="doc" size={14} /> {exporting ? "Generatingâ€¦" : "Export as PDF"}
         </button>
       }
     >
@@ -513,7 +525,7 @@ function AdminDashboard() {
         </div>
       </Reveal>
 
-      {/* ───────────── COMPANIES ───────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPANIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div id="companies-section">
         {/* Pending companies */}
         <Reveal as="section" style={{ marginBottom: 36 }}>
@@ -574,25 +586,42 @@ function AdminDashboard() {
               </p>
             </div>
           ) : (
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                {verifiedCompanies.map((c, i) => (
-                  <li
-                    key={c.CompanyID}
-                    style={{
-                      borderBottom: i === verifiedCompanies.length - 1 ? "none" : undefined,
-                    }}
+            <>
+              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {visibleVerified.map((c, i) => (
+                    <li
+                      key={c.CompanyID}
+                      style={{
+                        borderBottom: i === visibleVerified.length - 1 ? "none" : undefined,
+                      }}
+                    >
+                      <VerifiedCompanyRow company={c} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {hasMoreVerified && (
+                <div className="row" style={{ justifyContent: "center", marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setShowAllVerified((v) => !v)}
                   >
-                    <VerifiedCompanyRow company={c} />
-                  </li>
-                ))}
-              </ul>
-            </div>
+                    {showAllVerified ? (
+                      <>Show less <Icon name="arrow_right" size={13} style={{ transform: "rotate(-90deg)" }} /></>
+                    ) : (
+                      <>Show {verifiedCompanies.length - VERIFIED_PREVIEW_COUNT} more <Icon name="arrow_right" size={13} style={{ transform: "rotate(90deg)" }} /></>
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </Reveal>
       </div>
 
-      {/* ───────────── SUPPORT ───────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SUPPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div id="support-section">
         {/* Pending tickets */}
         <Reveal as="section" style={{ marginBottom: 36 }}>
@@ -668,6 +697,24 @@ function AdminDashboard() {
           )}
         </Reveal>
       </div>
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ MANAGEMENT CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <Reveal as="section" style={{ marginBottom: 24 }}>
+        <div
+          className="card card-pad-lg"
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}
+        >
+          <div>
+            <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>Data management</span>
+            <h2 className="h3" style={{ fontSize: 20, marginTop: 4 }}>Clients, ports &amp; categories</h2>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+              Search the client directory, and add, edit or delete ports and service categories.
+            </p>
+          </div>
+          <Link to="/admin/management" className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
+            Open management <Icon name="arrow_right" size={14} />
+          </Link>
+        </div>
+      </Reveal>
     </PublicLayout>
   );
 }

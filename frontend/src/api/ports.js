@@ -5,6 +5,21 @@ export const listPorts = async () => {
   return data;
 };
 
+export const createPort = async ({ PortName, PortType, EstDate }) => {
+  const { data } = await api.post("/port", { PortName, PortType, EstDate });
+  return data;
+};
+
+export const updatePort = async (portId, { PortName, PortType, EstDate }) => {
+  const { data } = await api.put("/port", { PortName, PortType, EstDate }, { params: { PortID: portId } });
+  return data;
+};
+
+export const deletePort = async (portId) => {
+  const { data } = await api.delete("/port", { params: { PortID: portId } });
+  return data;
+};
+
 export const listCompanyPorts = async (companyId) => {
   const { data } = await api.get("/companyport", { params: { CompanyID: companyId } });
   return data;

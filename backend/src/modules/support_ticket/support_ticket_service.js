@@ -1,5 +1,79 @@
 import db from '../../Database/connection.js';
 
+const runQuery = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+        db.query(sql, params, (err, result) => {
+            if (err) return reject(err);
+            resolve(result);
+        });
+    });
+
+const TICKET_SELECT = `
+  SELECT
+    t.TicketID, t.Issue, t.Resolved, t.AdminID, t.ClientID,
+    CONCAT(au.FirstName, ' ', au.LastName) AS AdminName
+  FROM supportticket t
+  LEFT JOIN user au ON t.AdminID = au.UserID
+`;
+
+/* GET /supportticket/client  (requireAuth)
+   Returns all tickets filed by the signed-in client. */
+export const listClientTickets = async (req, res, next) => {
+    try {
+        const ClientID = req.session?.userId;
+        if (!ClientID) return res.status(401).json({ ok: false, message: 'Authentication required.' });
+        const rows = await runQuery(
+            `${TICKET_SELECT} WHERE t.ClientID = ? ORDER BY t.TicketID DESC`,
+            [ClientID]
+        );
+        return res.json({ ok: true, data: rows });
+    } catch (err) { return next(err); }
+};
+
+/* PUT /supportticket/client?TicketID=  (requireAuth)
+   Lets a client edit the Issue text of their own unresolved ticket. */
+export const updateClientTicket = async (req, res, next) => {
+    try {
+        const ClientID = req.session?.userId;
+        if (!ClientID) return res.status(401).json({ ok: false, message: 'Authentication required.' });
+        const TicketID = Number(req.query.TicketID);
+        if (!TicketID) return res.status(400).json({ ok: false, message: 'TicketID is required.' });
+        const Issue = String(req.body.Issue ?? '').trim();
+        if (!Issue) return res.status(400).json({ ok: false, message: 'Issue text is required.' });
+
+        const rows = await runQuery(
+            "SELECT * FROM supportticket WHERE TicketID = ? AND ClientID = ? LIMIT 1",
+            [TicketID, ClientID]
+        );
+        if (!rows.length) return res.status(403).json({ ok: false, message: 'Ticket not found.' });
+        if (Number(rows[0].Resolved)) return res.status(400).json({ ok: false, message: 'Resolved tickets cannot be edited.' });
+
+        await runQuery("UPDATE supportticket SET Issue = ? WHERE TicketID = ?", [Issue, TicketID]);
+        return res.json({ ok: true, message: 'Ticket updated.' });
+    } catch (err) { return next(err); }
+};
+
+/* DELETE /supportticket/client/:id  (requireAuth)
+   Lets a client delete their own unresolved ticket. */
+export const deleteClientTicket = async (req, res, next) => {
+    try {
+        const ClientID = req.session?.userId;
+        if (!ClientID) return res.status(401).json({ ok: false, message: 'Authentication required.' });
+        const TicketID = Number(req.params.id);
+        if (!TicketID) return res.status(400).json({ ok: false, message: 'Invalid ticket id.' });
+
+        const rows = await runQuery(
+            "SELECT * FROM supportticket WHERE TicketID = ? AND ClientID = ? LIMIT 1",
+            [TicketID, ClientID]
+        );
+        if (!rows.length) return res.status(403).json({ ok: false, message: 'Ticket not found.' });
+        if (Number(rows[0].Resolved)) return res.status(400).json({ ok: false, message: 'Resolved tickets cannot be deleted.' });
+
+        await runQuery("DELETE FROM supportticket WHERE TicketID = ?", [TicketID]);
+        return res.json({ ok: true, message: 'Ticket deleted.' });
+    } catch (err) { return next(err); }
+};
+
 export const createSupportTicket = (req, res) => {
     console.log("Post Request Received");
     db.query("INSERT INTO supportticket (`Issue`,`Resolved`,`AdminID`,`ClientID`) VALUES (?,?,?,?)",

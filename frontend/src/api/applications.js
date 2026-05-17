@@ -55,3 +55,12 @@ export const cancelApplication = async (applicationId) => {
   const { data } = await api.delete(`/application/${applicationId}/cancel`);
   return data;
 };
+
+export const editApplication = async (applicationId, payload) => {
+  const { data } = await api.put(
+    `/application/${applicationId}/client-edit`,
+    payload,
+    { headers: { "Content-Type": undefined } }
+  );
+  return data;
+};

@@ -88,6 +88,15 @@ export const updateCompanyPricing = async (prices) => {
   return data;
 };
 
+// DELETE /company/pricing/:categoryId  (requires company session)
+//   Removes one (CompanyID, CategoryID) row so the company stops
+//   offering that service.
+//   200: { ok: true, message }
+export const deleteCompanyPricing = async (categoryId) => {
+  const { data } = await api.delete(`/company/pricing/${categoryId}`);
+  return data;
+};
+
 // Backend contract (GET /company/dashboard-stats, requires company session):
 //   200: { ok: true, data: { CompanyID, CompletedRevenue, Comm,
 //                            CommissionAmount, PlatformFee, NetEarnings } }

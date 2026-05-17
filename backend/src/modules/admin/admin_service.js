@@ -275,6 +275,39 @@ export const resolveTicket = async (req, res, next) => {
   }
 };
 
+/* GET /admin/tickets/search
+   Filters: q (text in Issue), ticketId, clientId, adminId, resolved (0|1|all). */
+export const searchTickets = async (req, res, next) => {
+  try {
+    const where = [];
+    const params = [];
+
+    const q = String(req.query.q ?? '').trim();
+    if (q) { where.push('t.Issue LIKE ?'); params.push(`%${q}%`); }
+
+    const ticketId = Number(req.query.ticketId);
+    if (ticketId) { where.push('t.TicketID = ?'); params.push(ticketId); }
+
+    const clientId = Number(req.query.clientId);
+    if (clientId) { where.push('t.ClientID = ?'); params.push(clientId); }
+
+    const adminId = Number(req.query.adminId);
+    if (adminId) { where.push('t.AdminID = ?'); params.push(adminId); }
+
+    const resolved = req.query.resolved;
+    if (resolved === '0') { where.push('t.Resolved = 0'); }
+    else if (resolved === '1') { where.push('t.Resolved = 1'); }
+
+    const sql =
+      `${TICKET_SELECT_SQL}` +
+      (where.length ? `WHERE ${where.join(' AND ')} ` : '') +
+      `ORDER BY t.TicketID DESC`;
+
+    const rows = await runQuery(sql, params);
+    return res.json({ ok: true, count: rows.length, data: rows });
+  } catch (err) { return next(err); }
+};
+
 /* GET /admin/export-report  (requires admin session)
    Aggregates platform-wide KPIs and streams an Executive Report PDF.
    Layout mirrors the Company Performance PDF: 1pt page border, centered

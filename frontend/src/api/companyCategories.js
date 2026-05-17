@@ -13,6 +13,16 @@ export const listCompanyCategoryPricing = async (companyId) => {
   return Array.isArray(data) ? data : data?.data || [];
 };
 
+// GET /companycategory  → [{ CompanyID, CategoryID, Price }, ...]
+//
+// Unfiltered listing — the backend returns the bare table when no
+// CompanyID/CategoryID query params are supplied, so callers need to
+// join CompanyName / CategoryName themselves.
+export const listAllCompanyCategoryPricing = async () => {
+  const { data } = await api.get("/companycategory");
+  return Array.isArray(data) ? data : data?.data || [];
+};
+
 // GET /companycategory?CompanyID=X&CategoryID=Y
 //   → [{ CompanyID, CategoryID, Price }]
 //

@@ -52,24 +52,63 @@ export const getPort = (req, res) => {
     });
 };
 
-export const deletePort = (req, res) => {
-    const PortID = req.query.PortID;
+/* DELETE /port?PortID=<id>
+   Two FKs point at port.PortID:
+     - companyport.PortID   (which companies operate at the port)
+     - application.PortID   (filed shipments)
+   Active applications referencing this port would lose meaningful
+   data, so we refuse with 409 when any exist. The companyport rows
+   are just per-company associations — safe to clear so the port
+   itself can be removed. The whole thing runs in a single
+   transaction so a failed cleanup can't half-delete. */
+export const deletePort = async (req, res, next) => {
+    const PortID = Number(req.query.PortID);
+    if (!Number.isInteger(PortID) || PortID < 1) {
+        return res.status(400).json({ Status: "Error", Message: "Invalid PortID." });
+    }
 
-    db.query("SELECT PortID FROM port WHERE PortID = ?", [PortID], function (err, result) {
-        if (err) throw err;
-        if (result.length === 0) {
+    const conn = await db.pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        const [existing] = await conn.query(
+            "SELECT PortID FROM port WHERE PortID = ? LIMIT 1",
+            [PortID]
+        );
+        if (!existing.length) {
+            await conn.rollback();
             return res.status(404).json({
-                "Status": "Error",
-                "Message": "Record Id [" + PortID + "] does not exist or has already been deleted."
+                Status: "Error",
+                Message: `Record Id [${PortID}] does not exist or has already been deleted.`,
             });
         }
 
-        db.query("DELETE FROM port WHERE PortID = ?", [PortID], function (err, result) {
-            if (err) throw err;
-            res.status(200).json({ "Status": "OK", "Message": "Record Id [" + PortID + "] deleted Successfully" });
-            console.log("Delete Request Received for record [" + PortID + "] received");
+        const [appRows] = await conn.query(
+            "SELECT COUNT(*) AS n FROM application WHERE PortID = ?",
+            [PortID]
+        );
+        if (Number(appRows?.[0]?.n) > 0) {
+            await conn.rollback();
+            return res.status(409).json({
+                Status: "Error",
+                Message: "This port is still used by one or more applications and cannot be deleted.",
+            });
+        }
+
+        await conn.query("DELETE FROM companyport WHERE PortID = ?", [PortID]);
+        await conn.query("DELETE FROM port WHERE PortID = ?", [PortID]);
+
+        await conn.commit();
+        return res.status(200).json({
+            Status: "OK",
+            Message: `Record Id [${PortID}] deleted Successfully`,
         });
-    });
+    } catch (err) {
+        try { await conn.rollback(); } catch { /* ignore */ }
+        return next(err);
+    } finally {
+        conn.release();
+    }
 };
 
 export const searchPort = (req, res) => {

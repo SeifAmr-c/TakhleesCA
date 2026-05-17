@@ -287,29 +287,50 @@ export const getApplication = (req, res) => {
    signed-in client can be cancelled; anything in progress or further
    along must be handled by the company side. */
 export const cancelApplication = async (req, res, next) => {
+    const conn = await db.pool.getConnection();
     try {
         const ClientID = req.session?.userId;
         if (!ClientID) {
+            conn.release();
             return res.status(401).json({ ok: false, message: "Authentication required." });
         }
 
         const ApplicationID = Number(req.params.id);
         if (!Number.isInteger(ApplicationID) || ApplicationID < 1) {
+            conn.release();
             return res.status(400).json({ ok: false, message: "Invalid application id." });
         }
 
-        const result = await runQuery(
-            "DELETE FROM application WHERE ApplicationID = ? AND ClientID = ? AND Status = 'Pending'",
+        await conn.beginTransaction();
+
+        /* Verify ownership and Pending status before touching anything. */
+        const [rows] = await conn.query(
+            "SELECT ApplicationID FROM application WHERE ApplicationID = ? AND ClientID = ? AND Status = 'Pending' LIMIT 1",
             [ApplicationID, ClientID]
         );
-
-        if (!result.affectedRows) {
+        if (!rows.length) {
+            await conn.rollback();
             return res.status(400).json({ ok: false, message: "Application cannot be cancelled." });
         }
 
+        /* Delete child rows in FK-dependency order before removing the
+           application row itself (no ON DELETE CASCADE on these FKs). */
+        await conn.query(
+            "DELETE cp FROM companypayment cp INNER JOIN payment p ON p.PaymentID = cp.PaymentID WHERE p.ApplicationID = ?",
+            [ApplicationID]
+        );
+        await conn.query("DELETE FROM review    WHERE ApplicationID = ?", [ApplicationID]);
+        await conn.query("DELETE FROM document  WHERE ApplicationID = ?", [ApplicationID]);
+        await conn.query("DELETE FROM payment   WHERE ApplicationID = ?", [ApplicationID]);
+        await conn.query("DELETE FROM application WHERE ApplicationID = ?", [ApplicationID]);
+
+        await conn.commit();
         return res.status(200).json({ ok: true, message: "Application cancelled successfully." });
     } catch (err) {
+        try { await conn.rollback(); } catch { /* ignore */ }
         return next(err);
+    } finally {
+        conn.release();
     }
 };
 
@@ -433,6 +454,105 @@ export const completeViaQr = async (req, res, next) => {
         return next(err);
     } finally {
         conn.release();
+    }
+};
+
+/* PUT /application/:id/client-edit  (requires client session)
+   Allows a client to update the non-payment fields and documents of their
+   own application while it is still 'Pending' (before a company accepts). */
+export const editClientApplication = async (req, res, next) => {
+    try {
+        const ClientID = req.session?.userId;
+        if (!ClientID) {
+            return res.status(401).json({ ok: false, message: 'Authentication required.' });
+        }
+
+        const ApplicationID = Number(req.params.id);
+        if (!Number.isInteger(ApplicationID) || ApplicationID < 1) {
+            return res.status(400).json({ ok: false, message: 'Invalid application id.' });
+        }
+
+        const rows = await runQuery(
+            "SELECT * FROM application WHERE ApplicationID = ? AND ClientID = ? AND Status = 'Pending' LIMIT 1",
+            [ApplicationID, ClientID]
+        );
+        if (!rows.length) {
+            return res.status(403).json({ ok: false, message: 'Application not found or can no longer be edited.' });
+        }
+        const existing = rows[0];
+
+        const CategoryID      = req.body.CategoryID      !== undefined ? Number(req.body.CategoryID)               : existing.CategoryID;
+        const PortID          = req.body.PortID          !== undefined ? Number(req.body.PortID)                   : existing.PortID;
+        const DeliveryAddress = req.body.DeliveryAddress !== undefined ? String(req.body.DeliveryAddress).trim()   : existing.DeliveryAddress;
+        const ACID            = req.body.ACID            !== undefined ? String(req.body.ACID).trim()              : existing.ACID;
+
+        if (!CategoryID)            return res.status(400).json({ ok: false, message: 'CategoryID is required.' });
+        if (!PortID)                return res.status(400).json({ ok: false, message: 'PortID is required.' });
+        if (!DeliveryAddress)       return res.status(400).json({ ok: false, message: 'DeliveryAddress is required.' });
+        if (!/^\d{19}$/.test(ACID)) return res.status(400).json({ ok: false, message: 'ACID must be exactly 19 digits.' });
+
+        await runQuery(
+            'UPDATE application SET CategoryID = ?, PortID = ?, DeliveryAddress = ?, ACID = ? WHERE ApplicationID = ?',
+            [CategoryID, PortID, DeliveryAddress, ACID, ApplicationID]
+        );
+
+        const files = Array.isArray(req.files) ? req.files : [];
+
+        if (files.length) {
+            const [companyRow] = await runQuery(
+                'SELECT Name FROM company WHERE CompanyID = ? LIMIT 1',
+                [existing.CompanyID]
+            );
+            const docFolder = companyFolder(companyRow?.Name, 'documents');
+
+            await Promise.all(files.map(async (file) => {
+                const match = /^NewDoc_(\d+)$/.exec(file.fieldname);
+                if (!match) return;
+                const idx = match[1];
+                const DocType = String(req.body[`DocType_${idx}`] ?? '').trim();
+                const ExistingDocID = Number(req.body[`ExistingDocID_${idx}`]) || null;
+
+                if (!ALLOWED_DOC_TYPES.includes(DocType)) {
+                    throw Object.assign(
+                        new Error(`Document #${idx}: DocType must be one of ${ALLOWED_DOC_TYPES.join(', ')}.`),
+                        { status: 400 }
+                    );
+                }
+
+                const uploaded = await uploadToCloudinary(file.buffer, docFolder);
+
+                if (ExistingDocID) {
+                    await runQuery(
+                        "UPDATE document SET DocType = ?, Path = ?, UploadDate = NOW(), VerficationStatus = 'Pending' WHERE DocumentID = ? AND ApplicationID = ?",
+                        [DocType, uploaded.secure_url, ExistingDocID, ApplicationID]
+                    );
+                } else {
+                    await runQuery(
+                        "INSERT INTO document (DocType, UploadDate, VerficationStatus, Path, ApplicationID) VALUES (?, NOW(), 'Pending', ?, ?)",
+                        [DocType, uploaded.secure_url, ApplicationID]
+                    );
+                }
+            }));
+        }
+
+        // Handle DocType-only changes for existing docs (no new file uploaded for that slot)
+        const uploadedSlots = new Set(
+            files.map(f => { const m = /^NewDoc_(\d+)$/.exec(f.fieldname); return m ? m[1] : null; }).filter(Boolean)
+        );
+        for (let idx = 0; idx < 4; idx++) {
+            if (uploadedSlots.has(String(idx))) continue;
+            const ExistingDocID = Number(req.body[`ExistingDocID_${idx}`]) || null;
+            const DocType = req.body[`DocType_${idx}`] !== undefined ? String(req.body[`DocType_${idx}`]).trim() : null;
+            if (!ExistingDocID || !DocType || !ALLOWED_DOC_TYPES.includes(DocType)) continue;
+            await runQuery(
+                'UPDATE document SET DocType = ? WHERE DocumentID = ? AND ApplicationID = ?',
+                [DocType, ExistingDocID, ApplicationID]
+            );
+        }
+
+        return res.status(200).json({ ok: true, message: 'Application updated successfully.' });
+    } catch (err) {
+        return next(err);
     }
 };
 

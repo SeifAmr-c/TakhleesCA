@@ -10,6 +10,7 @@ import {
   getCompany,
   updateCompanyProfile,
   updateCompanyPricing,
+  deleteCompanyPricing,
   deleteCompanyAccount,
   canDeleteCompany,
 } from "../../api/companies.js";
@@ -542,13 +543,21 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
   );
 }
 
-/* ---------- Pricing form ---------- */
+/* ---------- Pricing form ----------
+   Dynamic add/remove list of the categories this company offers. The
+   global category list (from /category) is only consulted to populate
+   the "Add a category" dropdown — once a category is in the company's
+   own row list, it disappears from the dropdown to prevent duplicates.
+   On save we diff against the originally-loaded saved set: rows that
+   were removed get DELETEd, the rest get bulk-upserted via PUT. */
 function PricingForm({ companyId }) {
-  const [categories, setCategories] = useState([]);
-  const [drafts, setDrafts] = useState({});         // { [CategoryID]: stringFromInput }
-  const [savedPrices, setSavedPrices] = useState({}); // { [CategoryID]: numericPrice }
+  const [allCategories, setAllCategories] = useState([]);   // global { CategoryID, Type }
+  const [rows, setRows] = useState([]);                     // current UI list { CategoryID, Type, draft }
+  const [savedById, setSavedById] = useState({});           // { [CategoryID]: numericPrice } as loaded from the server
+  const [pickerValue, setPickerValue] = useState("");       // CategoryID selected in the "Add" dropdown
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [removingId, setRemovingId] = useState(null);       // CategoryID currently being deleted from the backend
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useAutoHideStatus();
 
@@ -556,27 +565,30 @@ function PricingForm({ companyId }) {
     let active = true;
     (async () => {
       try {
-        const [cats, rows] = await Promise.all([
+        const [cats, priced] = await Promise.all([
           listCategories().catch(() => []),
           listCompanyCategoryPricing(companyId).catch(() => []),
         ]);
         if (!active) return;
-        const catList = Array.isArray(cats) ? cats : cats?.data || [];
-        const priceList = Array.isArray(rows) ? rows : rows?.data || [];
-        const priceMap = {};
-        for (const r of priceList) {
-          if (r?.CategoryID != null && r?.Price != null) {
-            priceMap[Number(r.CategoryID)] = Number(r.Price);
-          }
+        const catList   = Array.isArray(cats)   ? cats   : cats?.data   || [];
+        const pricedList = Array.isArray(priced) ? priced : priced?.data || [];
+        /* `priced` rows come back joined with category.Type, so they
+           carry everything the UI needs without a follow-up lookup. */
+        const savedMap = {};
+        const initialRows = [];
+        for (const r of pricedList) {
+          const id = Number(r.CategoryID);
+          if (!id) continue;
+          savedMap[id] = Number(r.Price);
+          initialRows.push({
+            CategoryID: id,
+            Type: r.Type || catList.find((c) => Number(c.CategoryID) === id)?.Type || `Category #${id}`,
+            draft: String(Number(r.Price)),
+          });
         }
-        const draftMap = {};
-        for (const c of catList) {
-          const id = Number(c.CategoryID);
-          draftMap[id] = priceMap[id] != null ? String(priceMap[id]) : "";
-        }
-        setCategories(catList);
-        setSavedPrices(priceMap);
-        setDrafts(draftMap);
+        setAllCategories(catList);
+        setSavedById(savedMap);
+        setRows(initialRows);
       } finally {
         if (active) setLoading(false);
       }
@@ -584,61 +596,121 @@ function PricingForm({ companyId }) {
     return () => { active = false; };
   }, [companyId]);
 
-  const onChange = (categoryId) => (e) => {
+  /* Categories the company hasn't added yet — drives the picker. */
+  const availableForAdd = allCategories.filter(
+    (c) => !rows.some((r) => r.CategoryID === Number(c.CategoryID))
+  );
+
+  const onPriceChange = (categoryId) => (e) => {
     const value = e.target.value;
-    /* Numbers-only money-shape input: digits and an optional decimal up
-       to 2 places. Reject anything else by ignoring the keystroke. */
+    /* Money-shape input: digits + optional 2-decimal place. */
     if (value !== "" && !/^\d*\.?\d{0,2}$/.test(value)) return;
-    setDrafts((d) => ({ ...d, [categoryId]: value }));
+    setRows((list) => list.map((r) => r.CategoryID === categoryId ? { ...r, draft: value } : r));
     setErrors((m) => ({ ...m, [categoryId]: "" }));
     setStatus({ kind: "", text: "" });
   };
 
-  const dirty = categories.some((c) => {
-    const id = Number(c.CategoryID);
-    const draft = drafts[id] ?? "";
-    const saved = savedPrices[id];
-    if (saved == null) return draft !== "";
-    return Number(draft) !== Number(saved);
+  const onAdd = () => {
+    const id = Number(pickerValue);
+    if (!id) return;
+    const cat = allCategories.find((c) => Number(c.CategoryID) === id);
+    if (!cat) return;
+    setRows((list) => [...list, { CategoryID: id, Type: cat.Type, draft: "" }]);
+    setPickerValue("");
+    setStatus({ kind: "", text: "" });
+  };
+
+  /* Remove fires the DELETE against the backend immediately for rows
+     the company has already saved — so the companycategory row is gone
+     the moment the button is clicked, not deferred to Save. Newly-added
+     rows that haven't been saved yet are just dropped from local state. */
+  const onRemove = async (categoryId) => {
+    setStatus({ kind: "", text: "" });
+    const wasSaved = savedById[categoryId] != null;
+
+    const dropLocally = () => {
+      setRows((list) => list.filter((r) => r.CategoryID !== categoryId));
+      setErrors((m) => {
+        if (!m[categoryId]) return m;
+        const next = { ...m };
+        delete next[categoryId];
+        return next;
+      });
+    };
+
+    if (!wasSaved) {
+      dropLocally();
+      return;
+    }
+
+    setRemovingId(categoryId);
+    try {
+      await deleteCompanyPricing(categoryId);
+      setSavedById((map) => {
+        const next = { ...map };
+        delete next[categoryId];
+        return next;
+      });
+      dropLocally();
+      setStatus({ kind: "success", text: "Service removed." });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        text: err?.response?.data?.message || "Couldn't remove the service.",
+      });
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  /* Save is now upsert-only: anything in the current list that differs
+     from the saved state (new add, or price change) makes it dirty.
+     Removals already round-tripped to the backend in onRemove. */
+  const dirty = rows.some((r) => {
+    const saved = savedById[r.CategoryID];
+    if (saved == null) return true;
+    return r.draft === "" || Number(r.draft) !== Number(saved);
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus({ kind: "", text: "" });
 
-    /* Build the prices payload only from rows the company actually entered
-       a positive number for. Surface inline errors for invalid entries. */
+    /* Validate each row has a positive price. */
     const errs = {};
     const prices = [];
-    for (const c of categories) {
-      const id = Number(c.CategoryID);
-      const raw = (drafts[id] ?? "").trim();
-      if (raw === "") continue;
-      const numeric = Number(raw);
-      if (isNaN(numeric) || numeric <= 0) {
-        errs[id] = "Enter a price greater than 0.";
+    for (const r of rows) {
+      const raw = (r.draft ?? "").trim();
+      if (raw === "") {
+        errs[r.CategoryID] = "Enter a price greater than 0.";
         continue;
       }
-      prices.push({ CategoryID: id, Price: numeric });
+      const numeric = Number(raw);
+      if (isNaN(numeric) || numeric <= 0) {
+        errs[r.CategoryID] = "Enter a price greater than 0.";
+        continue;
+      }
+      prices.push({ CategoryID: r.CategoryID, Price: numeric });
     }
     setErrors(errs);
     if (Object.keys(errs).length) return;
+
     if (prices.length === 0) {
-      setStatus({ kind: "error", text: "Enter at least one price before saving." });
+      setStatus({ kind: "error", text: "Add at least one service before saving." });
       return;
     }
 
     setSubmitting(true);
     try {
       const res = await updateCompanyPricing(prices);
-      if (res?.ok) {
-        const next = { ...savedPrices };
-        for (const r of prices) next[r.CategoryID] = r.Price;
-        setSavedPrices(next);
-        setStatus({ kind: "success", text: res.message || "Pricing saved." });
-      } else {
+      if (!res?.ok) {
         setStatus({ kind: "error", text: res?.message || "Couldn't save pricing." });
+        return;
       }
+      const nextSaved = { ...savedById };
+      for (const p of prices) nextSaved[p.CategoryID] = p.Price;
+      setSavedById(nextSaved);
+      setStatus({ kind: "success", text: "Pricing saved." });
     } catch (err) {
       setStatus({
         kind: "error",
@@ -653,64 +725,129 @@ function PricingForm({ companyId }) {
     <form onSubmit={handleSubmit} className="card card-pad-lg" noValidate>
       <h3 className="card-title">Service pricing</h3>
       <p className="card-subtitle">
-        Set your price per category. Clients see this amount on the
-        application's Payment step.
+        Add the categories you offer and set a price for each. Clients
+        only see the categories listed here when starting an application.
       </p>
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
           <ContainerSpinner size={64} label="Loading pricing" />
         </div>
-      ) : categories.length === 0 ? (
-        <div style={{ padding: 24, textAlign: "center", color: "var(--ink-soft)" }}>
-          No categories defined yet.
-        </div>
       ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-          {categories.map((c, i) => {
-            const id = Number(c.CategoryID);
-            const draft = drafts[id] ?? "";
-            const saved = savedPrices[id];
-            return (
-              <li
-                key={id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 260px)",
-                  alignItems: "start",
-                  gap: 16,
-                  padding: "16px 0",
-                  borderBottom: i < categories.length - 1 ? "1px solid var(--gray-100)" : "none",
-                }}
+        <>
+          {rows.length === 0 ? (
+            <div
+              style={{
+                padding: "24px 16px",
+                textAlign: "center",
+                color: "var(--ink-soft)",
+                border: "1px dashed var(--line)",
+                borderRadius: "var(--radius-md)",
+                marginTop: 12,
+                fontSize: 13,
+              }}
+            >
+              You haven't added any services yet. Pick a category below to get started.
+            </div>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {rows.map((r, i) => (
+                <li
+                  key={r.CategoryID}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) minmax(160px, 220px) auto",
+                    alignItems: "start",
+                    gap: 16,
+                    padding: "16px 0",
+                    borderBottom: i < rows.length - 1 ? "1px solid var(--gray-100)" : "none",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: "var(--navy)", fontSize: 14 }}>
+                      {r.Type}
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {savedById[r.CategoryID] != null
+                        ? `Saved: EGP ${Number(savedById[r.CategoryID]).toLocaleString()}`
+                        : "Not yet saved."}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="input-with-icon">
+                      <span className="input-icon"><Icon name="receipt" size={14} /></span>
+                      <input
+                        className="input"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={r.draft}
+                        onChange={onPriceChange(r.CategoryID)}
+                        disabled={submitting}
+                      />
+                    </div>
+                    <FieldError message={errors[r.CategoryID]} />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => onRemove(r.CategoryID)}
+                    disabled={submitting || removingId === r.CategoryID}
+                    style={{ color: "var(--signal-stop, #dc2626)", alignSelf: "center" }}
+                    aria-label={`Remove ${r.Type}`}
+                  >
+                    {removingId === r.CategoryID ? (
+                      <ContainerSpinner inline size={14} label="Removing…" />
+                    ) : (
+                      "Remove"
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Add-a-category row. The dropdown only lists categories not
+              already in the company's rows above, which makes it
+              impossible to add a duplicate. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 12,
+              alignItems: "end",
+              marginTop: rows.length === 0 ? 16 : 20,
+              paddingTop: rows.length === 0 ? 0 : 16,
+              borderTop: rows.length === 0 ? "none" : "1px solid var(--gray-100)",
+            }}
+          >
+            <label className="field" style={{ margin: 0 }}>
+              <span className="field-label">Add a category</span>
+              <select
+                className="select"
+                value={pickerValue}
+                onChange={(e) => setPickerValue(e.target.value)}
+                disabled={submitting || availableForAdd.length === 0}
               >
-                <div>
-                  <div style={{ fontWeight: 600, color: "var(--navy)", fontSize: 14 }}>
-                    {c.Type}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {saved != null
-                      ? `Current price: EGP ${Number(saved).toLocaleString()}`
-                      : "Price not set yet."}
-                  </div>
-                </div>
-                <div>
-                  <div className="input-with-icon">
-                    <span className="input-icon"><Icon name="receipt" size={14} /></span>
-                    <input
-                      className="input"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={draft}
-                      onChange={onChange(id)}
-                      disabled={submitting}
-                    />
-                  </div>
-                  <FieldError message={errors[id]} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                <option value="">
+                  {availableForAdd.length
+                    ? "Select a category…"
+                    : "You've added every available category."}
+                </option>
+                {availableForAdd.map((c) => (
+                  <option key={c.CategoryID} value={c.CategoryID}>{c.Type}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onAdd}
+              disabled={!pickerValue || submitting}
+            >
+              <Icon name="check" size={14} /> Add
+            </button>
+          </div>
+        </>
       )}
 
       <div

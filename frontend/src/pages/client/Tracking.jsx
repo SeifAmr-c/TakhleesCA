@@ -6,8 +6,16 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
-import { listApplications, cancelApplication } from "../../api/applications.js";
-import { submitReview, checkApplicationReviewed } from "../../api/reviews.js";
+import { listApplications, cancelApplication, listCategories, editApplication } from "../../api/applications.js";
+import { listCompanyPorts } from "../../api/ports.js";
+import { listApplicationDocuments } from "../../api/documents.js";
+import {
+  submitReview,
+  checkApplicationReviewed,
+  getApplicationReview,
+  updateClientReview,
+  deleteClientReview,
+} from "../../api/reviews.js";
 import { useAuth } from "../../api/authState.js";
 
 const STATUS_BADGE = {
@@ -17,6 +25,15 @@ const STATUS_BADGE = {
 };
 
 const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
+
+const DOCUMENT_TYPES = [
+  "National ID / Passport",
+  "Proof Of Payment",
+  "Delegation",
+  "Shipping Document",
+];
+
+const MAX_DOC_BYTES = 5 * 1024 * 1024;
 
 /* DB ENUM ('Pending' | 'In Progress' | 'Completed')  →  internal sentinels
    used by the rest of the UI ('pending' | 'in_progress' | 'completed').
@@ -64,10 +81,13 @@ function shapeApplication(raw) {
     CategoryName: raw.CategoryName || null,
     CategoryID: raw.CategoryID || null,
     CompletionToken: raw.CompletionToken || null,
+    PortID: raw.PortID || null,
+    ACID: raw.ACID || "",
+    DeliveryAddress: raw.DeliveryAddress || "",
   };
 }
 
-function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isReviewed }) {
+function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, onEdit, cancelling, isReviewed }) {
   const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
   const stepIdx = statusToStepIndex(a.Status);
   const isCompleted = a.Status === "completed";
@@ -182,7 +202,15 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
       {isPending && (
         <>
           <hr className="divider" />
-          <div className="row" style={{ justifyContent: "flex-end" }}>
+          <div className="row" style={{ justifyContent: "flex-end", gap: 10 }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => onEdit?.(a)}
+              disabled={cancelling}
+            >
+              Edit application
+            </button>
             <button
               type="button"
               className="btn btn-sm"
@@ -210,12 +238,10 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
             <button
               type="button"
               className={`btn btn-sm ${isReviewed ? "btn-secondary" : "btn-accent"}`}
-              onClick={() => !isReviewed && onLeaveReview?.(a)}
-              disabled={isReviewed}
-              title={isReviewed ? "You've already reviewed this shipment" : undefined}
+              onClick={() => onLeaveReview?.(a)}
             >
               <Icon name="star" size={14} filled />
-              {isReviewed ? "Reviewed" : "Leave a review"}
+              {isReviewed ? "Edit review" : "Leave a review"}
             </button>
           </div>
         </>
@@ -250,12 +276,27 @@ function Tracking() {
 
   const [qrTarget, setQrTarget] = useState(null);
   const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewMode, setReviewMode] = useState("create"); // 'create' | 'edit'
+  const [editReviewId, setEditReviewId] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [reviewSent, setReviewSent] = useState(false);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState("");
   const [reviewedIds, setReviewedIds] = useState(new Set());
+
+  const [editTarget, setEditTarget] = useState(null);
+  const [editStep, setEditStep] = useState(0);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editDetailsErrors, setEditDetailsErrors] = useState({});
+  const [editDocErrors, setEditDocErrors] = useState({});
+  const [editForm, setEditForm] = useState({ CategoryID: "", PortID: "", DeliveryAddress: "", ACID: "" });
+  const [editDocSlots, setEditDocSlots] = useState([]);
+  const [editCategories, setEditCategories] = useState([]);
+  const [editPorts, setEditPorts] = useState([]);
 
   useEffect(() => {
     if (!clientId) {
@@ -346,11 +387,109 @@ function Tracking() {
   };
 
   const openReviewModal = (row) => {
+    const isEdit = reviewedIds.has(Number(row.ApplicationID));
     setReviewTarget(row);
+    setReviewMode(isEdit ? "edit" : "create");
+    setEditReviewId(null);
     setReviewRating(5);
     setReviewText("");
     setReviewSent(false);
     setReviewError("");
+
+    if (isEdit) {
+      setReviewLoading(true);
+      getApplicationReview(row.ApplicationID)
+        .then((existing) => {
+          if (existing) {
+            setEditReviewId(existing.ReviewID);
+            setReviewRating(existing.Rating ?? 5);
+            setReviewText(existing.Review ?? "");
+          }
+        })
+        .catch(() => {})
+        .finally(() => setReviewLoading(false));
+    }
+  };
+
+  const openEditModal = (row) => {
+    setEditTarget(row);
+    setEditStep(0);
+    setEditError("");
+    setEditDetailsErrors({});
+    setEditDocErrors({});
+    setEditForm({
+      CategoryID: String(row.CategoryID || ""),
+      PortID: String(row.PortID || ""),
+      DeliveryAddress: row.DeliveryAddress || "",
+      ACID: row.ACID || "",
+    });
+    setEditDocSlots([]);
+    setEditLoading(true);
+    Promise.all([
+      listCategories().catch(() => []),
+      listCompanyPorts(row.CompanyID).catch(() => []),
+      listApplicationDocuments(row.ApplicationID).catch(() => []),
+    ]).then(([cats, ports, docs]) => {
+      setEditCategories(Array.isArray(cats) ? cats : cats?.data || []);
+      setEditPorts(Array.isArray(ports) ? ports : ports?.data || []);
+      const sorted = [...(Array.isArray(docs) ? docs : [])].sort((a, b) => a.DocumentID - b.DocumentID);
+      const slots = sorted.slice(0, 4).map((d) => ({
+        docId: d.DocumentID,
+        type: d.DocType,
+        currentPath: d.Path,
+        newFile: null,
+      }));
+      while (slots.length < 4) slots.push({ docId: null, type: "", currentPath: null, newFile: null });
+      setEditDocSlots(slots);
+    }).finally(() => setEditLoading(false));
+  };
+
+  const updateEditDocSlot = (idx, key, value) => {
+    setEditDocSlots((prev) => prev.map((s, i) => i === idx ? { ...s, [key]: value } : s));
+  };
+
+  const handleEditContinue = () => {
+    const errs = {};
+    if (!editForm.CategoryID) errs.CategoryID = "Please select a service category.";
+    if (!editForm.PortID) errs.PortID = "Please select a port.";
+    if (!editForm.DeliveryAddress.trim()) errs.DeliveryAddress = "Delivery address is required.";
+    if (!/^\d{19}$/.test(editForm.ACID)) errs.ACID = "ACID must be exactly 19 digits.";
+    setEditDetailsErrors(errs);
+    if (Object.keys(errs).length) return;
+    setEditStep(1);
+  };
+
+  const handleEditSubmit = async () => {
+    const docErrs = {};
+    editDocSlots.forEach((slot, i) => {
+      if (!slot.type) docErrs[i] = "Choose a document type.";
+      else if (!slot.currentPath && !slot.newFile) docErrs[i] = "Attach a file.";
+      else if (slot.newFile && slot.newFile.size > MAX_DOC_BYTES) docErrs[i] = "File must be 5 MB or smaller.";
+    });
+    setEditDocErrors(docErrs);
+    if (Object.keys(docErrs).length) return;
+
+    setEditSubmitting(true);
+    setEditError("");
+    try {
+      const payload = new FormData();
+      payload.append("CategoryID", editForm.CategoryID);
+      payload.append("PortID", editForm.PortID);
+      payload.append("DeliveryAddress", editForm.DeliveryAddress.trim());
+      payload.append("ACID", editForm.ACID);
+      editDocSlots.forEach((slot, idx) => {
+        if (slot.docId) payload.append(`ExistingDocID_${idx}`, String(slot.docId));
+        payload.append(`DocType_${idx}`, slot.type);
+        if (slot.newFile) payload.append(`NewDoc_${idx}`, slot.newFile);
+      });
+      await editApplication(editTarget.ApplicationID, payload);
+      setEditTarget(null);
+      setRefreshTick((n) => n + 1);
+    } catch (err) {
+      setEditError(err?.response?.data?.message || "Couldn't update the application. Please try again.");
+    } finally {
+      setEditSubmitting(false);
+    }
   };
 
   const handleSubmitReview = async () => {
@@ -371,6 +510,47 @@ function Tracking() {
         err?.response?.data?.message ||
           err?.response?.data?.error ||
           "Couldn't submit your review. Please try again."
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleUpdateReview = async () => {
+    if (!reviewText.trim() || !editReviewId) return;
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      await updateClientReview(editReviewId, { Review: reviewText.trim(), Rating: reviewRating });
+      setReviewTarget(null);
+    } catch (err) {
+      setReviewError(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Couldn't update your review. Please try again."
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!editReviewId) return;
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      await deleteClientReview(editReviewId);
+      setReviewedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(Number(reviewTarget.ApplicationID));
+        return next;
+      });
+      setReviewTarget(null);
+    } catch (err) {
+      setReviewError(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Couldn't delete your review. Please try again."
       );
     } finally {
       setReviewSubmitting(false);
@@ -461,6 +641,7 @@ function Tracking() {
                 onLeaveReview={openReviewModal}
                 onRevealQr={setQrTarget}
                 onCancel={handleCancelApplication}
+                onEdit={openEditModal}
                 cancelling={cancellingId === a.ApplicationID}
                 isReviewed={reviewedIds.has(Number(a.ApplicationID))}
               />
@@ -577,7 +758,9 @@ function Tracking() {
                 <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
                   Application #{reviewTarget.ApplicationID}
                 </span>
-                <h3 className="card-title">Leave a review</h3>
+                <h3 className="card-title">
+                  {reviewMode === "edit" ? "Edit your review" : "Leave a review"}
+                </h3>
               </div>
               <button
                 type="button"
@@ -592,6 +775,10 @@ function Tracking() {
               <div className="banner-success" style={{ marginTop: 8 }}>
                 <Icon name="check" size={16} />
                 Thanks — your review for {reviewTarget.CompanyName} has been recorded.
+              </div>
+            ) : reviewLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+                <ContainerSpinner size={40} label="Loading your review…" />
               </div>
             ) : (
               <div className="stack" style={{ marginTop: 8 }}>
@@ -640,28 +827,321 @@ function Tracking() {
                   </div>
                 )}
 
-                <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 16 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setReviewTarget(null)}
-                    disabled={reviewSubmitting}
+                {reviewMode === "edit" ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={handleDeleteReview}
+                      disabled={reviewSubmitting}
+                      style={{
+                        background: "var(--signal-stop, #dc2626)",
+                        color: "#fff",
+                        border: "1px solid var(--signal-stop, #dc2626)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {reviewSubmitting ? <ContainerSpinner inline size={14} label="Deleting…" /> : "Delete review"}
+                    </button>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setReviewTarget(null)}
+                        disabled={reviewSubmitting}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleUpdateReview}
+                        disabled={!reviewText.trim() || reviewSubmitting}
+                      >
+                        {reviewSubmitting ? (
+                          <ContainerSpinner inline size={16} label="Saving…" />
+                        ) : (
+                          <><Icon name="check" size={14} /> Save changes</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 16 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setReviewTarget(null)}
+                      disabled={reviewSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleSubmitReview}
+                      disabled={!reviewText.trim() || reviewSubmitting}
+                    >
+                      {reviewSubmitting ? (
+                        <ContainerSpinner inline size={16} label="Submitting…" />
+                      ) : (
+                        <><Icon name="check" size={14} /> Submit review</>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {editTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => { if (!editSubmitting) setEditTarget(null); }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "oklch(15% 0.045 245 / 0.5)",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            zIndex: 120,
+            backdropFilter: "blur(3px)",
+            WebkitBackdropFilter: "blur(3px)",
+          }}
+        >
+          <div
+            className="card card-pad-lg"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}
+          >
+            {/* Header */}
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+              <div>
+                <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
+                  Application #{editTarget.ApplicationID}
+                </span>
+                <h3 className="card-title">Edit application</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setEditTarget(null)}
+                disabled={editSubmitting}
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Step tabs */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 20, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${editStep === 0 ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setEditStep(0)}
+                disabled={editSubmitting}
+              >
+                Details
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${editStep === 1 ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => { if (editStep === 0) { handleEditContinue(); } else { setEditStep(1); } }}
+                disabled={editSubmitting}
+              >
+                Documents
+              </button>
+            </div>
+
+            {editLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+                <ContainerSpinner size={48} label="Loading application data…" />
+              </div>
+            ) : editStep === 0 ? (
+              <div className="stack">
+                <label className="field">
+                  <span className="field-label">Service category *</span>
+                  <select
+                    className="select"
+                    value={editForm.CategoryID}
+                    onChange={(e) => { setEditForm((f) => ({ ...f, CategoryID: e.target.value })); setEditDetailsErrors((m) => ({ ...m, CategoryID: "" })); }}
+                    disabled={editSubmitting}
                   >
-                    Cancel
+                    <option value="">{editCategories.length ? "Select a category…" : "Loading categories…"}</option>
+                    {editCategories.map((c) => (
+                      <option key={c.CategoryID} value={c.CategoryID}>{c.Type}</option>
+                    ))}
+                  </select>
+                  {editDetailsErrors.CategoryID && <span style={{ color: "var(--signal-stop)", fontSize: 12, marginTop: 4, display: "block" }}>{editDetailsErrors.CategoryID}</span>}
+                </label>
+
+                <label className="field">
+                  <span className="field-label">Port *</span>
+                  <select
+                    className="select"
+                    value={editForm.PortID}
+                    onChange={(e) => { setEditForm((f) => ({ ...f, PortID: e.target.value })); setEditDetailsErrors((m) => ({ ...m, PortID: "" })); }}
+                    disabled={editSubmitting}
+                  >
+                    <option value="">{editPorts.length ? "Select a port…" : "No ports available"}</option>
+                    {editPorts.map((p) => (
+                      <option key={p.PortID} value={p.PortID}>{p.PortName}{p.PortType ? ` (${p.PortType})` : ""}</option>
+                    ))}
+                  </select>
+                  {editDetailsErrors.PortID && <span style={{ color: "var(--signal-stop)", fontSize: 12, marginTop: 4, display: "block" }}>{editDetailsErrors.PortID}</span>}
+                </label>
+
+                <label className="field">
+                  <span className="field-label">Delivery address *</span>
+                  <div className="input-with-icon">
+                    <span className="input-icon"><Icon name="pin" size={16} /></span>
+                    <input
+                      className="input"
+                      value={editForm.DeliveryAddress}
+                      onChange={(e) => { setEditForm((f) => ({ ...f, DeliveryAddress: e.target.value })); setEditDetailsErrors((m) => ({ ...m, DeliveryAddress: "" })); }}
+                      disabled={editSubmitting}
+                      placeholder="Street, district, city"
+                    />
+                  </div>
+                  {editDetailsErrors.DeliveryAddress && <span style={{ color: "var(--signal-stop)", fontSize: 12, marginTop: 4, display: "block" }}>{editDetailsErrors.DeliveryAddress}</span>}
+                </label>
+
+                <label className="field">
+                  <span className="field-label">ACID number *</span>
+                  <div className="input-with-icon">
+                    <span className="input-icon"><Icon name="lock" size={16} /></span>
+                    <input
+                      className="input"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      maxLength={19}
+                      value={editForm.ACID}
+                      onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 19); setEditForm((f) => ({ ...f, ACID: d })); setEditDetailsErrors((m) => ({ ...m, ACID: "" })); }}
+                      disabled={editSubmitting}
+                      placeholder="19-digit ACID number"
+                    />
+                  </div>
+                  <span className="hint">Must be exactly 19 digits.</span>
+                  {editDetailsErrors.ACID && <span style={{ color: "var(--signal-stop)", fontSize: 12, marginTop: 4, display: "block" }}>{editDetailsErrors.ACID}</span>}
+                </label>
+              </div>
+            ) : (
+              <div className="stack">
+                {editDocSlots.map((slot, idx) => (
+                  <div
+                    key={idx}
+                    style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 16, background: "var(--surface)" }}
+                  >
+                    <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+                      <span className="mono" style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint)" }}>
+                        Document #{idx + 1}
+                      </span>
+                      {slot.currentPath && !slot.newFile && (
+                        <a
+                          href={slot.currentPath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: 12 }}
+                        >
+                          View current
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 12 }}>
+                      <label className="field">
+                        <span className="field-label">Document type *</span>
+                        <select
+                          className="select"
+                          value={slot.type}
+                          onChange={(e) => { updateEditDocSlot(idx, "type", e.target.value); setEditDocErrors((m) => ({ ...m, [idx]: "" })); }}
+                          disabled={editSubmitting}
+                        >
+                          <option value="">Select type…</option>
+                          {DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </label>
+
+                      <div className="field">
+                        <span className="field-label">
+                          File {slot.currentPath ? "(optional — replaces current)" : "*"}
+                        </span>
+                        {slot.newFile ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: "1px solid var(--brand)", borderRadius: "var(--radius-md)", background: "var(--harbor-100)", fontSize: 13 }}>
+                            <Icon name="check" size={14} />
+                            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{slot.newFile.name}</span>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: "2px 6px", fontSize: 12, flexShrink: 0 }}
+                              onClick={() => updateEditDocSlot(idx, "newFile", null)}
+                              disabled={editSubmitting}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", border: "1px dashed var(--line-strong)", borderRadius: "var(--radius-md)", cursor: editSubmitting ? "not-allowed" : "pointer", background: "var(--surface-2)", fontSize: 13, color: "var(--ink-soft)" }}>
+                            <input
+                              type="file"
+                              accept="application/pdf,image/*"
+                              style={{ display: "none" }}
+                              disabled={editSubmitting}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (!f) return;
+                                if (f.size > MAX_DOC_BYTES) { setEditDocErrors((m) => ({ ...m, [idx]: "File must be 5 MB or smaller." })); return; }
+                                setEditDocErrors((m) => ({ ...m, [idx]: "" }));
+                                updateEditDocSlot(idx, "newFile", f);
+                              }}
+                            />
+                            <Icon name="doc" size={14} />
+                            {slot.currentPath ? "Replace file…" : "Click to upload…"}
+                          </label>
+                        )}
+                        {editDocErrors[idx] && <span style={{ color: "var(--signal-stop)", fontSize: 12, marginTop: 4, display: "block" }}>{editDocErrors[idx]}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {editError && (
+              <div className="banner-error" style={{ marginTop: 16 }}>
+                <Icon name="bell" size={14} />{editError}
+              </div>
+            )}
+
+            {/* Navigation buttons */}
+            {!editLoading && (
+              <div className="row" style={{ justifyContent: "space-between", marginTop: 20 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => editStep === 0 ? setEditTarget(null) : setEditStep(0)}
+                  disabled={editSubmitting}
+                >
+                  {editStep === 0 ? "Cancel" : "Back"}
+                </button>
+                {editStep === 0 ? (
+                  <button type="button" className="btn btn-primary" onClick={handleEditContinue} disabled={editSubmitting}>
+                    Continue <Icon name="arrow_right" size={14} />
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleSubmitReview}
-                    disabled={!reviewText.trim() || reviewSubmitting}
-                  >
-                    {reviewSubmitting ? (
-                      <ContainerSpinner inline size={16} label="Submitting…" />
+                ) : (
+                  <button type="button" className="btn btn-primary" onClick={handleEditSubmit} disabled={editSubmitting}>
+                    {editSubmitting ? (
+                      <ContainerSpinner inline size={16} label="Saving…" />
                     ) : (
-                      <><Icon name="check" size={14} /> Submit review</>
+                      <><Icon name="check" size={14} /> Save changes</>
                     )}
                   </button>
-                </div>
+                )}
               </div>
             )}
           </div>

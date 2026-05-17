@@ -64,6 +64,7 @@ router.put(
   companyService.updateCompanyProfile
 );
 router.put("/pricing", requireCompany, companyService.updateCompanyPricing);
+router.delete("/pricing/:categoryId", requireCompany, companyService.deleteCompanyPricing);
 router.get("/can-delete", requireCompany, companyService.canDeleteCompany);
 router.delete("/profile", requireCompany, companyService.deleteCompanyProfile);
 router.delete("/", companyService.deleteCompany);

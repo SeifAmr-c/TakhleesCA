@@ -66,6 +66,13 @@ export const resolveTicket = async (ticketId) => {
   return data;
 };
 
+// GET /admin/tickets/search  → { ok, count, data: [...] }
+// Params: q (Issue text), ticketId, clientId, adminId, resolved ('0'|'1'|'')
+export const searchAdminTickets = async (params = {}) => {
+  const { data } = await api.get("/admin/tickets/search", { params });
+  return data;
+};
+
 // GET /admin/export-report → streamed application/pdf as a Blob.
 export const exportAdminReport = async () => {
   const response = await api.get("/admin/export-report", {

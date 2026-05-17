@@ -5,6 +5,7 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { submitSupportTicket } from "../../api/payments.js";
+import { listMyTickets, updateMyTicket, deleteMyTicket } from "../../api/tickets.js";
 import { useAuth } from "../../api/authState.js";
 
 const CONTACTS = [
@@ -19,6 +20,8 @@ function ContactUs() {
   const location = useLocation();
 
   const isLoggedIn = auth?.kind === "user";
+  const isClient = isLoggedIn && auth?.role === "client";
+  const clientId = isClient ? auth?.user?.UserID : null;
   const fullName = isLoggedIn
     ? [auth.user?.FirstName, auth.user?.LastName].filter(Boolean).join(" ")
     : "";
@@ -27,6 +30,15 @@ function ContactUs() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  const [tickets, setTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketEditingId, setTicketEditingId] = useState(null);
+  const [ticketEditIssue, setTicketEditIssue] = useState("");
+  const [ticketDeleteConfirmId, setTicketDeleteConfirmId] = useState(null);
+  const [ticketBusy, setTicketBusy] = useState(false);
+  const [ticketNotice, setTicketNotice] = useState("");
+  const [ticketError, setTicketError] = useState("");
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -37,6 +49,59 @@ function ContactUs() {
       }));
     }
   }, [isLoggedIn, fullName, auth]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    setTicketsLoading(true);
+    listMyTickets()
+      .then((res) => setTickets(Array.isArray(res?.data) ? res.data : []))
+      .catch(() => setTickets([]))
+      .finally(() => setTicketsLoading(false));
+  }, [clientId]);
+
+  const showTicketNotice = (msg) => {
+    setTicketNotice(msg);
+    setTimeout(() => setTicketNotice(""), 3500);
+  };
+
+  const handleTicketEdit = (ticket) => {
+    setTicketEditingId(ticket.TicketID);
+    setTicketEditIssue(ticket.Issue);
+    setTicketDeleteConfirmId(null);
+    setTicketError("");
+  };
+
+  const handleTicketSave = async (ticketId) => {
+    if (!ticketEditIssue.trim()) return;
+    setTicketBusy(true);
+    setTicketError("");
+    try {
+      await updateMyTicket(ticketId, { Issue: ticketEditIssue.trim() });
+      setTickets((prev) => prev.map((t) => t.TicketID === ticketId ? { ...t, Issue: ticketEditIssue.trim() } : t));
+      setTicketEditingId(null);
+      showTicketNotice("Ticket updated.");
+    } catch (err) {
+      setTicketError(err?.response?.data?.message || "Couldn't update the ticket.");
+    } finally {
+      setTicketBusy(false);
+    }
+  };
+
+  const handleTicketDelete = async (ticketId) => {
+    setTicketBusy(true);
+    setTicketError("");
+    try {
+      await deleteMyTicket(ticketId);
+      setTickets((prev) => prev.filter((t) => t.TicketID !== ticketId));
+      setTicketDeleteConfirmId(null);
+      showTicketNotice("Ticket deleted.");
+    } catch (err) {
+      setTicketError(err?.response?.data?.message || "Couldn't delete the ticket.");
+      setTicketDeleteConfirmId(null);
+    } finally {
+      setTicketBusy(false);
+    }
+  };
 
   const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -62,7 +127,11 @@ function ContactUs() {
         AdminID: null,
       });
       setSuccess(true);
-      setTimeout(() => navigate("/"), 1500);
+      setForm((f) => ({ ...f, Message: "" }));
+      listMyTickets()
+        .then((res) => setTickets(Array.isArray(res?.data) ? res.data : []))
+        .catch(() => {});
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(
         err?.response?.data?.message ||
@@ -205,6 +274,143 @@ function ContactUs() {
           </div>
         </div>
       </Reveal>
+
+      {isClient && (
+        <Reveal as="section" className="section" style={{ paddingTop: 0 }}>
+          <div className="container" style={{ maxWidth: 900 }}>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+              <div>
+                <span className="eyebrow">Help &amp; support</span>
+                <h2 className="h3" style={{ fontSize: 20 }}>My support tickets</h2>
+              </div>
+            </div>
+
+            {ticketNotice && (
+              <div className="banner-success" style={{ marginBottom: 12 }}>
+                <Icon name="check" size={14} />{ticketNotice}
+              </div>
+            )}
+            {ticketError && (
+              <div className="banner-error" style={{ marginBottom: 12 }}>
+                <Icon name="bell" size={14} />{ticketError}
+              </div>
+            )}
+
+            {ticketsLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+                <ContainerSpinner size={60} label="Loading tickets" />
+              </div>
+            ) : tickets.length === 0 ? (
+              <div className="card" style={{ textAlign: "center", padding: 40 }}>
+                <Icon name="bell" size={24} color="var(--ink-faint)" />
+                <h3 className="h3" style={{ marginTop: 12 }}>No support tickets yet</h3>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  Use the form above to submit a support request.
+                </p>
+              </div>
+            ) : (
+              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {tickets.map((t, i) => {
+                    const isResolved = Number(t.Resolved) === 1;
+                    const isEditing = ticketEditingId === t.TicketID;
+                    const isConfirmingDelete = ticketDeleteConfirmId === t.TicketID;
+                    return (
+                      <li
+                        key={t.TicketID}
+                        style={{
+                          padding: "16px 20px",
+                          borderBottom: i === tickets.length - 1 ? "none" : "1px solid var(--gray-100)",
+                        }}
+                      >
+                        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <span className="mono" style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+                                #{t.TicketID}
+                              </span>
+                              {isResolved ? (
+                                <span className="badge badge-success"><span className="dot" />Resolved</span>
+                              ) : (
+                                <span className="badge badge-pending"><span className="dot" />Open</span>
+                              )}
+                            </div>
+                            {isEditing ? (
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
+                                <input
+                                  className="input"
+                                  style={{ flex: 1, minWidth: 180, fontSize: 14 }}
+                                  value={ticketEditIssue}
+                                  onChange={(e) => setTicketEditIssue(e.target.value)}
+                                  disabled={ticketBusy}
+                                  autoFocus
+                                />
+                                <button
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => handleTicketSave(t.TicketID)}
+                                  disabled={ticketBusy || !ticketEditIssue.trim()}
+                                >
+                                  {ticketBusy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={13} /> Save</>}
+                                </button>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => setTicketEditingId(null)}
+                                  disabled={ticketBusy}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <p style={{ margin: 0, fontSize: 14, color: "var(--gray-800)", lineHeight: 1.5 }}>
+                                {t.Issue}
+                              </p>
+                            )}
+                            {isResolved && t.AdminName && (
+                              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                Resolved by <strong style={{ color: "var(--navy)" }}>{t.AdminName}</strong>
+                              </div>
+                            )}
+                          </div>
+
+                          {!isResolved && !isEditing && (
+                            <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+                              {isConfirmingDelete ? (
+                                <>
+                                  <span style={{ fontSize: 12, color: "var(--ink-faint)", alignSelf: "center" }}>Delete?</span>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => setTicketDeleteConfirmId(null)} disabled={ticketBusy}>Cancel</button>
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{ background: "var(--signal-stop,#dc2626)", color: "#fff", border: "1px solid var(--signal-stop,#dc2626)" }}
+                                    onClick={() => handleTicketDelete(t.TicketID)}
+                                    disabled={ticketBusy}
+                                  >
+                                    {ticketBusy ? <ContainerSpinner inline size={14} label="Deleting…" /> : "Confirm"}
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => handleTicketEdit(t)}>Edit</button>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ color: "var(--signal-stop,#dc2626)" }}
+                                    onClick={() => { setTicketDeleteConfirmId(t.TicketID); setTicketEditingId(null); }}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Reveal>
+      )}
     </PublicLayout>
   );
 }

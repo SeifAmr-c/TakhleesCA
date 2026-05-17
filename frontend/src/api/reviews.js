@@ -26,3 +26,20 @@ export const checkApplicationReviewed = async (applicationId) => {
   });
   return Array.isArray(data) && data.length > 0;
 };
+
+export const getApplicationReview = async (applicationId) => {
+  const { data } = await api.get("/review/search", {
+    params: { keyword: "ApplicationID", keyvalue: applicationId },
+  });
+  return Array.isArray(data) && data.length > 0 ? data[0] : null;
+};
+
+export const updateClientReview = async (reviewId, { Review, Rating }) => {
+  const { data } = await api.put("/review/client", { Review, Rating }, { params: { ReviewID: reviewId } });
+  return data;
+};
+
+export const deleteClientReview = async (reviewId) => {
+  const { data } = await api.delete("/review/client", { params: { ReviewID: reviewId } });
+  return data;
+};

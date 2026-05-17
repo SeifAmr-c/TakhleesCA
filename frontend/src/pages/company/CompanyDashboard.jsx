@@ -10,6 +10,7 @@ import {
 } from "../../api/applications.js";
 import { getCompanyDashboardStats, exportCompanyReport } from "../../api/companies.js";
 import { listApplicationDocuments } from "../../api/documents.js";
+import { listCompanyReviews } from "../../api/reviews.js";
 import { useAuth } from "../../api/authState.js";
 
 /* DB ENUM 'Pending' | 'In Progress' | 'Completed'  →  internal lower-case
@@ -348,6 +349,12 @@ function CompanyDashboard() {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
 
+  // Reviews section
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewRatingFilter, setReviewRatingFilter] = useState(null);
+  const [reviewQuery, setReviewQuery] = useState("");
+
   const reloadApplications = async () => {
     console.log("FRONTEND: reloadApplications fired. auth =", auth, "companyId =", companyId);
     if (!companyId) {
@@ -383,6 +390,15 @@ function CompanyDashboard() {
   useEffect(() => {
     reloadApplications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    setReviewsLoading(true);
+    listCompanyReviews(companyId)
+      .then((data) => setReviews(Array.isArray(data) ? data : []))
+      .catch(() => setReviews([]))
+      .finally(() => setReviewsLoading(false));
   }, [companyId]);
 
   const pending = useMemo(
@@ -442,6 +458,19 @@ function CompanyDashboard() {
       netEarnings: Number(stats?.NetEarnings ?? 0),
     };
   }, [pending, accepted, stats]);
+
+  const filteredReviews = useMemo(() => {
+    const q = reviewQuery.trim().toLowerCase();
+    return reviews.filter((r) => {
+      if (reviewRatingFilter !== null && r.Rating !== reviewRatingFilter) return false;
+      if (!q) return true;
+      const haystack = [r.Review, r.FirstName, r.LastName]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [reviews, reviewRatingFilter, reviewQuery]);
 
   const showNotice = (text) => {
     setNotice(text);
@@ -715,6 +744,108 @@ function CompanyDashboard() {
                 onDecision={handleDecision}
                 onStatusChange={handleStatusChange}
               />
+            ))}
+          </div>
+        )}
+      </Reveal>
+      {/* Client reviews */}
+      <Reveal as="section" style={{ marginBottom: 24 }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div>
+            <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>Clients</span>
+            <h2 className="h3" style={{ fontSize: 20 }}>Client reviews</h2>
+          </div>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {filteredReviews.length} of {reviews.length} shown
+          </span>
+        </div>
+
+        <div
+          className="card"
+          style={{
+            padding: 14,
+            marginBottom: 16,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div className="row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
+            {[null, 1, 2, 3, 4, 5].map((r) => {
+              const active = reviewRatingFilter === r;
+              return (
+                <button
+                  key={r ?? "all"}
+                  type="button"
+                  className={`btn btn-sm ${active ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setReviewRatingFilter(r)}
+                >
+                  {r === null ? "All" : "★".repeat(r)}
+                </button>
+              );
+            })}
+          </div>
+          <div className="input-with-icon" style={{ minWidth: 260, flex: "0 1 320px" }}>
+            <span className="input-icon"><Icon name="search" size={16} /></span>
+            <input
+              className="input"
+              placeholder="Search by reviewer name or review text…"
+              value={reviewQuery}
+              onChange={(e) => setReviewQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {reviewsLoading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+            <ContainerSpinner size={48} label="Loading reviews" />
+          </div>
+        ) : filteredReviews.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: 40 }}>
+            <Icon name="star" size={24} color="var(--ink-faint)" />
+            <h3 className="h3" style={{ marginTop: 12 }}>No reviews yet</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              {reviews.length === 0
+                ? "You haven't received any client reviews yet."
+                : "No reviews match the current filter."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid">
+            {filteredReviews.map((r) => (
+              <div key={r.ReviewID} className="card" style={{ padding: "16px 20px" }}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div>
+                    <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Icon
+                          key={i}
+                          name="star"
+                          size={15}
+                          color={i <= r.Rating ? "var(--accent)" : "var(--line-strong)"}
+                          filled={i <= r.Rating}
+                        />
+                      ))}
+                      <span style={{ fontSize: 12, color: "var(--ink-faint)", marginLeft: 6, alignSelf: "center" }}>
+                        {r.Rating} / 5
+                      </span>
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>
+                      {r.FirstName} {r.LastName}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", fontSize: 12, color: "var(--ink-faint)", flexShrink: 0 }}>
+                    <div>Application #{r.ApplicationID}</div>
+                    {r.CategoryID && <div>Category #{r.CategoryID}</div>}
+                  </div>
+                </div>
+                {r.Review && (
+                  <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.6 }}>
+                    "{r.Review}"
+                  </p>
+                )}
+              </div>
             ))}
           </div>
         )}

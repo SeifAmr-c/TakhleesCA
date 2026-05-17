@@ -4,7 +4,7 @@ import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
-import { createApplication, listCategories } from "../../api/applications.js";
+import { createApplication } from "../../api/applications.js";
 import { listCompanyPorts } from "../../api/ports.js";
 import { submitPayment } from "../../api/payments.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
@@ -17,12 +17,16 @@ const DOCUMENT_TYPES = [
   "Shipping Document",
 ];
 
-const REQUIRED_DOC_COUNT = 4;
+const REQUIRED_DOC_COUNT = DOCUMENT_TYPES.length;
 
+/* Each document slot is permanently bound to one DOCUMENT_TYPES entry by
+   index — the user no longer picks the type, they just attach the file
+   for that slot. The `type` value flows through to the multipart payload
+   (DocType_0..DocType_3) so the backend still receives the correct type. */
 const makeInitialDocuments = () =>
-  Array.from({ length: REQUIRED_DOC_COUNT }, (_, i) => ({
+  DOCUMENT_TYPES.map((type, i) => ({
     id: i + 1,
-    type: "",
+    type,
     file: null,
   }));
 
@@ -110,7 +114,9 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
             disabled={submitting || !categories.length}
           >
             <option value="">
-              {categories.length ? "Select a category…" : "Loading categories…"}
+              {categories.length
+                ? "Select a category…"
+                : "This company hasn't published any services yet"}
             </option>
             {categories.map((c) => (
               <option key={c.CategoryID} value={c.CategoryID}>{c.Type}</option>
@@ -171,11 +177,6 @@ function DocumentsStep({
 }) {
   const setDocFieldError = (id, key, msg) =>
     setDocErrors((m) => ({ ...m, [id]: { ...(m[id] || {}), [key]: msg } }));
-
-  const updateType = (id, value) => {
-    setDocuments((list) => list.map((d) => (d.id === id ? { ...d, type: value } : d)));
-    if (value) setDocFieldError(id, "type", "");
-  };
 
   const updateFile = (id, file) =>
     setDocuments((list) => list.map((d) => (d.id === id ? { ...d, file } : d)));
@@ -243,8 +244,17 @@ function DocumentsStep({
             >
               <div
                 className="row"
-                style={{ justifyContent: "space-between", marginBottom: 10 }}
+                style={{ justifyContent: "space-between", marginBottom: 10, alignItems: "baseline" }}
               >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--ink)",
+                  }}
+                >
+                  {d.type}
+                </span>
                 <span
                   className="mono"
                   style={{
@@ -254,61 +264,38 @@ function DocumentsStep({
                     color: "var(--ink-faint)",
                   }}
                 >
-                  Document #{i + 1} (required)
+                  Document #{i + 1} · required
                 </span>
               </div>
 
-              <div
-                className="grid"
-                style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 12 }}
-              >
-                <label className="field">
-                  <span className="field-label">Document type *</span>
-                  <select
-                    className="select"
-                    value={d.type}
-                    onChange={(e) => updateType(d.id, e.target.value)}
+              <div className="field">
+                <label
+                  className={`${dropStyles.dropzone} ${d.file ? dropStyles.dropzoneFilled : ""}`}
+                >
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className={dropStyles.dropzoneInput}
+                    onChange={onPickFile(d.id)}
                     disabled={submitting}
                     required
-                  >
-                    <option value="">Select type…</option>
-                    {DOCUMENT_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                  <FieldError message={errs.type} />
+                  />
+                  <span className={dropStyles.dropzoneIcon} aria-hidden="true">
+                    <Icon name={d.file ? "check" : "doc"} size={24} />
+                  </span>
+                  {d.file ? (
+                    <>
+                      <span className={dropStyles.dropzoneFilename}>{d.file.name}</span>
+                      <span className={dropStyles.dropzoneSubtext}>Click to replace</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={dropStyles.dropzoneTitle}>Click to upload {d.type}</span>
+                      <span className={dropStyles.dropzoneSubtext}>PDF or image · max 5 MB</span>
+                    </>
+                  )}
                 </label>
-
-                <div className="field">
-                  <span className="field-label">File *</span>
-                  <label
-                    className={`${dropStyles.dropzone} ${d.file ? dropStyles.dropzoneFilled : ""}`}
-                  >
-                    <input
-                      type="file"
-                      accept="application/pdf,image/*"
-                      className={dropStyles.dropzoneInput}
-                      onChange={onPickFile(d.id)}
-                      disabled={submitting}
-                      required
-                    />
-                    <span className={dropStyles.dropzoneIcon} aria-hidden="true">
-                      <Icon name={d.file ? "check" : "doc"} size={24} />
-                    </span>
-                    {d.file ? (
-                      <>
-                        <span className={dropStyles.dropzoneFilename}>{d.file.name}</span>
-                        <span className={dropStyles.dropzoneSubtext}>Click to replace</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className={dropStyles.dropzoneTitle}>Click to upload</span>
-                        <span className={dropStyles.dropzoneSubtext}>PDF or image · max 5 MB</span>
-                      </>
-                    )}
-                  </label>
-                  <FieldError message={errs.file} />
-                </div>
+                <FieldError message={errs.file} />
               </div>
             </div>
           );
@@ -652,31 +639,15 @@ function FillApplication() {
 
   const [submitted, setSubmitted] = useState(null);
 
-  /* Reference data: categories + ports come straight from the DB. No
-     hardcoded fallback list — if the server is unreachable, the dropdowns
-     stay disabled with a "Loading…" placeholder. */
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const [portData, catData] = await Promise.all([
-        companyId ? listCompanyPorts(companyId).catch(() => null) : Promise.resolve(null),
-        listCategories().catch(() => null),
-      ]);
-      if (!active) return;
-
-      const prts = Array.isArray(portData) ? portData : portData?.data || [];
-      const cats = Array.isArray(catData) ? catData : catData?.data || [];
-      setPorts(prts);
-      setCategories(cats);
-    })();
-    return () => { active = false; };
-  }, [companyId]);
-
-  /* Fetch this company's per-category pricing once the companyId is
-     known. Build a { CategoryID: Price } map for instant lookups when
-     the user toggles between categories. */
+  /* Reference data: ports and the company's offered categories.
+     Categories come from /companycategory (joined with category.Type)
+     so the dropdown only lists what the chosen company actually
+     services — no global category list anymore. The same response
+     also feeds the per-category pricing map below. */
   useEffect(() => {
     if (!companyId) {
+      setPorts([]);
+      setCategories([]);
       setCompanyPricing({});
       return;
     }
@@ -684,18 +655,26 @@ function FillApplication() {
     setPriceLoading(true);
     (async () => {
       try {
-        const rows = await listCompanyCategoryPricing(companyId);
+        const [portData, pricingData] = await Promise.all([
+          listCompanyPorts(companyId).catch(() => null),
+          listCompanyCategoryPricing(companyId).catch(() => null),
+        ]);
         if (!active) return;
+
+        const prts = Array.isArray(portData) ? portData : portData?.data || [];
+        setPorts(prts);
+
+        const rows = Array.isArray(pricingData) ? pricingData : pricingData?.data || [];
+        const cats = [];
         const map = {};
         for (const r of rows) {
-          if (r?.CategoryID != null && r?.Price != null) {
-            map[Number(r.CategoryID)] = Number(r.Price);
-          }
+          if (r?.CategoryID == null) continue;
+          const id = Number(r.CategoryID);
+          if (r.Price != null) map[id] = Number(r.Price);
+          cats.push({ CategoryID: id, Type: r.Type || `Category #${id}` });
         }
+        setCategories(cats);
         setCompanyPricing(map);
-      } catch {
-        if (!active) return;
-        setCompanyPricing({});
       } finally {
         if (active) setPriceLoading(false);
       }
@@ -747,7 +726,6 @@ function FillApplication() {
     }
     for (const d of documents) {
       const e = {};
-      if (!d.type) e.type = "Choose a document type.";
       if (!d.file) e.file = "Attach a file.";
       if (Object.keys(e).length) errs[d.id] = e;
     }

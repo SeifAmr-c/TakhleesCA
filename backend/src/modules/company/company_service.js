@@ -184,7 +184,7 @@ export const getCompany = async (req, res, next) => {
             }
 
             const reviews = await runQuery(
-                `SELECT r.ReviewID, r.Review, r.Rating, r.ApplicationID, r.CategoryID,
+                `SELECT r.ReviewID, r.Review, r.Rating, r.ApplicationID, a.CategoryID,
                         u.FirstName, u.LastName
                    FROM Review r
                    JOIN Application a ON r.ApplicationID = a.ApplicationID
@@ -398,6 +398,37 @@ export const updateCompanyProfile = async (req, res, next) => {
             message: "Profile updated.",
             data: { company: updated[0] },
         });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+/* DELETE /company/pricing/:categoryId  (requires company session)
+   Removes a single (CompanyID, CategoryID) row from companycategory so
+   the company can stop offering that service. Scoped to the signed-in
+   company's id — never accepts CompanyID from the caller. */
+export const deleteCompanyPricing = async (req, res, next) => {
+    try {
+        const CompanyID = req.session?.companyId;
+        if (!CompanyID) {
+            return res.status(401).json({ ok: false, message: "Company sign-in required." });
+        }
+        const CategoryID = Number(req.params.categoryId);
+        if (!Number.isInteger(CategoryID) || CategoryID < 1) {
+            return res.status(400).json({ ok: false, message: "Invalid CategoryID." });
+        }
+
+        const result = await runQuery(
+            "DELETE FROM companycategory WHERE CompanyID = ? AND CategoryID = ?",
+            [CompanyID, CategoryID]
+        );
+        if (!result?.affectedRows) {
+            return res.status(404).json({
+                ok: false,
+                message: "This company does not offer that category.",
+            });
+        }
+        return res.status(200).json({ ok: true, message: "Category removed from your services." });
     } catch (err) {
         return next(err);
     }
@@ -830,10 +861,10 @@ export const recommendCompanies = async (req, res, next) => {
                     GROUP BY CompanyID, CategoryID
                ) fa ON fa.CompanyID = c.CompanyID AND fa.CategoryID = cc.CategoryID
                LEFT JOIN (
-                   SELECT a.CompanyID, r.CategoryID, AVG(r.Rating) AS AverageRating
+                   SELECT a.CompanyID, a.CategoryID, AVG(r.Rating) AS AverageRating
                      FROM review r
                      JOIN application a ON a.ApplicationID = r.ApplicationID
-                    GROUP BY a.CompanyID, r.CategoryID
+                    GROUP BY a.CompanyID, a.CategoryID
                ) ar ON ar.CompanyID = c.CompanyID AND ar.CategoryID = cc.CategoryID
               WHERE c.Governorate = ?
                 AND cat.Type = ?
