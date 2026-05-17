@@ -9,52 +9,87 @@ const runQuery = (sql, params = []) =>
     });
 
 const PAYMENT_GATEWAYS = ['Credit Card', 'Bank Transfer'];
+/* Flat platform listing fee applied on top of the per-company commission. */
+const LISTING_FEE = 1600;
 
 export const createPayment = async (req, res, next) => {
+    /* Frontend has historically sent the gateway under either `Method` or
+       `PaymentGateway`; accept both so we don't break the existing form. */
+    const Gateway = req.body.PaymentGateway ?? req.body.Method;
+    const Amount = Number(req.body.Amount);
+    const ApplicationID = Number(req.body.ApplicationID);
+
+    if (!ApplicationID) {
+        return res.status(400).json({ ok: false, message: 'ApplicationID is required.' });
+    }
+    if (isNaN(Amount) || Amount <= 0) {
+        return res.status(400).json({ ok: false, message: 'Amount must be a positive number.' });
+    }
+    if (!PAYMENT_GATEWAYS.includes(Gateway)) {
+        return res.status(400).json({
+            ok: false,
+            message: `PaymentGateway must be one of: ${PAYMENT_GATEWAYS.join(', ')}.`,
+        });
+    }
+
+    const conn = await db.pool.getConnection();
     try {
-        /* Frontend has historically sent the gateway under either `Method` or
-           `PaymentGateway`; accept both so we don't break the existing form. */
-        const Gateway = req.body.PaymentGateway ?? req.body.Method;
-        const Amount = Number(req.body.Amount);
-        const ApplicationID = Number(req.body.ApplicationID);
+        await conn.beginTransaction();
 
-        if (!ApplicationID) {
-            return res.status(400).json({ ok: false, message: 'ApplicationID is required.' });
-        }
-        if (isNaN(Amount) || Amount <= 0) {
-            return res.status(400).json({ ok: false, message: 'Amount must be a positive number.' });
-        }
-        if (!PAYMENT_GATEWAYS.includes(Gateway)) {
-            return res.status(400).json({
-                ok: false,
-                message: `PaymentGateway must be one of: ${PAYMENT_GATEWAYS.join(', ')}.`,
-            });
-        }
-
-        /* Make sure the application actually exists — otherwise the FK insert
-           would fail with a less helpful error mid-transaction. */
-        const exists = await runQuery(
-            'SELECT 1 FROM application WHERE ApplicationID = ? LIMIT 1',
+        /* Resolve the owning company and its commission rate in one shot so
+           we can book the website's slice of this payment alongside the
+           payment row itself. */
+        const [appRows] = await conn.query(
+            `SELECT a.CompanyID, c.Comm
+               FROM application a
+               LEFT JOIN company c ON c.CompanyID = a.CompanyID
+              WHERE a.ApplicationID = ?
+              LIMIT 1`,
             [ApplicationID]
         );
-        if (!exists.length) {
+        if (!appRows.length) {
+            await conn.rollback();
             return res.status(404).json({ ok: false, message: `Application ${ApplicationID} not found.` });
         }
+        const { CompanyID, Comm } = appRows[0];
 
         /* PaymentDate is NOT NULL in the schema. The form doesn't send one,
            so we stamp it server-side. */
-        const result = await runQuery(
+        const [paymentResult] = await conn.query(
             'INSERT INTO payment (PaymentDate, Amount, PaymentGateway, ApplicationID) VALUES (NOW(), ?, ?, ?)',
             [Amount, Gateway, ApplicationID]
         );
+        const PaymentID = paymentResult.insertId;
+
+        /* Book Takhlees' revenue on this payment: flat listing fee plus the
+           company's commission percentage of the paid amount. Same formula
+           the admin dashboards aggregate inline — recording it per Payment
+           lets future reports read from CompanyPayment directly. */
+        const commPercent = Number(Comm) || 0;
+        const websiteRevenue = LISTING_FEE + (Amount * commPercent) / 100;
+        await conn.query(
+            'INSERT INTO companypayment (PaymentDate, Amount, CompanyID, PaymentID) VALUES (NOW(), ?, ?, ?)',
+            [websiteRevenue, CompanyID, PaymentID]
+        );
+
+        await conn.commit();
 
         return res.status(201).json({
             ok: true,
             message: 'Payment recorded.',
-            data: { PaymentID: result.insertId, Amount, PaymentGateway: Gateway, ApplicationID },
+            data: {
+                PaymentID,
+                Amount,
+                PaymentGateway: Gateway,
+                ApplicationID,
+                WebsiteRevenue: websiteRevenue,
+            },
         });
     } catch (err) {
+        try { await conn.rollback(); } catch { /* ignore */ }
         return next(err);
+    } finally {
+        conn.release();
     }
 };
 

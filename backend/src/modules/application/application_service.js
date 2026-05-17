@@ -587,10 +587,6 @@ export const updateApplication = async (req, res, next) => {
 
         const newStatus = String(Status);
         const isCompleting = newStatus === 'Completed';
-        /* Revenue tracking only fires on the transition INTO Accepted —
-           re-saving an application that's already Accepted must not
-           double-insert a CompanyPayment row. */
-        const isAccepting = newStatus === 'Accepted' && String(existing.Status) !== 'Accepted';
         /* The QR handshake token is minted on the first transition into
            'In Progress'. We don't re-roll on subsequent saves so the token
            the client is currently displaying stays valid until completion. */
@@ -611,42 +607,6 @@ export const updateApplication = async (req, res, next) => {
             await conn.query(
                 "UPDATE document SET VerficationStatus = 'Accepted' WHERE ApplicationID = ?",
                 [ApplicationID]
-            );
-        }
-
-        /* On accept: book Takhlees' platform revenue into CompanyPayment.
-           Formula: 1600 (fixed listing fee) + Amount * Comm / 100.
-           Runs inside the same transaction so the financial row can't
-           drift from the application's status. */
-        if (isAccepting) {
-            const [paymentRows] = await conn.query(
-                "SELECT PaymentID, Amount FROM payment WHERE ApplicationID = ? ORDER BY PaymentID DESC LIMIT 1",
-                [ApplicationID]
-            );
-            if (paymentRows.length === 0) {
-                throw Object.assign(
-                    new Error('Cannot accept an application with no payment on record.'),
-                    { status: 409 }
-                );
-            }
-            const { PaymentID, Amount: paymentAmount } = paymentRows[0];
-
-            const [companyRows] = await conn.query(
-                "SELECT Comm FROM company WHERE CompanyID = ? LIMIT 1",
-                [CompanyID]
-            );
-            if (companyRows.length === 0) {
-                throw Object.assign(
-                    new Error('Accepting company not found.'),
-                    { status: 404 }
-                );
-            }
-            const comm = Number(companyRows[0].Comm);
-            const revenue = 1600 + (Number(paymentAmount) * (comm / 100));
-
-            await conn.query(
-                "INSERT INTO companypayment (PaymentDate, Amount, CompanyID, PaymentID) VALUES (NOW(), ?, ?, ?)",
-                [revenue, CompanyID, PaymentID]
             );
         }
 
