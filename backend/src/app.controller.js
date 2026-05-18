@@ -35,8 +35,18 @@ export const bootstrap = () => {
      Prod: lock to the configured frontend origin (required when sending
      credentialed requests — a wildcard is rejected by the browser).
      Dev: reflect any origin so the React web client and the Expo mobile
-     app (LAN IP / 10.0.2.2) all work. */
-  const allowedOrigin = process.env.FRONTEND_ORIGIN;
+     app (LAN IP / 10.0.2.2) all work.
+
+     Origin strings must match the browser's `Origin` header byte-for-byte,
+     which never includes a trailing slash. Strip one if FRONTEND_ORIGIN
+     was configured with a stray slash (a very easy dashboard mistake) so
+     the preflight doesn't silently fail with no error in the logs. */
+  const allowedOrigin = process.env.FRONTEND_ORIGIN
+    ? process.env.FRONTEND_ORIGIN.replace(/\/+$/, '')
+    : undefined;
+  if (isProd && allowedOrigin) {
+    console.log(`[cors] allowed origin = ${allowedOrigin}`);
+  }
   app.use(cors({
     origin: isProd && allowedOrigin
       ? allowedOrigin
