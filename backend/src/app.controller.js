@@ -3,7 +3,7 @@ import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
 import cors from "cors";
 
-import { dbConfig } from "./Database/db_config.js";
+import db from "./Database/connection.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import userRouter from "./modules/user/user_controller.js";
 import applicationRouter from "./modules/application/application_controller.js";
@@ -71,13 +71,17 @@ export const bootstrap = () => {
   app.use(express.json());
 
   const MySQLStore = MySQLStoreFactory(session);
-  /* Reuse the central db_config so the session store inherits the same
-     TLS policy as the data pool — there is no way for one connection to
-     end up encrypted while the other isn't. */
-  const sessionStore = new MySQLStore({
-    ...dbConfig,
-    createDatabaseTable: true,
-  });
+  /* Hand express-mysql-session the EXISTING data pool from connection.js
+     instead of letting it build its own. When it builds its own, the
+     mysql2 `ssl` option set in our db_config doesn't always propagate
+     cleanly inside the library, which makes TiDB Cloud reject the
+     connection with "Connections using insecure transport are
+     prohibited" — even though our data pool authenticated over TLS.
+     Sharing the pool guarantees one TLS-validated transport for both
+     route handlers and session reads/writes, and also halves the open
+     connections against TiDB's serverless quota. */
+  const sessionStore = new MySQLStore({ createDatabaseTable: true }, db.pool);
+  console.log('[session] using shared TLS pool from connection.js');
 
   app.use(session({
     secret: process.env.SESSION_SECRET || 'dev-local-session-secret-change-me',
