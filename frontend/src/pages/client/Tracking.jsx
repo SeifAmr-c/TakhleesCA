@@ -940,7 +940,12 @@ function Tracking() {
             <div style={{ display: "flex", gap: 6, marginBottom: 20, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
               <button
                 type="button"
-                className={`btn btn-sm ${editStep === 0 ? "btn-primary" : "btn-ghost"}`}
+                className="btn btn-sm"
+                style={
+                  editStep === 0
+                    ? { background: "var(--signal-go)", color: "#fff", borderColor: "var(--signal-go)" }
+                    : { background: "var(--signal-go-bg)", color: "var(--signal-go)", borderColor: "var(--signal-go-border)" }
+                }
                 onClick={() => setEditStep(0)}
                 disabled={editSubmitting}
               >
@@ -948,7 +953,12 @@ function Tracking() {
               </button>
               <button
                 type="button"
-                className={`btn btn-sm ${editStep === 1 ? "btn-primary" : "btn-ghost"}`}
+                className="btn btn-sm"
+                style={
+                  editStep === 1
+                    ? { background: "var(--signal-go)", color: "#fff", borderColor: "var(--signal-go)" }
+                    : { background: "var(--signal-go-bg)", color: "var(--signal-go)", borderColor: "var(--signal-go-border)" }
+                }
                 onClick={() => { if (editStep === 0) { handleEditContinue(); } else { setEditStep(1); } }}
                 disabled={editSubmitting}
               >
