@@ -3,6 +3,7 @@ import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
 import cors from "cors";
 
+import { dbConfig } from "./Database/db_config.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import userRouter from "./modules/user/user_controller.js";
 import applicationRouter from "./modules/application/application_controller.js";
@@ -60,19 +61,12 @@ export const bootstrap = () => {
   app.use(express.json());
 
   const MySQLStore = MySQLStoreFactory(session);
-  const dbHost = process.env.DB_HOST;
+  /* Reuse the central db_config so the session store inherits the same
+     TLS policy as the data pool — there is no way for one connection to
+     end up encrypted while the other isn't. */
   const sessionStore = new MySQLStore({
-    host: dbHost,
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    ...dbConfig,
     createDatabaseTable: true,
-    /* Managed MySQL providers (TiDB Cloud, Aiven, etc.) require TLS;
-       localhost dev does not. Mirror connection.js's heuristic. */
-    ssl: dbHost && dbHost !== 'localhost'
-      ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
-      : undefined,
   });
 
   app.use(session({

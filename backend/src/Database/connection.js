@@ -1,17 +1,12 @@
-import 'dotenv/config';
 import mysql from 'mysql2/promise';
+import { dbConfig } from './db_config.js';
 
-/* TLS is required by TiDB Cloud (and most managed MySQL providers).
-   Enable it whenever a non-localhost host is configured. */
-const needsTls = process.env.DB_HOST && process.env.DB_HOST !== 'localhost';
-
+/* All connection params (incl. TLS) come from db_config.js so behaviour
+   matches setup_db.js and the express-session store. SSL is enforced
+   whenever DB_HOST is not localhost — NODE_ENV is intentionally not
+   part of that decision. */
 const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    ssl: needsTls ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined,
+    ...dbConfig,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

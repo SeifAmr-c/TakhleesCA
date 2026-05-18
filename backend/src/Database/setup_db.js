@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import mysql from 'mysql2/promise';
+import { dbConfig, dbConfigNoDatabase } from './db_config.js';
 
 import { initUserTable } from './user.model.js';
 import { initClientTable } from './client.model.js';
@@ -16,14 +16,7 @@ import { initDocumentTable } from './document.model.js';
 import { initPaymentTable } from './payment.model.js';
 import { initCompanyPaymentTable } from './company_payment.model.js';
 
-const DB_NAME = process.env.DB_NAME;
-const DB_HOST = process.env.DB_HOST;
-const DB_PORT = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
-const DB_USER = process.env.DB_USER;
-const DB_PASSWORD = process.env.DB_PASSWORD;
-const DB_SSL = DB_HOST && DB_HOST !== 'localhost'
-    ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
-    : undefined;
+const DB_NAME = dbConfig.database;
 
 /* Seed reference data the UI depends on. Idempotent: only inserts when
    the table is empty so re-running setup_db.js doesn't duplicate rows. */
@@ -75,23 +68,12 @@ async function seedReferenceData(pool) {
 async function main() {
     /* Bootstrap connection (no database selected) so we can create the
        target database before opening a pool that pins it. */
-    const bootstrap = await mysql.createConnection({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASSWORD,
-        ssl: DB_SSL,
-    });
+    const bootstrap = await mysql.createConnection(dbConfigNoDatabase);
     await bootstrap.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME}`);
     await bootstrap.end();
 
     const pool = mysql.createPool({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASSWORD,
-        database: DB_NAME,
-        ssl: DB_SSL,
+        ...dbConfig,
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
