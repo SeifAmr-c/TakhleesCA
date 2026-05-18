@@ -138,7 +138,7 @@ function PendingCompanyCard({ company, onAccept, busy }) {
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setViewerUrl(`/${company.ComReg}`)}
+              onClick={() => setViewerUrl(company.ComReg)}
             >
               <Icon name="doc" size={14} /> View registration doc
             </button>
