@@ -18,8 +18,12 @@ import { initCompanyPaymentTable } from './company_payment.model.js';
 
 const DB_NAME = process.env.DB_NAME;
 const DB_HOST = process.env.DB_HOST;
+const DB_PORT = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_SSL = DB_HOST && DB_HOST !== 'localhost'
+    ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+    : undefined;
 
 /* Seed reference data the UI depends on. Idempotent: only inserts when
    the table is empty so re-running setup_db.js doesn't duplicate rows. */
@@ -73,17 +77,21 @@ async function main() {
        target database before opening a pool that pins it. */
     const bootstrap = await mysql.createConnection({
         host: DB_HOST,
+        port: DB_PORT,
         user: DB_USER,
         password: DB_PASSWORD,
+        ssl: DB_SSL,
     });
     await bootstrap.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME}`);
     await bootstrap.end();
 
     const pool = mysql.createPool({
         host: DB_HOST,
+        port: DB_PORT,
         user: DB_USER,
         password: DB_PASSWORD,
         database: DB_NAME,
+        ssl: DB_SSL,
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,

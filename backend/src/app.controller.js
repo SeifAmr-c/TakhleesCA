@@ -20,15 +20,26 @@ import adminRouter from "./modules/admin/admin_controller.js";
 
 export const bootstrap = () => {
   const app = express();
+  const isProd = process.env.NODE_ENV === 'production';
+
+  /* Render / Vercel / any reverse-proxied host terminates TLS upstream
+     of the Node process. Without trust proxy, express-session sees the
+     hop as plain HTTP and refuses to set Secure cookies in prod. */
+  app.set('trust proxy', 1);
 
   // -----------------------------
   // Middlewares
   // -----------------------------
   /* CORS first so preflights pass before session/body parsing runs.
-     Dev: reflect any origin and allow credentials so the React web
-     client and the Expo mobile app (LAN IP / 10.0.2.2) all work. */
+     Prod: lock to the configured frontend origin (required when sending
+     credentialed requests — a wildcard is rejected by the browser).
+     Dev: reflect any origin so the React web client and the Expo mobile
+     app (LAN IP / 10.0.2.2) all work. */
+  const allowedOrigin = process.env.FRONTEND_ORIGIN;
   app.use(cors({
-    origin: (origin, callback) => callback(null, true),
+    origin: isProd && allowedOrigin
+      ? allowedOrigin
+      : (origin, callback) => callback(null, true),
     credentials: true,
   }));
 
@@ -49,29 +60,35 @@ export const bootstrap = () => {
   app.use(express.json());
 
   const MySQLStore = MySQLStoreFactory(session);
+  const dbHost = process.env.DB_HOST;
   const sessionStore = new MySQLStore({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'Takhlees',
+    host: dbHost,
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
     createDatabaseTable: true,
+    /* Managed MySQL providers (TiDB Cloud, Aiven, etc.) require TLS;
+       localhost dev does not. Mirror connection.js's heuristic. */
+    ssl: dbHost && dbHost !== 'localhost'
+      ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+      : undefined,
   });
 
   app.use(session({
-    secret: 'dev-local-session-secret-change-me',
+    secret: process.env.SESSION_SECRET || 'dev-local-session-secret-change-me',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       maxAge: 30 * 60 * 1000,
       httpOnly: true,
-      /* sameSite must be 'lax' for local HTTP. 'none' would silently
-         drop the cookie unless secure: true is also set, which breaks
-         http://localhost dev. */
-      sameSite: 'lax',
-      /* secure must be false over plain HTTP — otherwise the browser /
-         RN networking stack will refuse to store or send the cookie. */
-      secure: false,
+      /* Prod: cookie is sent from Vercel (frontend) to Render (backend)
+         cross-site, so sameSite must be 'none' and secure must be true
+         (browsers refuse 'none' without secure). Dev: 'lax' + insecure
+         so localhost HTTP and the Expo native stack keep working. */
+      sameSite: isProd ? 'none' : 'lax',
+      secure: isProd,
     },
   }));
 
