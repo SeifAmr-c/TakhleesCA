@@ -21,6 +21,13 @@ import adminRouter from "./modules/admin/admin_controller.js";
 export const bootstrap = () => {
   const app = express();
 
+  /* Render terminates HTTPS at its proxy and forwards plain HTTP to us.
+     Without this, express-session sees req.secure === false and refuses
+     to set a `secure` cookie, so cross-site logins silently break. */
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   app.use(cors({
     origin: (origin, callback) => callback(null, true),
     credentials: true,
@@ -56,7 +63,12 @@ export const bootstrap = () => {
     cookie: {
       maxAge: 30 * 60 * 1000,
       httpOnly: true,
-      sameSite: 'lax',
+      /* In production the frontend (Vercel) and backend (Render) are on
+         different sites, so the session cookie must be SameSite=None to
+         flow on cross-site XHR — and browsers only accept None when the
+         cookie is also Secure. In dev, CRA's proxy makes requests
+         same-origin so Lax is correct and works over plain HTTP. */
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       secure: process.env.NODE_ENV === 'production',
     },
   }));
