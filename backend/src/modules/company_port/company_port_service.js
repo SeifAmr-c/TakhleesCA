@@ -1,5 +1,11 @@
 import Company from '../../Database/mongo/company.mongo.js';
 import Port from '../../Database/mongo/port.mongo.js';
+import Application from '../../Database/mongo/application.mongo.js';
+
+/* A company can drop a port only if it isn't actively working on an
+   application that targets it. Completed / Accepted / Rejected applications
+   are historical and read from the embedded snapshot, so they don't block. */
+const ACTIVE_APPLICATION_STATUSES = ['Pending', 'In Progress'];
 
 /* The CompanyPort "join table" is folded into Company.ports[]. These
    handlers manipulate that embedded array and shape responses to match
@@ -105,6 +111,20 @@ export const deleteCompanyPort = async (req, res, next) => {
     }
     const cid = Number(CompanyID);
     const pid = Number(PortID);
+
+    const activeCount = await Application.countDocuments({
+      CompanyID: cid,
+      PortID: pid,
+      Status: { $in: ACTIVE_APPLICATION_STATUSES },
+    });
+    if (activeCount > 0) {
+      return res.status(409).json({
+        Status: "Error",
+        Code: "PORT_IN_USE",
+        ActiveApplications: activeCount,
+        Message: `Cannot remove port: ${activeCount} active application${activeCount === 1 ? '' : 's'} still using it.`,
+      });
+    }
 
     const result = await Company.updateOne(
       { CompanyID: cid, 'ports.PortID': pid },

@@ -5,6 +5,28 @@ export const listPorts = async () => {
   return data;
 };
 
+/* Admin-only — includes ActiveApplications count per port so the management
+   UI can disable / "freeze" the delete button when the port is still in use. */
+export const listPortsWithUsage = async () => {
+  const { data } = await api.get("/port/with-usage");
+  return data;
+};
+
+export const createPort = async ({ PortName, PortType, EstDate }) => {
+  const { data } = await api.post("/port", { PortName, PortType, EstDate });
+  return data;
+};
+
+export const updatePort = async (portId, body) => {
+  const { data } = await api.put("/port", body, { params: { PortID: portId } });
+  return data;
+};
+
+export const deletePort = async (portId) => {
+  const { data } = await api.delete("/port", { params: { PortID: portId } });
+  return data;
+};
+
 export const listCompanyPorts = async (companyId) => {
   const { data } = await api.get("/companyport", { params: { CompanyID: companyId } });
   return data;

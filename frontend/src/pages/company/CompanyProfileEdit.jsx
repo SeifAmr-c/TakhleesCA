@@ -739,147 +739,219 @@ function PricingForm({ companyId }) {
   );
 }
 
-/* ---------- Ports form ---------- */
+/* ---------- Ports form ----------
+   Each port write hits the backend immediately so the company's port list
+   stays consistent with the admin-managed catalog: add picks from ports the
+   admin has published and isn't already saved, delete is blocked server-side
+   if the company has an active application using that port (the backend
+   returns 409 PORT_IN_USE — we surface that as an inline error). */
 function PortsForm({ companyId }) {
   const [allPorts, setAllPorts] = useState([]);
-  const [savedPortIds, setSavedPortIds] = useState(new Set());
-  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [savedPorts, setSavedPorts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [busyPortId, setBusyPortId] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSelection, setPickerSelection] = useState("");
   const [status, setStatus] = useAutoHideStatus();
+
+  const reload = useCallback(async () => {
+    const [ports, companyPorts] = await Promise.all([
+      listPorts().catch(() => []),
+      listCompanyPorts(companyId).catch(() => []),
+    ]);
+    const portList = Array.isArray(ports) ? ports : ports?.data || [];
+    const cpList = Array.isArray(companyPorts) ? companyPorts : companyPorts?.data || [];
+    setAllPorts(portList);
+    setSavedPorts(cpList.map((cp) => ({
+      PortID: Number(cp.PortID),
+      PortName: cp.PortName,
+      PortType: cp.PortType,
+    })));
+  }, [companyId]);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        const [ports, companyPorts] = await Promise.all([
-          listPorts().catch(() => []),
-          listCompanyPorts(companyId).catch(() => []),
-        ]);
-        if (!active) return;
-        const portList = Array.isArray(ports) ? ports : ports?.data || [];
-        const cpList = Array.isArray(companyPorts) ? companyPorts : companyPorts?.data || [];
-        const saved = new Set(cpList.map((cp) => Number(cp.PortID)));
-        setAllPorts(portList);
-        setSavedPortIds(saved);
-        setSelectedIds(new Set(saved));
-      } finally {
-        if (active) setLoading(false);
-      }
+      try { await reload(); } finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, [companyId]);
+  }, [reload]);
 
-  const toggle = (portId) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(portId) ? next.delete(portId) : next.add(portId);
-      return next;
-    });
+  const savedIds = new Set(savedPorts.map((p) => p.PortID));
+  const availableToAdd = allPorts.filter((p) => !savedIds.has(Number(p.PortID)));
+
+  /* Keep the picker selection in range when available ports change. */
+  useEffect(() => {
+    if (!pickerOpen) return;
+    if (availableToAdd.length === 0) {
+      setPickerSelection("");
+      return;
+    }
+    const stillValid = availableToAdd.some((p) => String(p.PortID) === pickerSelection);
+    if (!stillValid) setPickerSelection(String(availableToAdd[0].PortID));
+  }, [pickerOpen, availableToAdd, pickerSelection]);
+
+  const handleAdd = async () => {
+    const portId = Number(pickerSelection);
+    if (!portId) return;
+    setAdding(true);
     setStatus({ kind: "", text: "" });
-  };
-
-  const dirty = allPorts.some((p) => {
-    const id = Number(p.PortID);
-    return selectedIds.has(id) !== savedPortIds.has(id);
-  });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setStatus({ kind: "", text: "" });
-    setSubmitting(true);
     try {
-      const toAdd = [...selectedIds].filter((id) => !savedPortIds.has(id));
-      const toRemove = [...savedPortIds].filter((id) => !selectedIds.has(id));
-      await Promise.all([
-        ...toAdd.map((portId) => addCompanyPort({ CompanyID: companyId, PortID: portId })),
-        ...toRemove.map((portId) => removeCompanyPort(companyId, portId)),
-      ]);
-      setSavedPortIds(new Set(selectedIds));
-      setStatus({ kind: "success", text: "Ports saved." });
+      await addCompanyPort({ CompanyID: companyId, PortID: portId });
+      await reload();
+      const added = allPorts.find((p) => Number(p.PortID) === portId);
+      setPickerOpen(false);
+      setStatus({ kind: "success", text: `Added ${added?.PortName || "port"}.` });
     } catch (err) {
       setStatus({
         kind: "error",
-        text: err?.response?.data?.Message || "Couldn't save ports.",
+        text: err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add port.",
       });
     } finally {
-      setSubmitting(false);
+      setAdding(false);
+    }
+  };
+
+  const handleRemove = async (port) => {
+    setBusyPortId(port.PortID);
+    setStatus({ kind: "", text: "" });
+    try {
+      await removeCompanyPort(companyId, port.PortID);
+      await reload();
+      setStatus({ kind: "success", text: `Removed ${port.PortName}.` });
+    } catch (err) {
+      const code = err?.response?.data?.Code;
+      const active = err?.response?.data?.ActiveApplications;
+      const msg = code === "PORT_IN_USE"
+        ? `Can't remove ${port.PortName} — ${active} active application${active === 1 ? "" : "s"} still using it.`
+        : (err?.response?.data?.Message || err?.response?.data?.message || "Couldn't remove port.");
+      setStatus({ kind: "error", text: msg });
+    } finally {
+      setBusyPortId(null);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="card card-pad-lg" noValidate>
+    <div className="card card-pad-lg">
       <h3 className="card-title">Ports of operation</h3>
-      <p className="card-subtitle">Select all ports where you provide clearance services.</p>
+      <p className="card-subtitle">
+        Add ports from the catalog where you provide clearance services. A port can't be
+        removed while you have an active application using it.
+      </p>
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
           <ContainerSpinner size={64} label="Loading ports" />
         </div>
-      ) : allPorts.length === 0 ? (
-        <div style={{ padding: 24, textAlign: "center", color: "var(--ink-soft)" }}>
-          No ports available.
-        </div>
       ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "12px 0" }}>
-          {allPorts.map((p) => {
-            const id = Number(p.PortID);
-            const selected = selectedIds.has(id);
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => toggle(id)}
-                disabled={submitting}
+        <>
+          {savedPorts.length === 0 ? (
+            <div style={{ padding: 16, textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
+              You haven't added any ports yet.
+            </div>
+          ) : (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+              {savedPorts.map((p) => (
+                <li
+                  key={p.PortID}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    border: "1px solid var(--line)", borderRadius: 10,
+                    padding: "10px 14px", background: "var(--surface, #fff)",
+                  }}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: p.PortType === "Air" ? "var(--harbor-100, #e6f0ff)" : "var(--gray-50)",
+                    color: "var(--brand)", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Icon name={p.PortType === "Air" ? "trending" : "anchor"} size={14} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}>{p.PortName}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{p.PortType}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busyPortId === p.PortID}
+                    onClick={() => handleRemove(p)}
+                    style={{ color: "var(--signal-stop, #c33)" }}
+                  >
+                    {busyPortId === p.PortID
+                      ? <ContainerSpinner inline size={14} label="Removing…" />
+                      : <><Icon name="logout" size={14} /> Remove</>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {pickerOpen ? (
+            <div
+              style={{
+                marginTop: 16, padding: 14, borderRadius: 10,
+                border: "1px solid var(--line)", background: "var(--gray-50)",
+                display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap",
+              }}
+            >
+              <select
+                value={pickerSelection}
+                onChange={(e) => setPickerSelection(e.target.value)}
+                disabled={adding || availableToAdd.length === 0}
+                aria-label="Choose a port to add"
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: `1.5px solid ${selected ? "var(--brand)" : "var(--line-strong)"}`,
-                  background: selected ? "var(--harbor-100)" : "var(--surface)",
-                  color: selected ? "var(--brand)" : "var(--ink-soft)",
-                  fontWeight: selected ? 600 : 400,
-                  fontSize: 14,
-                  cursor: submitting ? "not-allowed" : "pointer",
-                  transition: "border-color 150ms ease, background 150ms ease, color 150ms ease",
+                  flex: 1, minWidth: 200, height: 38,
+                  border: "1px solid var(--line)", borderRadius: 8,
+                  padding: "0 10px", fontSize: 14, background: "var(--surface, #fff)",
                 }}
               >
-                {selected && <Icon name="check" size={13} />}
-                {p.PortName}
-                {p.PortType && (
-                  <span style={{ fontSize: 11, opacity: 0.65 }}>({p.PortType})</span>
+                {availableToAdd.length === 0 ? (
+                  <option value="">No more ports available</option>
+                ) : (
+                  availableToAdd.map((p) => (
+                    <option key={p.PortID} value={String(p.PortID)}>
+                      {p.PortName}{p.PortType ? ` (${p.PortType})` : ""}
+                    </option>
+                  ))
                 )}
+              </select>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleAdd}
+                disabled={adding || !pickerSelection || availableToAdd.length === 0}
+              >
+                {adding ? <ContainerSpinner inline size={14} label="Adding…" /> : <><Icon name="check" size={14} /> Confirm</>}
               </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
-          marginTop: 20,
-        }}
-      >
-        <button
-          type="submit"
-          className="btn btn-primary btn-lg"
-          disabled={!dirty || submitting || loading}
-        >
-          {submitting ? (
-            <ContainerSpinner inline size={20} label="Saving…" />
+              <button
+                type="button" className="btn btn-secondary btn-sm" disabled={adding}
+                onClick={() => { setPickerOpen(false); setStatus({ kind: "", text: "" }); }}
+              >
+                Cancel
+              </button>
+            </div>
           ) : (
-            <>Save ports <Icon name="check" size={16} /></>
+            <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={availableToAdd.length === 0}
+                title={availableToAdd.length === 0 ? "You've already added every available port." : undefined}
+                onClick={() => setPickerOpen(true)}
+              >
+                <Icon name="check" size={14} /> Add port
+              </button>
+            </div>
           )}
-        </button>
-        <InlineStatus status={status} />
-      </div>
-    </form>
+
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+            <InlineStatus status={status} />
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

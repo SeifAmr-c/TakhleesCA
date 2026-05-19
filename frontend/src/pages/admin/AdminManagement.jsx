@@ -19,15 +19,22 @@ import {
   resolveTicket,
 } from "../../api/admin.js";
 import { updateCompanyCommission } from "../../api/companies.js";
+import {
+  listPortsWithUsage,
+  createPort,
+  updatePort,
+  deletePort,
+} from "../../api/ports.js";
 
-const TABS = ["companies", "support", "users", "commissions"];
+const TABS = ["companies", "support", "users", "commissions", "ports"];
 const SUBS = {
   companies:   ["pending", "verified"],
   support:     ["pending", "resolved"],
   users:       ["all"],
   commissions: ["all"],
+  ports:       ["all"],
 };
-const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all" };
+const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all", ports: "all" };
 
 const HASH_ALIASES = {
   "companies-section": "companies",
@@ -385,6 +392,187 @@ function CommissionRow({ company, busy, savedAt, onSave }) {
   );
 }
 
+/* ---------- Port management cards ---------- */
+const PORT_TYPES = ["Air", "Sea"];
+
+function AddPortForm({ onCreate, busy }) {
+  const [name, setName] = useState("");
+  const [type, setType] = useState("Sea");
+  const [estDate, setEstDate] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim() || !type || !estDate) {
+      setError("Name, type, and establishment date are required.");
+      return;
+    }
+    try {
+      await onCreate({ PortName: name.trim(), PortType: type, EstDate: estDate });
+      setName("");
+      setType("Sea");
+      setEstDate("");
+    } catch (err) {
+      setError(err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add port.");
+    }
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      className="card"
+      style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr 0.9fr auto", gap: 10, alignItems: "end", padding: 16, marginBottom: 16 }}
+    >
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Port name</span>
+        <input
+          value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
+          placeholder="e.g. Port Said" aria-label="Port name"
+          style={{ height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14 }}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Type</span>
+        <select
+          value={type} onChange={(e) => setType(e.target.value)} disabled={busy}
+          aria-label="Port type"
+          style={{ height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14, background: "var(--surface, #fff)" }}
+        >
+          {PORT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Established</span>
+        <input
+          type="date" value={estDate} onChange={(e) => setEstDate(e.target.value)} disabled={busy}
+          aria-label="Establishment date"
+          style={{ height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14 }}
+        />
+      </label>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={busy} style={{ height: 36 }}>
+        {busy ? <ContainerSpinner inline size={14} label="Adding…" /> : <><Icon name="check" size={14} /> Add port</>}
+      </button>
+      {error && (
+        <div style={{ gridColumn: "1 / -1", color: "var(--signal-stop, #c33)", fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+    </form>
+  );
+}
+
+function PortRow({ port, busy, onSave, onDelete, isLast }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(port.PortName);
+  const [type, setType] = useState(port.PortType);
+  const active = Number(port.ActiveApplications || 0);
+  const frozen = active > 0;
+
+  useEffect(() => {
+    setName(port.PortName);
+    setType(port.PortType);
+  }, [port.PortName, port.PortType, editing]);
+
+  const dirty = editing && (name.trim() !== port.PortName || type !== port.PortType);
+
+  return (
+    <li style={{ borderBottom: isLast ? "none" : "1px solid var(--gray-100)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: 8,
+        background: type === "Air" ? "var(--harbor-100, #e6f0ff)" : "var(--gray-50)",
+        color: "var(--navy)", display: "inline-flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon name={type === "Air" ? "trending" : "anchor"} size={16} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {editing ? (
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <input
+              value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
+              aria-label="Port name"
+              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 180 }}
+            />
+            <select
+              value={type} onChange={(e) => setType(e.target.value)} disabled={busy}
+              aria-label="Port type"
+              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, background: "var(--surface, #fff)" }}
+            >
+              {PORT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        ) : (
+          <>
+            <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>{port.PortName}</div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+              <span style={{ fontFamily: "var(--font-mono)" }}>#{port.PortID}</span>
+              <span style={{ color: "var(--gray-300)", margin: "0 6px" }}>·</span>
+              {port.PortType}
+              <span style={{ color: "var(--gray-300)", margin: "0 6px" }}>·</span>
+              Est. {formatDate(port.EstDate)}
+              {frozen && (
+                <>
+                  <span style={{ color: "var(--gray-300)", margin: "0 6px" }}>·</span>
+                  <span style={{ color: "var(--accent-dark, #b25f00)", fontWeight: 600 }}>
+                    {active} active application{active === 1 ? "" : "s"}
+                  </span>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        {editing ? (
+          <>
+            <button
+              className="btn btn-primary btn-sm" disabled={busy || !dirty || !name.trim()}
+              onClick={() => onSave(port.PortID, { PortName: name.trim(), PortType: type }).then(() => setEditing(false))}
+              style={{ minWidth: 72, justifyContent: "center" }}
+            >
+              {busy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={14} /> Save</>}
+            </button>
+            <button
+              type="button" className="btn btn-secondary btn-sm" disabled={busy}
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button" className="btn btn-secondary btn-sm" disabled={busy}
+              onClick={() => setEditing(true)}
+            >
+              <Icon name="doc" size={14} /> Edit
+            </button>
+            {frozen ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled
+                title={`Frozen: ${active} active application${active === 1 ? "" : "s"} still using this port.`}
+                style={{ opacity: 0.7, cursor: "not-allowed", background: "var(--gray-50)" }}
+              >
+                <Icon name="lock" size={14} /> Frozen
+              </button>
+            ) : (
+              <button
+                type="button" className="btn btn-secondary btn-sm" disabled={busy}
+                onClick={() => onDelete(port)}
+                style={{ color: "var(--signal-stop, #c33)" }}
+              >
+                <Icon name="logout" size={14} /> Delete
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function SectionHeader({ eyebrow, eyebrowAccent, eyebrowIcon, title, count, actions }) {
   return (
     <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
@@ -696,6 +884,13 @@ const PRINT_COLS = {
     { key: "ContactEmail", label: "Email" },
     { key: "Comm",      label: "Commission", align: "right", mono: true, value: (r) => `${Number(r.Comm ?? 0)}%` },
   ],
+  ports: [
+    { key: "PortID",   label: "Port #", align: "right", mono: true, width: 70 },
+    { key: "PortName", label: "Name" },
+    { key: "PortType", label: "Type" },
+    { key: "EstDate",  label: "Established", mono: true, value: (r) => formatDate(r.EstDate) },
+    { key: "ActiveApplications", label: "Active apps", align: "right", mono: true, value: (r) => String(r.ActiveApplications || 0) },
+  ],
 };
 
 function ExportPdfButton({ onClick }) {
@@ -717,16 +912,21 @@ function AdminManagement() {
   const [pendingTickets, setPendingTickets] = useState([]);
   const [resolvedTickets, setResolvedTickets] = useState([]);
   const [users, setUsers] = useState([]);
+  const [ports, setPorts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [companyBusyId, setCompanyBusyId] = useState(null);
   const [ticketBusyId, setTicketBusyId] = useState(null);
   const [commBusyId, setCommBusyId] = useState(null);
+  const [portBusyId, setPortBusyId] = useState(null);
+  const [portAdding, setPortAdding] = useState(false);
   const [commSavedAt, setCommSavedAt] = useState({});
   const [notice, setNotice] = useState("");
   const [verifiedExpanded, setVerifiedExpanded] = useState(false);
   const VERIFIED_COLLAPSED_COUNT = 5;
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectBusy, setRejectBusy] = useState(false);
+  const [deletePortTarget, setDeletePortTarget] = useState(null);
+  const [deletePortBusy, setDeletePortBusy] = useState(false);
   const [tab, setTab] = useState("companies");
   const [sub, setSub] = useState(DEFAULT_SUB.companies);
   const [filter, setFilter] = useState("");
@@ -792,11 +992,21 @@ function AdminManagement() {
     }
   };
 
+  const refreshPorts = async () => {
+    try {
+      const data = await listPortsWithUsage();
+      setPorts(Array.isArray(data) ? data : data?.data || []);
+    } catch (err) {
+      console.error("listPortsWithUsage failed:", err?.response?.status, err?.response?.data || err);
+      setPorts([]);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        await Promise.all([refreshCompanies(), refreshTickets(), refreshUsers()]);
+        await Promise.all([refreshCompanies(), refreshTickets(), refreshUsers(), refreshPorts()]);
       } finally {
         if (active) setLoading(false);
       }
@@ -863,6 +1073,51 @@ function AdminManagement() {
     }
   };
 
+  const handleAddPort = async (body) => {
+    setPortAdding(true);
+    try {
+      await createPort(body);
+      await refreshPorts();
+      showNotice(`Port "${body.PortName}" added.`);
+    } finally {
+      setPortAdding(false);
+    }
+  };
+
+  const handleSavePort = async (portId, body) => {
+    setPortBusyId(portId);
+    try {
+      await updatePort(portId, body);
+      await refreshPorts();
+      showNotice(`Port "${body.PortName}" updated.`);
+    } catch (err) {
+      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't update the port.";
+      showNotice(msg);
+      throw err;
+    } finally {
+      setPortBusyId(null);
+    }
+  };
+
+  const handleDeletePortConfirm = async () => {
+    if (!deletePortTarget) return;
+    const target = deletePortTarget;
+    setDeletePortBusy(true);
+    setPortBusyId(target.PortID);
+    setDeletePortTarget(null);
+    try {
+      await deletePort(target.PortID);
+      await refreshPorts();
+      showNotice(`Port "${target.PortName}" deleted.`);
+    } catch (err) {
+      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't delete the port.";
+      showNotice(msg);
+    } finally {
+      setDeletePortBusy(false);
+      setPortBusyId(null);
+    }
+  };
+
   const handleResolve = async (ticketId) => {
     setTicketBusyId(ticketId);
     try {
@@ -908,12 +1163,18 @@ function AdminManagement() {
     String(c.Name||"").toLowerCase().includes(q) ||
     String(c.ContactEmail||"").toLowerCase().includes(q)
   ), [verifiedCompanies, q]);
+  const filteredPorts = useMemo(() => !q ? ports : ports.filter(p =>
+    String(p.PortName||"").toLowerCase().includes(q) ||
+    String(p.PortType||"").toLowerCase().includes(q) ||
+    String(p.PortID).includes(q)
+  ), [ports, q]);
 
   const primaryTabs = [
     { id: "companies",   label: "Companies",       icon: "building", count: pendingCompanies.length + verifiedCompanies.length },
     { id: "support",     label: "Support tickets", icon: "bell",     count: pendingTickets.length + resolvedTickets.length },
     { id: "users",       label: "Users",           icon: "user",     count: users.length },
     { id: "commissions", label: "Commissions",     icon: "receipt",  count: verifiedCompanies.length },
+    { id: "ports",       label: "Ports",           icon: "anchor",   count: ports.length },
   ];
 
   const subTabs = {
@@ -927,6 +1188,7 @@ function AdminManagement() {
     ],
     users: [],
     commissions: [],
+    ports: [],
   };
 
   /* Print exports — each one feeds the rows + column map for the current
@@ -1178,28 +1440,85 @@ function AdminManagement() {
     </>
   );
 
+  const renderPortsAll = () => (
+    <>
+      <SectionHeader
+        eyebrow="Catalog" eyebrowIcon="anchor"
+        title="Ports of operation"
+        count={`${filteredPorts.length} of ${ports.length} configured`}
+        actions={<ExportPdfButton onClick={() => openPrint("ports", "Ports of operation", filteredPorts)} />}
+      />
+      <SearchFilter value={filter} onChange={setFilter} placeholder="Filter by name, type, or port #…" />
+
+      <AddPortForm onCreate={handleAddPort} busy={portAdding} />
+
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+          <ContainerSpinner size={80} label="Loading ports" />
+        </div>
+      ) : filteredPorts.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: 48 }}>
+          <Icon name="anchor" size={28} color="var(--ink-faint)" />
+          <h3 className="h3" style={{ marginTop: 12 }}>{ports.length === 0 ? "No ports yet" : "No matches"}</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            {ports.length === 0 ? "Add a port above to make it available to companies." : "Try a different search term."}
+          </p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {filteredPorts.map((p, i) => (
+              <PortRow
+                key={p.PortID}
+                port={p}
+                busy={portBusyId === p.PortID}
+                onSave={handleSavePort}
+                onDelete={setDeletePortTarget}
+                isLast={i === filteredPorts.length - 1}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+
   const renderContent = () => {
     if (tab === "companies") return sub === "verified" ? renderCompaniesVerified() : renderCompaniesPending();
     if (tab === "support") return sub === "resolved" ? renderSupportResolved() : renderSupportPending();
     if (tab === "users") return renderUsersAll();
     if (tab === "commissions") return renderUsersCommissions();
+    if (tab === "ports") return renderPortsAll();
     return null;
   };
 
   return (
-    <PublicLayout
-      title="Takhlees Management"
-      subtitle="Companies, support tickets, users, and commissions."
-      role="Admin"
-      actions={
-        <button
-          type="button" className="btn btn-secondary btn-sm"
-          onClick={() => navigate("/admin/dashboard")}
+    <PublicLayout role="Admin">
+      <div className="container" style={{ padding: "32px 24px 80px" }}>
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            gap: 16,
+            flexWrap: "wrap",
+            marginBottom: 32,
+          }}
         >
-          <Icon name="arrow_left" size={14} /> Back to dashboard
-        </button>
-      }
-    >
+          <div className="row">
+            <button
+              type="button" className="btn btn-secondary btn-sm"
+              onClick={() => navigate("/admin/dashboard")}
+            >
+              <Icon name="arrow_left" size={14} /> Back to dashboard
+            </button>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <h1 className="h2" style={{ margin: 0 }}>Takhlees Management</h1>
+            <p className="muted" style={{ margin: "6px 0 0" }}>Companies, support tickets, users, and commissions.</p>
+          </div>
+        </header>
+
       {notice && (
         <div className="banner-success">
           <Icon name="check" size={16} />
@@ -1271,6 +1590,21 @@ function AdminManagement() {
         onCancel={() => { if (!rejectBusy) setRejectTarget(null); }}
       />
 
+      <ConfirmModal
+        open={!!deletePortTarget}
+        title="Delete this port?"
+        message={deletePortTarget
+          ? `“${deletePortTarget.PortName}” will be removed from the catalog and unlinked from all companies. Historical applications keep their snapshot.`
+          : ""
+        }
+        confirmLabel="Delete port"
+        cancelLabel="Cancel"
+        variant="danger"
+        busy={deletePortBusy}
+        onConfirm={handleDeletePortConfirm}
+        onCancel={() => { if (!deletePortBusy) setDeletePortTarget(null); }}
+      />
+
       <PrintableTable
         open={!!printConfig}
         onClose={() => setPrintConfig(null)}
@@ -1279,6 +1613,7 @@ function AdminManagement() {
         columns={printConfig?.columns || []}
         rows={printConfig?.rows || []}
       />
+      </div>
     </PublicLayout>
   );
 }

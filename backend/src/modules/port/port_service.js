@@ -45,9 +45,29 @@ export const getPort = async (req, res, next) => {
   }
 };
 
+/* Statuses that count as "currently using" a port. Completed / Accepted /
+   Rejected applications are historical and safely preserved by the embedded
+   `port` snapshot on the Application doc, so deleting the master Port row
+   won't break their reads. */
+const ACTIVE_APPLICATION_STATUSES = ['Pending', 'In Progress'];
+
 export const deletePort = async (req, res, next) => {
   try {
     const pid = Number(req.query.PortID);
+
+    const activeCount = await Application.countDocuments({
+      PortID: pid,
+      Status: { $in: ACTIVE_APPLICATION_STATUSES },
+    });
+    if (activeCount > 0) {
+      return res.status(409).json({
+        Status: "Error",
+        Code: "PORT_IN_USE",
+        ActiveApplications: activeCount,
+        Message: `Cannot delete port: ${activeCount} active application${activeCount === 1 ? '' : 's'} still using it.`,
+      });
+    }
+
     const result = await Port.deleteOne({ PortID: pid });
     if (!result.deletedCount) {
       return res.status(404).json({
@@ -55,7 +75,38 @@ export const deletePort = async (req, res, next) => {
         Message: `Record Id [${pid}] does not exist or has already been deleted.`,
       });
     }
+
+    /* Keep the embedded Company.ports[] array in sync — otherwise companies
+       would carry a dangling PortID that no longer resolves. */
+    await Company.updateMany(
+      { 'ports.PortID': pid },
+      { $pull: { ports: { PortID: pid } } }
+    );
+
     return res.status(200).json({ Status: "OK", Message: `Record Id [${pid}] deleted Successfully` });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/* Same shape as getPort, but annotates each row with the count of active
+   applications referencing it. Used by the admin Ports tab to decide
+   whether to render a delete or a frozen indicator. */
+export const getPortsWithUsage = async (_req, res, next) => {
+  try {
+    const ports = await Port.find().sort({ PortID: 1 }).lean();
+    if (ports.length === 0) return res.json([]);
+
+    const counts = await Application.aggregate([
+      { $match: { Status: { $in: ACTIVE_APPLICATION_STATUSES }, PortID: { $ne: null } } },
+      { $group: { _id: '$PortID', n: { $sum: 1 } } },
+    ]);
+    const byPort = new Map(counts.map((c) => [Number(c._id), c.n]));
+
+    return res.json(ports.map((p) => ({
+      ...p,
+      ActiveApplications: byPort.get(Number(p.PortID)) || 0,
+    })));
   } catch (err) {
     return next(err);
   }
