@@ -17,7 +17,8 @@ const ReviewSchema = new mongoose.Schema(
 
         category: {
             type: new mongoose.Schema(
-                { Type: { type: String, enum: ['Electronics', 'Cars', 'Clothes', 'Other'] } },
+                /* Open string to match the admin-managed Category.Type. */
+                { Type: { type: String } },
                 { _id: false }
             ),
             default: null,

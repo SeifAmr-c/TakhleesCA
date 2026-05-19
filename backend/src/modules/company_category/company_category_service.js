@@ -1,5 +1,10 @@
 import Company from '../../Database/mongo/company.mongo.js';
 import Category from '../../Database/mongo/category.mongo.js';
+import Application from '../../Database/mongo/application.mongo.js';
+
+/* Same definition as the port module — only Pending / In Progress
+   applications block the company from removing a category. */
+const ACTIVE_APPLICATION_STATUSES = ['Pending', 'In Progress'];
 
 /* CompanyCategory was the SQL join table holding (CompanyID, CategoryID, Price).
    In Mongo it is folded into Company.categories[]. These handlers operate on
@@ -152,6 +157,20 @@ export const deleteCompanyCategory = async (req, res, next) => {
     }
     const cid = Number(CompanyID);
     const catId = Number(CategoryID);
+
+    const activeCount = await Application.countDocuments({
+      CompanyID: cid,
+      CategoryID: catId,
+      Status: { $in: ACTIVE_APPLICATION_STATUSES },
+    });
+    if (activeCount > 0) {
+      return res.status(409).json({
+        Status: "Error",
+        Code: "CATEGORY_IN_USE",
+        ActiveApplications: activeCount,
+        Message: `Cannot remove category: ${activeCount} active application${activeCount === 1 ? '' : 's'} still using it.`,
+      });
+    }
 
     const result = await Company.updateOne(
       { CompanyID: cid, 'categories.CategoryID': catId },

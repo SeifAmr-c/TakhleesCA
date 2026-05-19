@@ -9,12 +9,16 @@ import ConfirmModal from "../../components/ConfirmModal.jsx";
 import {
   getCompany,
   updateCompanyProfile,
-  updateCompanyPricing,
   deleteCompanyAccount,
   canDeleteCompany,
 } from "../../api/companies.js";
-import { listCategories } from "../../api/applications.js";
-import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
+import {
+  listCategories,
+  listCompanyCategoryPricing,
+  createCompanyCategoryPrice,
+  upsertCompanyCategoryPrice,
+  deleteCompanyCategoryPrice,
+} from "../../api/companyCategories.js";
 import { listPorts, listCompanyPorts, addCompanyPort, removeCompanyPort } from "../../api/ports.js";
 import { useAuth, setAuth, clearAuth } from "../../api/authState.js";
 import { getCroppedImage } from "../../utils/cropImage.js";
@@ -542,200 +546,296 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
   );
 }
 
-/* ---------- Pricing form ---------- */
+/* One saved pricing row: shows the category, an editable price input, a
+   Save button that only enables when the draft differs from the saved
+   value, and a Remove button. */
+function PricingRow({ row, busy, moneyShape, onSave, onRemove }) {
+  const initial = String(row.Price);
+  const [draft, setDraft] = useState(initial);
+
+  useEffect(() => { setDraft(String(row.Price)); }, [row.Price]);
+
+  const dirty = draft !== initial && draft !== "";
+
+  return (
+    <li
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        border: "1px solid var(--line)", borderRadius: 10,
+        padding: "10px 14px", background: "var(--surface, #fff)",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}>{row.Type}</div>
+        <div className="muted" style={{ fontSize: 12 }}>
+          Current price: EGP {Number(row.Price).toLocaleString()}
+        </div>
+      </div>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span className="muted" style={{ fontSize: 12 }}>EGP</span>
+        <input
+          inputMode="decimal"
+          value={draft}
+          onChange={(e) => { if (moneyShape(e.target.value)) setDraft(e.target.value); }}
+          disabled={busy}
+          aria-label={`Price for ${row.Type}`}
+          style={{
+            width: 110, height: 34, border: "1px solid var(--line)", borderRadius: 8,
+            padding: "0 10px", fontSize: 14, fontFamily: "var(--font-mono)", textAlign: "right",
+          }}
+        />
+        <button
+          type="button" className="btn btn-primary btn-sm"
+          disabled={busy || !dirty}
+          onClick={() => onSave(draft)}
+        >
+          {busy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={14} /> Save</>}
+        </button>
+      </div>
+      <button
+        type="button" className="btn btn-secondary btn-sm" disabled={busy}
+        onClick={onRemove} style={{ color: "var(--signal-stop, #c33)" }}
+      >
+        <Icon name="logout" size={14} /> Remove
+      </button>
+    </li>
+  );
+}
+
+/* ---------- Pricing form ----------
+   Mirrors the PortsForm pattern: the company explicitly opts categories in
+   from the admin-managed catalog, sets a price per row, and can remove a
+   row. Removal is blocked server-side if any active application is using
+   the (company, category) pair (409 CATEGORY_IN_USE — surfaced inline). */
 function PricingForm({ companyId }) {
-  const [categories, setCategories] = useState([]);
-  const [drafts, setDrafts] = useState({});         // { [CategoryID]: stringFromInput }
-  const [savedPrices, setSavedPrices] = useState({}); // { [CategoryID]: numericPrice }
+  const [allCategories, setAllCategories] = useState([]);
+  const [savedRows, setSavedRows] = useState([]); // [{ CategoryID, Type, Price }]
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [busyCatId, setBusyCatId] = useState(null);
+  const [picker, setPicker] = useState({ open: false, categoryId: "", price: "", error: "" });
+  const [pickerBusy, setPickerBusy] = useState(false);
   const [status, setStatus] = useAutoHideStatus();
+
+  const reload = useCallback(async () => {
+    const [cats, rows] = await Promise.all([
+      listCategories().catch(() => []),
+      listCompanyCategoryPricing(companyId).catch(() => []),
+    ]);
+    const catList = Array.isArray(cats) ? cats : cats?.data || [];
+    const priceList = Array.isArray(rows) ? rows : rows?.data || [];
+    setAllCategories(catList);
+    setSavedRows(priceList.map((r) => ({
+      CategoryID: Number(r.CategoryID),
+      Type: r.Type,
+      Price: Number(r.Price),
+    })));
+  }, [companyId]);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        const [cats, rows] = await Promise.all([
-          listCategories().catch(() => []),
-          listCompanyCategoryPricing(companyId).catch(() => []),
-        ]);
-        if (!active) return;
-        const catList = Array.isArray(cats) ? cats : cats?.data || [];
-        const priceList = Array.isArray(rows) ? rows : rows?.data || [];
-        const priceMap = {};
-        for (const r of priceList) {
-          if (r?.CategoryID != null && r?.Price != null) {
-            priceMap[Number(r.CategoryID)] = Number(r.Price);
-          }
-        }
-        const draftMap = {};
-        for (const c of catList) {
-          const id = Number(c.CategoryID);
-          draftMap[id] = priceMap[id] != null ? String(priceMap[id]) : "";
-        }
-        setCategories(catList);
-        setSavedPrices(priceMap);
-        setDrafts(draftMap);
-      } finally {
-        if (active) setLoading(false);
-      }
+      try { await reload(); } finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, [companyId]);
+  }, [reload]);
 
-  const onChange = (categoryId) => (e) => {
-    const value = e.target.value;
-    /* Numbers-only money-shape input: digits and an optional decimal up
-       to 2 places. Reject anything else by ignoring the keystroke. */
-    if (value !== "" && !/^\d*\.?\d{0,2}$/.test(value)) return;
-    setDrafts((d) => ({ ...d, [categoryId]: value }));
-    setErrors((m) => ({ ...m, [categoryId]: "" }));
-    setStatus({ kind: "", text: "" });
-  };
+  const savedIds = new Set(savedRows.map((r) => r.CategoryID));
+  const availableToAdd = allCategories.filter((c) => !savedIds.has(Number(c.CategoryID)));
 
-  const dirty = categories.some((c) => {
-    const id = Number(c.CategoryID);
-    const draft = drafts[id] ?? "";
-    const saved = savedPrices[id];
-    if (saved == null) return draft !== "";
-    return Number(draft) !== Number(saved);
-  });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setStatus({ kind: "", text: "" });
-
-    /* Build the prices payload only from rows the company actually entered
-       a positive number for. Surface inline errors for invalid entries. */
-    const errs = {};
-    const prices = [];
-    for (const c of categories) {
-      const id = Number(c.CategoryID);
-      const raw = (drafts[id] ?? "").trim();
-      if (raw === "") continue;
-      const numeric = Number(raw);
-      if (isNaN(numeric) || numeric <= 0) {
-        errs[id] = "Enter a price greater than 0.";
-        continue;
-      }
-      prices.push({ CategoryID: id, Price: numeric });
-    }
-    setErrors(errs);
-    if (Object.keys(errs).length) return;
-    if (prices.length === 0) {
-      setStatus({ kind: "error", text: "Enter at least one price before saving." });
+  /* Keep picker selection valid as the catalog/picker state changes. */
+  useEffect(() => {
+    if (!picker.open) return;
+    if (availableToAdd.length === 0) {
+      if (picker.categoryId !== "") setPicker((p) => ({ ...p, categoryId: "" }));
       return;
     }
+    const stillValid = availableToAdd.some((c) => String(c.CategoryID) === picker.categoryId);
+    if (!stillValid) setPicker((p) => ({ ...p, categoryId: String(availableToAdd[0].CategoryID) }));
+  }, [picker.open, picker.categoryId, availableToAdd]);
 
-    setSubmitting(true);
+  const moneyShape = (v) => v === "" || /^\d*\.?\d{0,2}$/.test(v);
+
+  const handleAdd = async () => {
+    const cid = Number(picker.categoryId);
+    const price = Number(picker.price);
+    if (!cid) {
+      setPicker((p) => ({ ...p, error: "Choose a category." }));
+      return;
+    }
+    if (!price || price <= 0) {
+      setPicker((p) => ({ ...p, error: "Enter a price greater than 0." }));
+      return;
+    }
+    setPickerBusy(true);
+    setStatus({ kind: "", text: "" });
     try {
-      const res = await updateCompanyPricing(prices);
-      if (res?.ok) {
-        const next = { ...savedPrices };
-        for (const r of prices) next[r.CategoryID] = r.Price;
-        setSavedPrices(next);
-        setStatus({ kind: "success", text: res.message || "Pricing saved." });
-      } else {
-        setStatus({ kind: "error", text: res?.message || "Couldn't save pricing." });
-      }
+      await createCompanyCategoryPrice(companyId, cid, price);
+      await reload();
+      const added = allCategories.find((c) => Number(c.CategoryID) === cid);
+      setPicker({ open: false, categoryId: "", price: "", error: "" });
+      setStatus({ kind: "success", text: `Added ${added?.Type || "category"}.` });
+    } catch (err) {
+      setPicker((p) => ({
+        ...p,
+        error: err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add category.",
+      }));
+    } finally {
+      setPickerBusy(false);
+    }
+  };
+
+  const handleSavePrice = async (row, draft) => {
+    const numeric = Number(draft);
+    if (!numeric || numeric <= 0) {
+      setStatus({ kind: "error", text: `Enter a price greater than 0 for ${row.Type}.` });
+      return;
+    }
+    setBusyCatId(row.CategoryID);
+    setStatus({ kind: "", text: "" });
+    try {
+      await upsertCompanyCategoryPrice(companyId, row.CategoryID, numeric);
+      await reload();
+      setStatus({ kind: "success", text: `Updated price for ${row.Type}.` });
     } catch (err) {
       setStatus({
         kind: "error",
-        text: err?.response?.data?.message || "Couldn't save pricing.",
+        text: err?.response?.data?.Message || err?.response?.data?.message || "Couldn't save price.",
       });
     } finally {
-      setSubmitting(false);
+      setBusyCatId(null);
+    }
+  };
+
+  const handleRemove = async (row) => {
+    setBusyCatId(row.CategoryID);
+    setStatus({ kind: "", text: "" });
+    try {
+      await deleteCompanyCategoryPrice(companyId, row.CategoryID);
+      await reload();
+      setStatus({ kind: "success", text: `Removed ${row.Type}.` });
+    } catch (err) {
+      const code = err?.response?.data?.Code;
+      const active = err?.response?.data?.ActiveApplications;
+      const msg = code === "CATEGORY_IN_USE"
+        ? `Can't remove ${row.Type} — ${active} active application${active === 1 ? "" : "s"} still using it.`
+        : (err?.response?.data?.Message || err?.response?.data?.message || "Couldn't remove category.");
+      setStatus({ kind: "error", text: msg });
+    } finally {
+      setBusyCatId(null);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="card card-pad-lg" noValidate>
+    <div className="card card-pad-lg">
       <h3 className="card-title">Service pricing</h3>
       <p className="card-subtitle">
-        Set your price per category. Clients see this amount on the
-        application's Payment step.
+        Add the categories you service from the catalog and set a price for each. A
+        category can't be removed while you have an active application using it.
       </p>
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
           <ContainerSpinner size={64} label="Loading pricing" />
         </div>
-      ) : categories.length === 0 ? (
-        <div style={{ padding: 24, textAlign: "center", color: "var(--ink-soft)" }}>
-          No categories defined yet.
-        </div>
       ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-          {categories.map((c, i) => {
-            const id = Number(c.CategoryID);
-            const draft = drafts[id] ?? "";
-            const saved = savedPrices[id];
-            return (
-              <li
-                key={id}
+        <>
+          {savedRows.length === 0 ? (
+            <div style={{ padding: 16, textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
+              You haven't priced any categories yet.
+            </div>
+          ) : (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+              {savedRows.map((row) => (
+                <PricingRow
+                  key={row.CategoryID}
+                  row={row}
+                  busy={busyCatId === row.CategoryID}
+                  moneyShape={moneyShape}
+                  onSave={(draft) => handleSavePrice(row, draft)}
+                  onRemove={() => handleRemove(row)}
+                />
+              ))}
+            </ul>
+          )}
+
+          {picker.open ? (
+            <div
+              style={{
+                marginTop: 16, padding: 14, borderRadius: 10,
+                border: "1px solid var(--line)", background: "var(--gray-50)",
+                display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) auto auto",
+                gap: 10, alignItems: "center",
+              }}
+            >
+              <select
+                value={picker.categoryId}
+                onChange={(e) => setPicker((p) => ({ ...p, categoryId: e.target.value, error: "" }))}
+                disabled={pickerBusy || availableToAdd.length === 0}
+                aria-label="Choose a category to add"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 260px)",
-                  alignItems: "start",
-                  gap: 16,
-                  padding: "16px 0",
-                  borderBottom: i < categories.length - 1 ? "1px solid var(--gray-100)" : "none",
+                  height: 38, border: "1px solid var(--line)", borderRadius: 8,
+                  padding: "0 10px", fontSize: 14, background: "var(--surface, #fff)",
                 }}
               >
-                <div>
-                  <div style={{ fontWeight: 600, color: "var(--navy)", fontSize: 14 }}>
-                    {c.Type}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {saved != null
-                      ? `Current price: EGP ${Number(saved).toLocaleString()}`
-                      : "Price not set yet."}
-                  </div>
+                {availableToAdd.length === 0 ? (
+                  <option value="">No more categories available</option>
+                ) : (
+                  availableToAdd.map((c) => (
+                    <option key={c.CategoryID} value={String(c.CategoryID)}>{c.Type}</option>
+                  ))
+                )}
+              </select>
+              <input
+                type="text" inputMode="decimal" placeholder="Price (EGP)"
+                value={picker.price}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setPicker((p) => ({ ...p, price: v, error: "" }));
+                }}
+                disabled={pickerBusy || availableToAdd.length === 0}
+                aria-label="Price for new category"
+                style={{ height: 38, border: "1px solid var(--line)", borderRadius: 8, padding: "0 10px", fontSize: 14 }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleAdd}
+                disabled={pickerBusy || availableToAdd.length === 0}
+              >
+                {pickerBusy ? <ContainerSpinner inline size={14} label="Adding…" /> : <><Icon name="check" size={14} /> Confirm</>}
+              </button>
+              <button
+                type="button" className="btn btn-secondary btn-sm" disabled={pickerBusy}
+                onClick={() => { setPicker({ open: false, categoryId: "", price: "", error: "" }); setStatus({ kind: "", text: "" }); }}
+              >
+                Cancel
+              </button>
+              {picker.error && (
+                <div style={{ gridColumn: "1 / -1", color: "var(--signal-stop, #c33)", fontSize: 12 }}>
+                  {picker.error}
                 </div>
-                <div>
-                  <div className="input-with-icon">
-                    <span className="input-icon"><Icon name="receipt" size={14} /></span>
-                    <input
-                      className="input"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={draft}
-                      onChange={onChange(id)}
-                      disabled={submitting}
-                    />
-                  </div>
-                  <FieldError message={errors[id]} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
-          marginTop: 20,
-        }}
-      >
-        <button
-          type="submit"
-          className="btn btn-primary btn-lg"
-          disabled={!dirty || submitting || loading}
-        >
-          {submitting ? (
-            <ContainerSpinner inline size={20} label="Saving…" />
+              )}
+            </div>
           ) : (
-            <>Save pricing <Icon name="check" size={16} /></>
+            <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={availableToAdd.length === 0}
+                title={availableToAdd.length === 0 ? "You've already priced every available category." : undefined}
+                onClick={() => setPicker((p) => ({ ...p, open: true, error: "" }))}
+              >
+                <Icon name="check" size={14} /> Add category
+              </button>
+            </div>
           )}
-        </button>
-        <InlineStatus status={status} />
-      </div>
-    </form>
+
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+            <InlineStatus status={status} />
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -861,13 +961,6 @@ function PortsForm({ companyId }) {
                     padding: "10px 14px", background: "var(--surface, #fff)",
                   }}
                 >
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8,
-                    background: p.PortType === "Air" ? "var(--harbor-100, #e6f0ff)" : "var(--gray-50)",
-                    color: "var(--brand)", display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Icon name={p.PortType === "Air" ? "trending" : "anchor"} size={14} />
-                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}>{p.PortName}</div>
                     <div className="muted" style={{ fontSize: 12 }}>{p.PortType}</div>

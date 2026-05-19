@@ -15,7 +15,9 @@ const CompanyPortSubSchema = new mongoose.Schema(
 const CompanyCategorySubSchema = new mongoose.Schema(
     {
         CategoryID: { type: Number, required: true },
-        Type:       { type: String, enum: ['Electronics', 'Cars', 'Clothes', 'Other'] },
+        /* Mirrors Category.Type — open string now that the catalog is
+           admin-managed. */
+        Type:       { type: String },
         Price:      { type: Number, required: true, min: 0 },
     },
     { _id: false }

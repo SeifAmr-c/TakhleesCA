@@ -3,7 +3,9 @@ import mongoose from 'mongoose';
 const CategorySchema = new mongoose.Schema(
     {
         CategoryID: { type: Number, index: true, unique: true },
-        Type:       { type: String, required: true, enum: ['Electronics', 'Cars', 'Clothes', 'Other'] },
+        /* Type is admin-managed: kept as an open string so new service
+           categories can be added without a schema migration. */
+        Type:       { type: String, required: true, trim: true },
     },
     { timestamps: true }
 );

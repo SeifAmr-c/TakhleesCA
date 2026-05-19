@@ -1,5 +1,32 @@
 import { api } from "./client.js";
 
+/* Admin-managed catalog — kept here alongside the company-side helpers so
+   both surfaces import from one place. */
+export const listCategories = async () => {
+  const { data } = await api.get("/category");
+  return Array.isArray(data) ? data : data?.data || [];
+};
+
+export const listCategoriesWithUsage = async () => {
+  const { data } = await api.get("/category/with-usage");
+  return Array.isArray(data) ? data : data?.data || [];
+};
+
+export const createCategory = async ({ Type }) => {
+  const { data } = await api.post("/category", { Type });
+  return data;
+};
+
+export const updateCategory = async (categoryId, body) => {
+  const { data } = await api.put("/category", body, { params: { CategoryID: categoryId } });
+  return data;
+};
+
+export const deleteCategory = async (categoryId) => {
+  const { data } = await api.delete("/category", { params: { CategoryID: categoryId } });
+  return data;
+};
+
 // GET /companycategory?CompanyID=X
 //   → [{ CompanyID, CategoryID, Price, Type }, ...]
 //

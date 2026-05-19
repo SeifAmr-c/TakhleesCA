@@ -35,7 +35,8 @@
       "Bash(npm uninstall *)",
       "Bash(netstat -ano)",
       "Bash(taskkill //PID 8096 //F)",
-      "Bash(taskkill //PID 25008 //F)"
+      "Bash(taskkill //PID 25008 //F)",
+      "Bash(grep -nA 60 \"export const updateCompanyPricing\" \"src/modules/company/company_service.js\")"
     ]
   }
 }

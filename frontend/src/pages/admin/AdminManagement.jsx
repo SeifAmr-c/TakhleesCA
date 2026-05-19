@@ -25,16 +25,23 @@ import {
   updatePort,
   deletePort,
 } from "../../api/ports.js";
+import {
+  listCategoriesWithUsage,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from "../../api/companyCategories.js";
 
-const TABS = ["companies", "support", "users", "commissions", "ports"];
+const TABS = ["companies", "support", "users", "commissions", "ports", "categories"];
 const SUBS = {
   companies:   ["pending", "verified"],
   support:     ["pending", "resolved"],
   users:       ["all"],
   commissions: ["all"],
   ports:       ["all"],
+  categories:  ["all"],
 };
-const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all", ports: "all" };
+const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all", ports: "all", categories: "all" };
 
 const HASH_ALIASES = {
   "companies-section": "companies",
@@ -573,6 +580,141 @@ function PortRow({ port, busy, onSave, onDelete, isLast }) {
   );
 }
 
+/* ---------- Category management cards ---------- */
+function AddCategoryForm({ onCreate, busy }) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) {
+      setError("Category name is required.");
+      return;
+    }
+    try {
+      await onCreate({ Type: name.trim() });
+      setName("");
+    } catch (err) {
+      setError(err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add category.");
+    }
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      className="card"
+      style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end", padding: 16, marginBottom: 16 }}
+    >
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Category name</span>
+        <input
+          value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
+          placeholder="e.g. Electronics" aria-label="Category name"
+          style={{ height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14 }}
+        />
+      </label>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={busy} style={{ height: 36 }}>
+        {busy ? <ContainerSpinner inline size={14} label="Adding…" /> : <><Icon name="check" size={14} /> Add category</>}
+      </button>
+      {error && (
+        <div style={{ gridColumn: "1 / -1", color: "var(--signal-stop, #c33)", fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+    </form>
+  );
+}
+
+function CategoryRow({ category, busy, onSave, onDelete, isLast }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(category.Type);
+  const active = Number(category.ActiveApplications || 0);
+  const frozen = active > 0;
+
+  useEffect(() => {
+    setName(category.Type);
+  }, [category.Type, editing]);
+
+  const dirty = editing && name.trim() && name.trim() !== category.Type;
+
+  return (
+    <li style={{ borderBottom: isLast ? "none" : "1px solid var(--gray-100)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {editing ? (
+          <input
+            value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
+            aria-label="Category name"
+            style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 220 }}
+          />
+        ) : (
+          <>
+            <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>{category.Type}</div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+              <span style={{ fontFamily: "var(--font-mono)" }}>#{category.CategoryID}</span>
+              {frozen && (
+                <>
+                  <span style={{ color: "var(--gray-300)", margin: "0 6px" }}>·</span>
+                  <span style={{ color: "var(--accent-dark, #b25f00)", fontWeight: 600 }}>
+                    {active} active application{active === 1 ? "" : "s"}
+                  </span>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        {editing ? (
+          <>
+            <button
+              className="btn btn-primary btn-sm" disabled={busy || !dirty}
+              onClick={() => onSave(category.CategoryID, { Type: name.trim() }).then(() => setEditing(false))}
+              style={{ minWidth: 72, justifyContent: "center" }}
+            >
+              {busy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={14} /> Save</>}
+            </button>
+            <button
+              type="button" className="btn btn-secondary btn-sm" disabled={busy}
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button" className="btn btn-secondary btn-sm" disabled={busy}
+              onClick={() => setEditing(true)}
+            >
+              <Icon name="doc" size={14} /> Edit
+            </button>
+            {frozen ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled
+                title={`Frozen: ${active} active application${active === 1 ? "" : "s"} still using this category.`}
+                style={{ opacity: 0.7, cursor: "not-allowed", background: "var(--gray-50)" }}
+              >
+                <Icon name="lock" size={14} /> Frozen
+              </button>
+            ) : (
+              <button
+                type="button" className="btn btn-secondary btn-sm" disabled={busy}
+                onClick={() => onDelete(category)}
+                style={{ color: "var(--signal-stop, #c33)" }}
+              >
+                <Icon name="logout" size={14} /> Delete
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function SectionHeader({ eyebrow, eyebrowAccent, eyebrowIcon, title, count, actions }) {
   return (
     <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
@@ -891,6 +1033,11 @@ const PRINT_COLS = {
     { key: "EstDate",  label: "Established", mono: true, value: (r) => formatDate(r.EstDate) },
     { key: "ActiveApplications", label: "Active apps", align: "right", mono: true, value: (r) => String(r.ActiveApplications || 0) },
   ],
+  categories: [
+    { key: "CategoryID", label: "Cat #", align: "right", mono: true, width: 70 },
+    { key: "Type",       label: "Name" },
+    { key: "ActiveApplications", label: "Active apps", align: "right", mono: true, value: (r) => String(r.ActiveApplications || 0) },
+  ],
 };
 
 function ExportPdfButton({ onClick }) {
@@ -913,12 +1060,15 @@ function AdminManagement() {
   const [resolvedTickets, setResolvedTickets] = useState([]);
   const [users, setUsers] = useState([]);
   const [ports, setPorts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [companyBusyId, setCompanyBusyId] = useState(null);
   const [ticketBusyId, setTicketBusyId] = useState(null);
   const [commBusyId, setCommBusyId] = useState(null);
   const [portBusyId, setPortBusyId] = useState(null);
   const [portAdding, setPortAdding] = useState(false);
+  const [categoryBusyId, setCategoryBusyId] = useState(null);
+  const [categoryAdding, setCategoryAdding] = useState(false);
   const [commSavedAt, setCommSavedAt] = useState({});
   const [notice, setNotice] = useState("");
   const [verifiedExpanded, setVerifiedExpanded] = useState(false);
@@ -927,6 +1077,8 @@ function AdminManagement() {
   const [rejectBusy, setRejectBusy] = useState(false);
   const [deletePortTarget, setDeletePortTarget] = useState(null);
   const [deletePortBusy, setDeletePortBusy] = useState(false);
+  const [deleteCategoryTarget, setDeleteCategoryTarget] = useState(null);
+  const [deleteCategoryBusy, setDeleteCategoryBusy] = useState(false);
   const [tab, setTab] = useState("companies");
   const [sub, setSub] = useState(DEFAULT_SUB.companies);
   const [filter, setFilter] = useState("");
@@ -1002,11 +1154,21 @@ function AdminManagement() {
     }
   };
 
+  const refreshCategories = async () => {
+    try {
+      const data = await listCategoriesWithUsage();
+      setCategories(Array.isArray(data) ? data : data?.data || []);
+    } catch (err) {
+      console.error("listCategoriesWithUsage failed:", err?.response?.status, err?.response?.data || err);
+      setCategories([]);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        await Promise.all([refreshCompanies(), refreshTickets(), refreshUsers(), refreshPorts()]);
+        await Promise.all([refreshCompanies(), refreshTickets(), refreshUsers(), refreshPorts(), refreshCategories()]);
       } finally {
         if (active) setLoading(false);
       }
@@ -1099,6 +1261,55 @@ function AdminManagement() {
     }
   };
 
+  const handleAddCategory = async (body) => {
+    setCategoryAdding(true);
+    try {
+      await createCategory(body);
+      await refreshCategories();
+      showNotice(`Category "${body.Type}" added.`);
+    } catch (err) {
+      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add category.";
+      showNotice(msg);
+      throw err;
+    } finally {
+      setCategoryAdding(false);
+    }
+  };
+
+  const handleSaveCategory = async (categoryId, body) => {
+    setCategoryBusyId(categoryId);
+    try {
+      await updateCategory(categoryId, body);
+      await refreshCategories();
+      showNotice(`Category renamed to "${body.Type}".`);
+    } catch (err) {
+      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't update the category.";
+      showNotice(msg);
+      throw err;
+    } finally {
+      setCategoryBusyId(null);
+    }
+  };
+
+  const handleDeleteCategoryConfirm = async () => {
+    if (!deleteCategoryTarget) return;
+    const target = deleteCategoryTarget;
+    setDeleteCategoryBusy(true);
+    setCategoryBusyId(target.CategoryID);
+    setDeleteCategoryTarget(null);
+    try {
+      await deleteCategory(target.CategoryID);
+      await refreshCategories();
+      showNotice(`Category "${target.Type}" deleted.`);
+    } catch (err) {
+      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't delete the category.";
+      showNotice(msg);
+    } finally {
+      setDeleteCategoryBusy(false);
+      setCategoryBusyId(null);
+    }
+  };
+
   const handleDeletePortConfirm = async () => {
     if (!deletePortTarget) return;
     const target = deletePortTarget;
@@ -1168,6 +1379,10 @@ function AdminManagement() {
     String(p.PortType||"").toLowerCase().includes(q) ||
     String(p.PortID).includes(q)
   ), [ports, q]);
+  const filteredCategories = useMemo(() => !q ? categories : categories.filter(c =>
+    String(c.Type||"").toLowerCase().includes(q) ||
+    String(c.CategoryID).includes(q)
+  ), [categories, q]);
 
   const primaryTabs = [
     { id: "companies",   label: "Companies",       icon: "building", count: pendingCompanies.length + verifiedCompanies.length },
@@ -1175,6 +1390,7 @@ function AdminManagement() {
     { id: "users",       label: "Users",           icon: "user",     count: users.length },
     { id: "commissions", label: "Commissions",     icon: "receipt",  count: verifiedCompanies.length },
     { id: "ports",       label: "Ports",           icon: "anchor",   count: ports.length },
+    { id: "categories",  label: "Categories",      icon: "package",  count: categories.length },
   ];
 
   const subTabs = {
@@ -1189,6 +1405,7 @@ function AdminManagement() {
     users: [],
     commissions: [],
     ports: [],
+    categories: [],
   };
 
   /* Print exports — each one feeds the rows + column map for the current
@@ -1483,12 +1700,56 @@ function AdminManagement() {
     </>
   );
 
+  const renderCategoriesAll = () => (
+    <>
+      <SectionHeader
+        eyebrow="Catalog" eyebrowIcon="package"
+        title="Service categories"
+        count={`${filteredCategories.length} of ${categories.length} configured`}
+        actions={<ExportPdfButton onClick={() => openPrint("categories", "Service categories", filteredCategories)} />}
+      />
+      <SearchFilter value={filter} onChange={setFilter} placeholder="Filter by name or category #…" />
+
+      <AddCategoryForm onCreate={handleAddCategory} busy={categoryAdding} />
+
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+          <ContainerSpinner size={80} label="Loading categories" />
+        </div>
+      ) : filteredCategories.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: 48 }}>
+          <Icon name="package" size={28} color="var(--ink-faint)" />
+          <h3 className="h3" style={{ marginTop: 12 }}>{categories.length === 0 ? "No categories yet" : "No matches"}</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            {categories.length === 0 ? "Add a category above to make it available to companies." : "Try a different search term."}
+          </p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {filteredCategories.map((c, i) => (
+              <CategoryRow
+                key={c.CategoryID}
+                category={c}
+                busy={categoryBusyId === c.CategoryID}
+                onSave={handleSaveCategory}
+                onDelete={setDeleteCategoryTarget}
+                isLast={i === filteredCategories.length - 1}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+
   const renderContent = () => {
     if (tab === "companies") return sub === "verified" ? renderCompaniesVerified() : renderCompaniesPending();
     if (tab === "support") return sub === "resolved" ? renderSupportResolved() : renderSupportPending();
     if (tab === "users") return renderUsersAll();
     if (tab === "commissions") return renderUsersCommissions();
     if (tab === "ports") return renderPortsAll();
+    if (tab === "categories") return renderCategoriesAll();
     return null;
   };
 
@@ -1603,6 +1864,21 @@ function AdminManagement() {
         busy={deletePortBusy}
         onConfirm={handleDeletePortConfirm}
         onCancel={() => { if (!deletePortBusy) setDeletePortTarget(null); }}
+      />
+
+      <ConfirmModal
+        open={!!deleteCategoryTarget}
+        title="Delete this category?"
+        message={deleteCategoryTarget
+          ? `“${deleteCategoryTarget.Type}” will be removed from the catalog and unlinked from all companies' pricing. Historical applications keep their snapshot.`
+          : ""
+        }
+        confirmLabel="Delete category"
+        cancelLabel="Cancel"
+        variant="danger"
+        busy={deleteCategoryBusy}
+        onConfirm={handleDeleteCategoryConfirm}
+        onCancel={() => { if (!deleteCategoryBusy) setDeleteCategoryTarget(null); }}
       />
 
       <PrintableTable
