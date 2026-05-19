@@ -20,18 +20,19 @@ import {
 } from "../../api/admin.js";
 import { updateCompanyCommission } from "../../api/companies.js";
 
-const TABS = ["companies", "support", "users"];
+const TABS = ["companies", "support", "users", "commissions"];
 const SUBS = {
-  companies: ["pending", "verified"],
-  support:   ["pending", "resolved"],
-  users:     ["all", "commissions"],
+  companies:   ["pending", "verified"],
+  support:     ["pending", "resolved"],
+  users:       ["all"],
+  commissions: ["all"],
 };
-const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all" };
+const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all" };
 
 const HASH_ALIASES = {
   "companies-section": "companies",
   "support-section":   "support",
-  "commissions":       "users/commissions",
+  "users/commissions": "commissions",
 };
 
 const initials2 = (name) =>
@@ -909,9 +910,10 @@ function AdminManagement() {
   ), [verifiedCompanies, q]);
 
   const primaryTabs = [
-    { id: "companies", label: "Companies", icon: "building", count: pendingCompanies.length + verifiedCompanies.length },
-    { id: "support",   label: "Support tickets", icon: "bell", count: pendingTickets.length + resolvedTickets.length },
-    { id: "users",     label: "Users", icon: "user", count: users.length },
+    { id: "companies",   label: "Companies",       icon: "building", count: pendingCompanies.length + verifiedCompanies.length },
+    { id: "support",     label: "Support tickets", icon: "bell",     count: pendingTickets.length + resolvedTickets.length },
+    { id: "users",       label: "Users",           icon: "user",     count: users.length },
+    { id: "commissions", label: "Commissions",     icon: "receipt",  count: verifiedCompanies.length },
   ];
 
   const subTabs = {
@@ -923,10 +925,8 @@ function AdminManagement() {
       { id: "pending",  label: "Unresolved", count: pendingTickets.length },
       { id: "resolved", label: "Resolved",   count: resolvedTickets.length },
     ],
-    users: [
-      { id: "all",         label: "All users",   count: users.length },
-      { id: "commissions", label: "Commissions", count: verifiedCompanies.length },
-    ],
+    users: [],
+    commissions: [],
   };
 
   /* Print exports — each one feeds the rows + column map for the current
@@ -1181,7 +1181,8 @@ function AdminManagement() {
   const renderContent = () => {
     if (tab === "companies") return sub === "verified" ? renderCompaniesVerified() : renderCompaniesPending();
     if (tab === "support") return sub === "resolved" ? renderSupportResolved() : renderSupportPending();
-    if (tab === "users") return sub === "commissions" ? renderUsersCommissions() : renderUsersAll();
+    if (tab === "users") return renderUsersAll();
+    if (tab === "commissions") return renderUsersCommissions();
     return null;
   };
 
@@ -1248,7 +1249,9 @@ function AdminManagement() {
           })}
         </div>
 
-        <PillTabs tabs={subTabs[tab]} active={sub} onChange={onSubChange} />
+        {subTabs[tab]?.length > 1 && (
+          <PillTabs tabs={subTabs[tab]} active={sub} onChange={onSubChange} />
+        )}
 
         <div role="tabpanel">{renderContent()}</div>
       </Reveal>
