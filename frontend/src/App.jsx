@@ -22,6 +22,7 @@ import UserProfileEdit from "./pages/client/UserProfileEdit.jsx";
 import CompanyDashboard from "./pages/company/CompanyDashboard.jsx";
 import CompanyProfileEdit from "./pages/company/CompanyProfileEdit.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminManagement from "./pages/admin/AdminManagement.jsx";
 import AdminProfileEdit from "./pages/admin/AdminProfileEdit.jsx";
 import AdminCommissions from "./pages/admin/AdminCommissions.jsx";
 
@@ -78,6 +79,7 @@ function App() {
         <Route path="/company/dashboard" element={<CompanyDashboard />} />
         <Route path="/company/profile" element={<CompanyProfileEdit />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/management" element={<RequireAdmin><AdminManagement /></RequireAdmin>} />
         <Route path="/admin/profile" element={<RequireAuth><AdminProfileEdit /></RequireAuth>} />
         <Route path="/admin/commissions" element={<RequireAdmin><AdminCommissions /></RequireAdmin>} />
 

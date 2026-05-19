@@ -38,18 +38,12 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
   const profileActive = location.pathname.startsWith("/user/profile");
   const adminProfileActive = location.pathname.startsWith("/admin/profile");
 
-  /* For admin tabs we always want to push a new hash so the dashboard's
-     hash-watcher fires (and switches the active tab) even when we're
-     already on /admin/dashboard. We replace any current hash with the
-     new one rather than just scrolling, so clicking "Commissions" after
-     "Companies" actually changes the active tab. */
+  /* Admin nav links deep-link into the management page's hash-driven
+     tab system. `replace: false` so each click is a real history entry
+     and the back button takes the admin back to where they were. */
   const goToAdminTab = (hash) => (e) => {
     e.preventDefault();
-    if (location.pathname === "/admin/dashboard") {
-      navigate(`/admin/dashboard#${hash}`, { replace: false });
-    } else {
-      navigate(`/admin/dashboard#${hash}`);
-    }
+    navigate(`/admin/management#${hash}`, { replace: false });
   };
 
   const handleLogout = async () => {
@@ -89,16 +83,17 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
           <div className="topnav-links">
             {isAdmin ? (
               <>
-                <a href="/admin/dashboard#companies" onClick={goToAdminTab("companies")}>
+                <NavLink to="/admin/dashboard" end>Dashboard</NavLink>
+                <a href="/admin/management#companies" onClick={goToAdminTab("companies")}>
                   Companies
                 </a>
-                <a href="/admin/dashboard#support" onClick={goToAdminTab("support")}>
+                <a href="/admin/management#support" onClick={goToAdminTab("support")}>
                   Support
                 </a>
-                <a href="/admin/dashboard#users" onClick={goToAdminTab("users")}>
+                <a href="/admin/management#users" onClick={goToAdminTab("users")}>
                   Users
                 </a>
-                <a href="/admin/dashboard#users/commissions" onClick={goToAdminTab("users/commissions")}>
+                <a href="/admin/management#users/commissions" onClick={goToAdminTab("users/commissions")}>
                   Commissions
                 </a>
               </>
