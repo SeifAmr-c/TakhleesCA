@@ -4,6 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Application from '../../Database/mongo/application.mongo.js';
 import Company from '../../Database/mongo/company.mongo.js';
+import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
 import SupportTicket from '../../Database/mongo/support_ticket.mongo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -136,6 +137,39 @@ export const verifyCompany = async (req, res, next) => {
       ok: true,
       message: `Company [${companyId}] verification status set to ${nextStatus}.`,
       data: { company: updated },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const rejectCompany = async (req, res, next) => {
+  try {
+    const companyId = Number(req.params.id);
+    if (!Number.isInteger(companyId) || companyId < 1) {
+      return res.status(400).json({ ok: false, message: "Invalid company id." });
+    }
+
+    const existing = await Company.findOne({ CompanyID: companyId }).select({ _id: 1 });
+    if (!existing) {
+      return res.status(404).json({ ok: false, message: `Company [${companyId}] not found.` });
+    }
+
+    /* Anonymize historical records so payments and applications remain
+       readable for audit/reporting; only the Company doc is removed. */
+    await CompanyPayment.updateMany(
+      { CompanyID: companyId },
+      { $set: { CompanyID: null, company: null } }
+    );
+    await Application.updateMany(
+      { CompanyID: companyId },
+      { $set: { CompanyID: null, company: null } }
+    );
+    await Company.deleteOne({ CompanyID: companyId });
+
+    return res.json({
+      ok: true,
+      message: `Company [${companyId}] rejected and deleted.`,
     });
   } catch (err) {
     return next(err);

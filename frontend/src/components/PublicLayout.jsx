@@ -38,15 +38,17 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
   const profileActive = location.pathname.startsWith("/user/profile");
   const adminProfileActive = location.pathname.startsWith("/admin/profile");
 
-  const scrollToSection = (id) => (e) => {
+  /* For admin tabs we always want to push a new hash so the dashboard's
+     hash-watcher fires (and switches the active tab) even when we're
+     already on /admin/dashboard. We replace any current hash with the
+     new one rather than just scrolling, so clicking "Commissions" after
+     "Companies" actually changes the active tab. */
+  const goToAdminTab = (hash) => (e) => {
     e.preventDefault();
-    const target = document.getElementById(id);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth" });
+    if (location.pathname === "/admin/dashboard") {
+      navigate(`/admin/dashboard#${hash}`, { replace: false });
     } else {
-      // Section lives on /admin/dashboard — navigate there with a hash and let
-      // the dashboard scroll on mount via the location.hash.
-      navigate(`/admin/dashboard#${id}`);
+      navigate(`/admin/dashboard#${hash}`);
     }
   };
 
@@ -87,12 +89,17 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
           <div className="topnav-links">
             {isAdmin ? (
               <>
-                <a href="#companies-section" onClick={scrollToSection("companies-section")}>
+                <a href="/admin/dashboard#companies" onClick={goToAdminTab("companies")}>
                   Companies
                 </a>
-                <NavLink to="/admin/commissions">Commissions</NavLink>
-                <a href="#support-section" onClick={scrollToSection("support-section")}>
+                <a href="/admin/dashboard#support" onClick={goToAdminTab("support")}>
                   Support
+                </a>
+                <a href="/admin/dashboard#users" onClick={goToAdminTab("users")}>
+                  Users
+                </a>
+                <a href="/admin/dashboard#users/commissions" onClick={goToAdminTab("users/commissions")}>
+                  Commissions
                 </a>
               </>
             ) : isCompany ? (

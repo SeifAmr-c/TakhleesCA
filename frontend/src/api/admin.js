@@ -40,6 +40,12 @@ export const verifyCompany = async (companyId, body = { status: "Verified" }) =>
   return data;
 };
 
+// DELETE /admin/companies/:id → permanently removes a (pending) company.
+export const rejectCompany = async (companyId) => {
+  const { data } = await api.delete(`/admin/companies/${companyId}`);
+  return data;
+};
+
 // ── Support tickets (admin only) ───────────────────────────────
 // GET /admin/tickets/pending  → { ok, count, data: [...] }
 export const getPendingTickets = async () => {
