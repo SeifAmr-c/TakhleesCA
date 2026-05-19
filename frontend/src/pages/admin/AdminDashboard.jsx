@@ -6,6 +6,7 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import DocViewer from "../../components/DocViewer.jsx";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
+import logo from "../../assets/logo.png";
 import {
   onlineUsers,
   listUsers,
@@ -168,7 +169,9 @@ function PendingCompanyCard({ company, onAccept, onReject, busy }) {
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setViewerUrl(`/${company.ComReg}`)}
+              onClick={() => setViewerUrl(
+                /^https?:\/\//i.test(company.ComReg) ? company.ComReg : `/${company.ComReg}`
+              )}
             >
               <Icon name="doc" size={14} /> View registration doc
             </button>
@@ -723,15 +726,25 @@ function AdminDashboard() {
 
   const handleRejectConfirm = async () => {
     if (!rejectTarget) return;
+    const target = rejectTarget;
     setRejectBusy(true);
-    setCompanyBusyId(rejectTarget.CompanyID);
+    setCompanyBusyId(target.CompanyID);
+    /* Close the modal up-front. Leaving it open on failure traps the
+       admin in an endless retry loop with no visible feedback when the
+       backend is throwing — the banner notice tells them what went
+       wrong, and they can click Reject again on the card if they want. */
+    setRejectTarget(null);
     try {
-      await rejectCompany(rejectTarget.CompanyID);
+      await rejectCompany(target.CompanyID);
       await refreshCompanies();
-      showNotice(`${rejectTarget.Name} rejected and removed.`);
-      setRejectTarget(null);
-    } catch {
-      showNotice("Couldn't reject the company. Please try again.");
+      showNotice(`${target.Name} rejected and removed.`);
+    } catch (err) {
+      console.error("rejectCompany failed:", err?.response?.status, err?.response?.data || err);
+      const msg = err?.response?.data?.message
+        || err?.response?.data?.error
+        || err?.message
+        || "Couldn't reject the company. Please try again.";
+      showNotice(msg);
     } finally {
       setRejectBusy(false);
       setCompanyBusyId(null);
@@ -1184,19 +1197,73 @@ function AdminDashboard() {
           <StatCard icon="user" label="Online users" value={analytics.onlineUsers} sub="Live sessions right now" />
         </div>
 
-        <div style={{ marginTop: 18 }}>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              navigate("#companies");
-              const target = document.getElementById("management");
-              if (target) target.scrollIntoView({ behavior: "smooth" });
+        <button
+          type="button"
+          onClick={() => {
+            navigate("#companies");
+            const target = document.getElementById("management");
+            if (target) target.scrollIntoView({ behavior: "smooth" });
+          }}
+          className="card card-hover"
+          style={{
+            marginTop: 20,
+            width: "100%",
+            display: "grid",
+            gridTemplateColumns: "auto 1fr auto",
+            alignItems: "center",
+            gap: 20,
+            padding: "22px 28px",
+            cursor: "pointer",
+            border: "1px solid var(--line)",
+            background: "var(--surface, #fff)",
+            textAlign: "left",
+            font: "inherit",
+            color: "inherit",
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 14,
+              background: "var(--gray-50)",
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            Manage marketplace <Icon name="arrow_down" size={14} />
-          </button>
-        </div>
+            <img
+              src={logo}
+              alt=""
+              style={{ width: 40, height: 40, objectFit: "contain" }}
+            />
+          </span>
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: "var(--navy)", letterSpacing: "-0.01em" }}>
+              Takhlees Management
+            </span>
+            <span className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+              Companies, support tickets, users, and commissions — all in one place.
+            </span>
+          </span>
+          <span
+            aria-hidden
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "var(--gray-50)",
+              display: "grid",
+              placeItems: "center",
+              color: "var(--navy)",
+              flexShrink: 0,
+            }}
+          >
+            <Icon name="arrow_down" size={18} />
+          </span>
+        </button>
       </Reveal>
 
       {/* ───────────── MANAGEMENT (one consolidated section) ───────────── */}
