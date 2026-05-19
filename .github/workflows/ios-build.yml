@@ -47,6 +47,5 @@ jobs:
 
       - name: Build and submit to TestFlight
         env:
-          # TODO: replace with your actual LAN IPv4 before pushing
-          EXPO_PUBLIC_API_URL: http://192.168.1.8:3000
+          EXPO_PUBLIC_API_URL: https://takhleesca.onrender.com
         run: eas build --platform ios --profile production --auto-submit --non-interactive
