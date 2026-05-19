@@ -588,6 +588,7 @@ function PrintableTable({ open, onClose, title, subtitle, columns, rows }) {
                       textTransform: "uppercase", letterSpacing: "0.05em",
                       border: "1px solid #0f172a", fontWeight: 600,
                       width: c.width,
+                      whiteSpace: c.nowrap ? "nowrap" : "normal",
                     }}
                   >
                     {c.label}
@@ -608,7 +609,8 @@ function PrintableTable({ open, onClose, title, subtitle, columns, rows }) {
                           border: "1px solid #cbd5e1",
                           textAlign: c.align || "left",
                           verticalAlign: "top",
-                          wordBreak: c.wrap === false ? "normal" : "break-word",
+                          whiteSpace: c.nowrap ? "nowrap" : "normal",
+                          wordBreak: c.nowrap || c.wrap === false ? "normal" : "break-word",
                           fontFamily: c.mono ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit",
                           color: "#0f172a",
                         }}
@@ -645,15 +647,15 @@ function PrintableTable({ open, onClose, title, subtitle, columns, rows }) {
    rendered (UI + PDF). */
 const PRINT_COLS = {
   pendingCompanies: [
-    { key: "CompanyID", label: "ID", align: "right", mono: true, width: 56 },
-    { key: "Name",      label: "Company name" },
-    { key: "ContactEmail", label: "Email" },
-    { key: "TaxNumber",    label: "Tax #", mono: true },
-    { key: "Governorate",  label: "Governorate" },
+    { key: "CompanyID", label: "ID", align: "right", mono: true, width: 56, nowrap: true },
+    { key: "Name",      label: "Company name", nowrap: true },
+    { key: "ContactEmail", label: "Email", nowrap: true },
+    { key: "TaxNumber",    label: "Tax #", mono: true, nowrap: true },
+    { key: "Governorate",  label: "Governorate", nowrap: true },
     { key: "Address",      label: "Address" },
-    { key: "FoundingDate", label: "Founded",   value: (r) => formatDate(r.FoundingDate),    mono: true },
-    { key: "RegistrationDate", label: "Submitted", value: (r) => formatDate(r.RegistrationDate), mono: true },
-    { key: "ComReg",       label: "Reg. doc", value: (r) => r.ComReg ? "Provided" : "Missing" },
+    { key: "FoundingDate", label: "Founded",   value: (r) => formatDate(r.FoundingDate),    mono: true, nowrap: true },
+    { key: "RegistrationDate", label: "Submitted", value: (r) => formatDate(r.RegistrationDate), mono: true, nowrap: true },
+    { key: "ComReg",       label: "Reg. doc", value: (r) => r.ComReg ? "Provided" : "Missing", nowrap: true },
     { key: "About",        label: "About" },
   ],
   verifiedCompanies: [

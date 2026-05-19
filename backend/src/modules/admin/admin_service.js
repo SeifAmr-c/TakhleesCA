@@ -306,14 +306,7 @@ export const generateExecutiveReport = async (req, res, next) => {
       'attachment; filename="Takhlees_Executive_Report.pdf"'
     );
 
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
-
-    doc
-      .lineWidth(1)
-      .strokeColor("#000000")
-      .rect(20, 20, doc.page.width - 40, doc.page.height - 40)
-      .stroke();
-
+    const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
     doc.pipe(res);
 
     const LEFT = doc.page.margins.left;
@@ -430,8 +423,9 @@ export const generateExecutiveReport = async (req, res, next) => {
         .text("Status", rightColX, tableTop + paddingY, { width: rightColWidth, align: "center", lineBreak: false, ellipsis: true });
       drawRowBorders(tableTop);
 
+      const FOOTER_RESERVE = 80;
       tickets.forEach((t) => {
-        if (doc.y + rowHeight + 70 > doc.page.height) doc.addPage();
+        if (doc.y + rowHeight > doc.page.height - FOOTER_RESERVE) doc.addPage();
         const yTop = doc.y;
         const issueText = String(t.Issue || "—");
         const statusText = `Resolved: ${t.Resolved ? "Yes" : "No"}`;
@@ -444,15 +438,23 @@ export const generateExecutiveReport = async (req, res, next) => {
     }
 
     doc.moveDown(1);
+    const SUMMARY_HEIGHT = 80;
+    if (doc.y + SUMMARY_HEIGHT > doc.page.height - 80) doc.addPage();
     row("Total Tickets", String(TotalTickets));
     row("Total Resolved", String(ResolvedTickets));
     row("Total Unresolved", String(UnresolvedTickets));
 
-    doc.fillColor("#888888").fontSize(10);
-    doc.font("Helvetica-Bold")
-      .text("Takhlees", 20, doc.page.height - 70, {
-        align: "center", width: doc.page.width - 40, lineBreak: false,
-      });
+    const range = doc.bufferedPageRange();
+    for (let i = range.start; i < range.start + range.count; i++) {
+      doc.switchToPage(i);
+      doc.lineWidth(1).strokeColor("#000000")
+        .rect(20, 20, doc.page.width - 40, doc.page.height - 40)
+        .stroke();
+      doc.fillColor("#888888").fontSize(10).font("Helvetica-Bold")
+        .text("Takhlees", 20, doc.page.height - 70, {
+          align: "center", width: doc.page.width - 40, lineBreak: false,
+        });
+    }
 
     doc.end();
   } catch (err) {
