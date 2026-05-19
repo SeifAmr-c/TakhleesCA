@@ -168,24 +168,18 @@ function PendingCompanyCard({ company, onAccept, busy }) {
 
 function VerifiedCompanyRow({ company }) {
   return (
-    <li
+    <div
       style={{
         display: "flex",
         alignItems: "center",
         gap: 14,
         padding: "16px 20px",
-        borderBottom: "1px solid var(--gray-100)",
       }}
     >
       <div className="avatar">{initials2(company.Name)}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
-            {company.Name}
-          </span>
-          <span className="badge badge-success">
-            <span className="dot" /> Verified
-          </span>
+        <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
+          {company.Name}
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 2, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <span>{company.ContactEmail || "—"}</span>
@@ -193,10 +187,15 @@ function VerifiedCompanyRow({ company }) {
           {company.TaxNumber && (<><span style={{ color: "var(--gray-300)" }}>·</span><span>Tax #{company.TaxNumber}</span></>)}
         </div>
       </div>
-      <div style={{ textAlign: "right", fontSize: 12, color: "var(--ink-faint)" }}>
+      <div style={{ width: 110, display: "flex", justifyContent: "flex-start", flexShrink: 0 }}>
+        <span className="badge badge-success">
+          <span className="dot" /> Verified
+        </span>
+      </div>
+      <div style={{ width: 140, textAlign: "right", fontSize: 12, color: "var(--ink-faint)", flexShrink: 0 }}>
         Joined {formatDate(company.RegistrationDate)}
       </div>
-    </li>
+    </div>
   );
 }
 
@@ -316,6 +315,8 @@ function AdminDashboard() {
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [verifiedExpanded, setVerifiedExpanded] = useState(false);
+  const VERIFIED_COLLAPSED_COUNT = 5;
   const location = useLocation();
 
   useEffect(() => {
@@ -573,22 +574,56 @@ function AdminDashboard() {
                 Approve a pending company to get the marketplace started.
               </p>
             </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                {verifiedCompanies.map((c, i) => (
-                  <li
-                    key={c.CompanyID}
+          ) : (() => {
+            const canCollapse = verifiedCompanies.length > VERIFIED_COLLAPSED_COUNT;
+            const visible = (canCollapse && !verifiedExpanded)
+              ? verifiedCompanies.slice(0, VERIFIED_COLLAPSED_COUNT)
+              : verifiedCompanies;
+            const hiddenCount = verifiedCompanies.length - VERIFIED_COLLAPSED_COUNT;
+            return (
+              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {visible.map((c, i) => (
+                    <li
+                      key={c.CompanyID}
+                      style={{
+                        borderBottom: i === visible.length - 1 && !canCollapse ? "none" : "1px solid var(--gray-100)",
+                      }}
+                    >
+                      <VerifiedCompanyRow company={c} />
+                    </li>
+                  ))}
+                </ul>
+                {canCollapse && (
+                  <button
+                    type="button"
+                    onClick={() => setVerifiedExpanded((v) => !v)}
                     style={{
-                      borderBottom: i === verifiedCompanies.length - 1 ? "none" : undefined,
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      padding: "12px 20px",
+                      border: "none",
+                      background: "var(--gray-50)",
+                      color: "var(--navy)",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "background 0.15s ease",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--gray-100)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "var(--gray-50)")}
                   >
-                    <VerifiedCompanyRow company={c} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                    {verifiedExpanded
+                      ? <>Show less <Icon name="arrow_up" size={14} /></>
+                      : <>Show {hiddenCount} more {hiddenCount === 1 ? "company" : "companies"} <Icon name="arrow_down" size={14} /></>}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </Reveal>
       </div>
 
