@@ -1759,7 +1759,7 @@ function AdminManagement() {
             marginBottom: 32,
           }}
         >
-          <div className="row">
+          <div className="row" style={{ flex: 1 }}>
             <button
               type="button" className="btn btn-secondary btn-sm"
               onClick={() => navigate("/admin/dashboard")}
@@ -1767,10 +1767,11 @@ function AdminManagement() {
               <Icon name="arrow_left" size={14} /> Back to dashboard
             </button>
           </div>
-          <div style={{ flex: 1, textAlign: "center" }}>
+          <div style={{ textAlign: "center" }}>
             <h1 className="h2" style={{ margin: 0 }}>Takhlees Management</h1>
             <p className="muted" style={{ margin: "6px 0 0" }}>Companies, support tickets, users, and commissions.</p>
           </div>
+          <div style={{ flex: 1 }} aria-hidden="true" />
         </header>
 
       {notice && (
