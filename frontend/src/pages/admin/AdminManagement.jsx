@@ -485,13 +485,6 @@ function PortRow({ port, busy, onSave, onDelete, isLast }) {
 
   return (
     <li style={{ borderBottom: isLast ? "none" : "1px solid var(--gray-100)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: 8,
-        background: type === "Air" ? "var(--harbor-100, #e6f0ff)" : "var(--gray-50)",
-        color: "var(--navy)", display: "inline-flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <Icon name={type === "Air" ? "trending" : "anchor"} size={16} />
-      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -1774,7 +1767,7 @@ function AdminManagement() {
               <Icon name="arrow_left" size={14} /> Back to dashboard
             </button>
           </div>
-          <div style={{ textAlign: "right" }}>
+          <div style={{ flex: 1, textAlign: "center" }}>
             <h1 className="h2" style={{ margin: 0 }}>Takhlees Management</h1>
             <p className="muted" style={{ margin: "6px 0 0" }}>Companies, support tickets, users, and commissions.</p>
           </div>
