@@ -6,6 +6,7 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import {
   listApplications,
   updateApplicationStatus,
+  rejectApplication,
 } from "../../api/applications.js";
 import { getCompanyDashboardStats, exportCompanyReport } from "../../api/companies.js";
 import { listApplicationDocuments } from "../../api/documents.js";
@@ -459,10 +460,11 @@ function CompanyDashboard() {
         );
         showNotice(`Accepted application #${applicationId} — moved to In progress.`);
       } else {
-        // 'Rejected' isn't a DB enum value yet; remove from view only and
-        // surface a toast so the company knows persistence is pending.
+        // Reject = delete: removes the application, its embedded
+        // documents/payments, and the documents' Cloudinary files.
+        await rejectApplication(applicationId);
         setApplications((list) => list.filter((a) => a.ApplicationID !== applicationId));
-        showNotice(`Hidden application #${applicationId}. Persistent rejection isn't supported yet.`);
+        showNotice(`Rejected application #${applicationId} — removed permanently.`);
       }
     } catch {
       showNotice(`Couldn't update application #${applicationId}.`);

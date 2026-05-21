@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { uploadToCloudinary, companyFolder } from '../../config/cloudinary.js';
+import { uploadToCloudinary, companyFolder, destroyCloudinaryAsset } from '../../config/cloudinary.js';
 import Application from '../../Database/mongo/application.mongo.js';
 import Company from '../../Database/mongo/company.mongo.js';
 import User from '../../Database/mongo/user.mongo.js';
@@ -263,6 +263,47 @@ export const cancelApplication = async (req, res, next) => {
             return res.status(400).json({ ok: false, message: "Application cannot be cancelled." });
         }
         return res.status(200).json({ ok: true, message: "Application cancelled successfully." });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+/* Company-initiated rejection. We delete the application outright rather
+   than parking it in a 'Rejected' state so no stale row, embedded
+   document/payment, or Cloudinary asset is left behind.
+
+   Gating on Status: 'Pending' is the referential-integrity guarantee: a
+   Review (Review.ApplicationID) is only written after completion and a
+   CompanyPayment (CompanyPayment.PaymentID) only on accept, so a Pending
+   application is referenced by nothing outside its own doc. Deleting it
+   therefore cannot orphan a cross-collection reference. */
+export const rejectApplication = async (req, res, next) => {
+    try {
+        const CompanyID = req.session?.companyId;
+        if (!CompanyID) {
+            return res.status(401).json({ ok: false, message: "Company sign-in required." });
+        }
+
+        const ApplicationID = Number(req.params.id);
+        if (!Number.isInteger(ApplicationID) || ApplicationID < 1) {
+            return res.status(400).json({ ok: false, message: "Invalid application id." });
+        }
+
+        const app = await Application.findOne({ ApplicationID, CompanyID, Status: 'Pending' });
+        if (!app) {
+            return res.status(404).json({
+                ok: false,
+                message: "No pending application found for your company with that id.",
+            });
+        }
+
+        // Drop the uploaded files from Cloudinary before the subdocs vanish
+        // with the parent. Best-effort: destroyCloudinaryAsset swallows errors.
+        await Promise.all((app.documents ?? []).map((d) => destroyCloudinaryAsset(d.Path)));
+
+        await Application.deleteOne({ ApplicationID, CompanyID, Status: 'Pending' });
+
+        return res.status(200).json({ ok: true, message: `Application #${ApplicationID} rejected and removed.` });
     } catch (err) {
         return next(err);
     }

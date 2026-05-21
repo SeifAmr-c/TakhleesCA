@@ -55,3 +55,14 @@ export const cancelApplication = async (applicationId) => {
   const { data } = await api.delete(`/application/${applicationId}/cancel`);
   return data;
 };
+
+// DELETE /application/:id/reject (requires company session)
+//   Company-initiated rejection. Backend deletes the application, its
+//   embedded documents/payments, and the documents' Cloudinary files, but
+//   only when the row belongs to the signed-in company AND is 'Pending'.
+//   200: { ok: true, message }
+//   404: { ok: false, message }
+export const rejectApplication = async (applicationId) => {
+  const { data } = await api.delete(`/application/${applicationId}/reject`);
+  return data;
+};

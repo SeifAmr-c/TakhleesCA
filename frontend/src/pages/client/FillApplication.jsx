@@ -4,7 +4,7 @@ import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
-import CreditCard, { detectNetwork } from "../../components/CreditCard.jsx";
+import CreditCard, { detectNetwork, expiryError } from "../../components/CreditCard.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
 import { listCompanyPorts } from "../../api/ports.js";
 import { submitPayment } from "../../api/payments.js";
@@ -345,6 +345,13 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
     setErrors((m) => ({ ...m, Expiry: "" }));
   };
 
+  /* Cardholder name — letters and spaces only. */
+  const onCardNameChange = (e) => {
+    const cleaned = e.target.value.replace(/[^A-Za-z ]/g, "");
+    setPayment((p) => ({ ...p, CardName: cleaned }));
+    setErrors((m) => ({ ...m, CardName: "" }));
+  };
+
   /* CVC — digits only, exactly up to 3. */
   const onCvcChange = (e) => {
     const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
@@ -474,7 +481,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                 <input
                   className="input"
                   value={payment.CardName}
-                  onChange={update("CardName")}
+                  onChange={onCardNameChange}
                   onFocus={() => setFlipped(false)}
                   disabled={submitting}
                 />
@@ -787,6 +794,10 @@ function FillApplication() {
         errs.CardNumber = "Enter a valid 16-digit card number.";
       if (!payment.CardName.trim()) errs.CardName = "Cardholder name is required.";
       if (!/^\d{2}\/\d{2}$/.test(payment.Expiry)) errs.Expiry = "Expiry must be MM/YY.";
+      else {
+        const expErr = expiryError(payment.Expiry);
+        if (expErr) errs.Expiry = expErr;
+      }
       if (!/^\d{3}$/.test(payment.CVC)) errs.CVC = "CVC must be exactly 3 digits.";
     }
     return errs;

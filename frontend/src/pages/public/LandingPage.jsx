@@ -777,8 +777,7 @@ function Verified() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns:
-                "minmax(220px, 2fr) minmax(180px, 1.4fr) minmax(180px, 1.4fr) minmax(120px, 1fr) 80px",
+              gridTemplateColumns: "minmax(220px, 2fr) minmax(120px, 1fr)",
               padding: "12px 20px",
               background: "var(--steel-50)",
               borderBottom: "1px solid var(--line)",
@@ -791,10 +790,7 @@ function Verified() {
             }}
           >
             <span>Agency</span>
-            <span>License</span>
-            <span>Ports covered</span>
             <span>Rating</span>
-            <span style={{ textAlign: "right" }}>Status</span>
           </div>
 
           {agencies.length === 0 && (
@@ -808,8 +804,7 @@ function Verified() {
               key={a.id}
               style={{
                 display: "grid",
-                gridTemplateColumns:
-                  "minmax(220px, 2fr) minmax(180px, 1.4fr) minmax(180px, 1.4fr) minmax(120px, 1fr) 80px",
+                gridTemplateColumns: "minmax(220px, 2fr) minmax(120px, 1fr)",
                 padding: "16px 20px",
                 alignItems: "center",
                 textDecoration: "none",
@@ -831,15 +826,6 @@ function Verified() {
                 >
                   {a.name}
                 </div>
-              </div>
-              <div
-                className="mono"
-                style={{ fontSize: 13, color: "var(--ink-soft)" }}
-              >
-                {a.license}
-              </div>
-              <div style={{ fontSize: 14, color: "var(--ink-soft)" }}>
-                {a.ports.length ? a.ports.join(" · ") : "—"}
               </div>
               <div
                 style={{
@@ -870,46 +856,6 @@ function Verified() {
                 ) : (
                   <span className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
                     No reviews
-                  </span>
-                )}
-              </div>
-              <div style={{ textAlign: "right" }}>
-                {a.live ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      color: "var(--signal-go)",
-                    }}
-                  >
-                    <span
-                      className="dot"
-                      style={{
-                        width: 6,
-                        height: 6,
-                        background: "var(--signal-go)",
-                      }}
-                    />
-                    Live
-                  </span>
-                ) : (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      fontWeight: 500,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      color: "var(--ink-faint)",
-                    }}
-                  >
-                    Queue
                   </span>
                 )}
               </div>
