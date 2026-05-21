@@ -4,6 +4,7 @@ import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
+import CreditCard, { detectNetwork } from "../../components/CreditCard.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
 import { listCompanyPorts } from "../../api/ports.js";
 import { submitPayment } from "../../api/payments.js";
@@ -319,6 +320,9 @@ function DocumentsStep({
 }
 
 function PaymentStep({ payment, setPayment, errors, setErrors, submitting, priceLoading, priceUnavailable }) {
+  const [flipped, setFlipped] = useState(false);
+  const network = detectNetwork(payment.CardNumber);
+
   const update = (key) => (e) => {
     const value = e.target.value;
     setPayment((p) => ({ ...p, [key]: value }));
@@ -439,6 +443,14 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
               background: "var(--surface-2)",
             }}
           >
+            <CreditCard
+              number={payment.CardNumber}
+              name={payment.CardName}
+              expiry={payment.Expiry}
+              cvc={payment.CVC}
+              network={network}
+              flipped={flipped}
+            />
             <div className="stack">
               <label className="field">
                 <span className="field-label">Card number</span>
@@ -449,6 +461,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                     inputMode="numeric"
                     value={payment.CardNumber}
                     onChange={onCardNumberChange}
+                    onFocus={() => setFlipped(false)}
                     placeholder="XXXX-XXXX-XXXX-XXXX"
                     maxLength={19}
                     disabled={submitting}
@@ -462,6 +475,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                   className="input"
                   value={payment.CardName}
                   onChange={update("CardName")}
+                  onFocus={() => setFlipped(false)}
                   disabled={submitting}
                 />
                 <FieldError message={errors.CardName} />
@@ -475,6 +489,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                     placeholder="MM/YY"
                     value={payment.Expiry}
                     onChange={onExpiryChange}
+                    onFocus={() => setFlipped(false)}
                     maxLength={5}
                     disabled={submitting}
                   />
@@ -487,6 +502,8 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                     inputMode="numeric"
                     value={payment.CVC}
                     onChange={onCvcChange}
+                    onFocus={() => setFlipped(true)}
+                    onBlur={() => setFlipped(false)}
                     maxLength={3}
                     disabled={submitting}
                   />

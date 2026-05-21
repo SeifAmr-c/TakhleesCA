@@ -5,28 +5,60 @@ import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import InteractiveMap from "../../components/InteractiveMap.jsx";
-import { searchCompanies } from "../../api/companies.js";
+import { listCompanies } from "../../api/companies.js";
+import { listReviewAverages } from "../../api/reviews.js";
+import { getLandingStats } from "../../api/stats.js";
 import { useAuth } from "../../api/authState.js";
 
 /* ----------------------------------------------------------------
-   Operational data shown on the landing page is illustrative — it
-   demonstrates the shape of a real platform read, not a marketing
-   claim. Every field maps to something the live product surfaces.
+   Operational figures on this page are read live from the platform
+   via GET /stats/landing — the unauthenticated, name-stripped public
+   stats feed. Nothing here is hardcoded marketing copy.
    ---------------------------------------------------------------- */
 
-const HEADLINE_FACTS = [
-  { value: "184", label: "Verified agencies" },
-  { value: "12,408", label: "Containers cleared" },
-  { value: "98.2%", label: "On-time milestones" },
-  { value: "2m 14s", label: "Avg. activation" },
-];
+const PLACEHOLDER = "—";
 
-const LIVE_OPS = [
-  { time: "03:42", id: "CMAU-7392150", event: "Released",      port: "Port Said" },
-  { time: "03:38", id: "MSCU-3847291", event: "Declared",      port: "Alexandria" },
-  { time: "03:31", id: "OOLU-9281047", event: "Gate-in",       port: "Damietta" },
-  { time: "03:25", id: "APMU-8273940", event: "Submitted",     port: "Sokhna" },
-];
+const formatNum = (n) =>
+  typeof n === "number" && Number.isFinite(n) ? n.toLocaleString("en-US") : PLACEHOLDER;
+
+const formatDate = (d) => {
+  if (!d) return PLACEHOLDER;
+  const date = new Date(d);
+  return Number.isNaN(date.getTime())
+    ? PLACEHOLDER
+    : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
+const formatDuration = (totalSeconds) => {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const m = Math.floor(s / 60);
+  return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+};
+
+// Maps the DB Status to the hero panel's 4-step timeline (which step is active).
+const STATUS_STEP = {
+  Pending: 0,
+  "In Progress": 2,
+  Accepted: 2,
+  Completed: 3,
+  Rejected: 0,
+};
+
+// A live countdown that ticks every second and resets to its seed on hitting 0.
+function Countdown({ seconds }) {
+  const seed = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 134;
+  const [remaining, setRemaining] = useState(seed);
+
+  useEffect(() => {
+    setRemaining(seed);
+    const id = setInterval(() => {
+      setRemaining((r) => (r <= 1 ? seed : r - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [seed]);
+
+  return <>{formatDuration(remaining)}</>;
+}
 
 const PRINCIPLES = [
   {
@@ -73,45 +105,22 @@ const FLOW_STEPS = [
   },
 ];
 
-const VERIFIED_AGENCIES = [
-  {
-    name: "Cairo Clearance Co.",
-    license: "CC-EG-2017-0431",
-    ports: ["Alexandria", "Port Said"],
-    rating: 4.9,
-    reviews: 342,
-    live: true,
-  },
-  {
-    name: "Alex Maritime Logistics",
-    license: "AML-EG-2014-0117",
-    ports: ["Alexandria", "Damietta"],
-    rating: 4.8,
-    reviews: 510,
-    live: true,
-  },
-  {
-    name: "Suez Customs Group",
-    license: "SCG-EG-2019-0822",
-    ports: ["Sokhna", "Suez"],
-    rating: 4.7,
-    reviews: 218,
-    live: false,
-  },
-  {
-    name: "Northport Brokers",
-    license: "NPB-EG-2016-0294",
-    ports: ["Alexandria", "Port Said"],
-    rating: 4.8,
-    reviews: 287,
-    live: true,
-  },
-];
-
 /* ================================================================
    Hero
    ================================================================ */
-function Hero() {
+function Hero({ stats }) {
+  const facts = [
+    { value: formatNum(stats?.verifiedAgencies), label: "Verified agencies" },
+    { value: formatNum(stats?.containersCleared), label: "Containers cleared" },
+    {
+      value: stats?.onTimePct != null ? `${stats.onTimePct}%` : PLACEHOLDER,
+      label: "On-time milestones",
+    },
+    {
+      value: <Countdown seconds={stats?.avgActivationSeconds} />,
+      label: "Avg. activation",
+    },
+  ];
   return (
     <section className="hero hero-pad">
       <div
@@ -174,7 +183,7 @@ function Hero() {
               gap: 0,
             }}
           >
-            {HEADLINE_FACTS.map((f, i) => (
+            {facts.map((f, i) => (
               <div
                 key={f.label}
                 style={{
@@ -216,13 +225,27 @@ function Hero() {
         </div>
 
         {/* Right: live shipment panel — looks like a real ops widget */}
-        <LiveShipmentPanel />
+        <LiveShipmentPanel featured={stats?.featured} />
       </div>
     </section>
   );
 }
 
-function LiveShipmentPanel() {
+function LiveShipmentPanel({ featured }) {
+  const tracking = featured?.TrackingNumber || PLACEHOLDER;
+  const status = featured?.Status || null;
+  const inMotion = status === "In Progress" || status === "Accepted";
+  const activeStep = status != null ? STATUS_STEP[status] ?? 0 : 2;
+  const route =
+    featured
+      ? `${featured.CategoryType || "Clearance"} → ${featured.PortName || PLACEHOLDER}`
+      : "Awaiting next shipment";
+  // Non-identifying secondary line — port mode + filing date, never the
+  // company name or client identity.
+  const meta = featured
+    ? `${featured.PortType ? `${featured.PortType.toUpperCase()} FREIGHT` : "SHIPMENT"} · FILED ${formatDate(featured.SubmissionDate).toUpperCase()}`
+    : "NO ACTIVE CLEARANCE";
+
   return (
     <div
       className="fade-up stagger-6"
@@ -254,11 +277,15 @@ function LiveShipmentPanel() {
             color: "var(--ink-faint)",
           }}
         >
-          Shipment · CMAU-7392150
+          Shipment · {tracking}
         </span>
-        <span className="badge badge-accent">
-          <span className="dot dot-live" /> In motion
-        </span>
+        {inMotion ? (
+          <span className="badge badge-accent">
+            <span className="dot dot-live" /> In motion
+          </span>
+        ) : (
+          <span className="badge">{status || "Idle"}</span>
+        )}
       </div>
 
       <div
@@ -269,7 +296,7 @@ function LiveShipmentPanel() {
           letterSpacing: "-0.01em",
         }}
       >
-        Shanghai &nbsp;→&nbsp; Alexandria
+        {route}
       </div>
       <div
         style={{
@@ -279,26 +306,19 @@ function LiveShipmentPanel() {
           marginTop: 4,
         }}
       >
-        CAIRO CLEARANCE CO. · LIC. CC-EG-2017-0431
+        {meta}
       </div>
 
       <div className="timeline" style={{ marginTop: 24, marginBottom: 4 }}>
-        <div className="timeline-step done">
-          <span className="dot" />
-          Submit
-        </div>
-        <div className="timeline-step done">
-          <span className="dot" />
-          Match
-        </div>
-        <div className="timeline-step active">
-          <span className="dot" />
-          Customs
-        </div>
-        <div className="timeline-step">
-          <span className="dot" />
-          Release
-        </div>
+        {["Submit", "Match", "Customs", "Release"].map((step, i) => (
+          <div
+            key={step}
+            className={`timeline-step${i < activeStep ? " done" : i === activeStep ? " active" : ""}`}
+          >
+            <span className="dot" />
+            {step}
+          </div>
+        ))}
       </div>
 
       <hr className="hairline" style={{ margin: "20px 0" }} />
@@ -310,9 +330,9 @@ function LiveShipmentPanel() {
           gap: 16,
         }}
       >
-        <Stat label="ETA" value="Apr 30" mono />
-        <Stat label="Fee" value="EGP 18,400" mono />
-        <Stat label="Docs" value="6 / 6" mono />
+        <Stat label="Filed" value={featured ? formatDate(featured.SubmissionDate) : PLACEHOLDER} mono />
+        <Stat label="Fee" value={featured ? `EGP ${formatNum(featured.Fee)}` : PLACEHOLDER} mono />
+        <Stat label="Docs" value={featured ? formatNum(featured.DocsSubmitted) : PLACEHOLDER} mono />
       </div>
     </div>
   );
@@ -352,7 +372,10 @@ function Stat({ label, value, mono = false }) {
 /* ================================================================
    Live operations strip — shows the platform is actually working
    ================================================================ */
-function LiveOpsStrip() {
+function LiveOpsStrip({ stats }) {
+  const ops = Array.isArray(stats?.recent) ? stats.recent : [];
+  const inMotionLabel =
+    typeof stats?.inMotion === "number" ? `${stats.inMotion} in motion` : "—";
   return (
     <section
       style={{
@@ -391,7 +414,7 @@ function LiveOpsStrip() {
               whiteSpace: "nowrap",
             }}
           >
-            Live ops · 47 in motion
+            Live ops · {inMotionLabel}
           </span>
         </div>
 
@@ -405,9 +428,14 @@ function LiveOpsStrip() {
             minWidth: 0,
           }}
         >
-          {LIVE_OPS.map((op) => (
+          {ops.length === 0 ? (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-faint)" }}>
+              No recent activity.
+            </span>
+          ) : (
+            ops.map((op, i) => (
             <div
-              key={op.id}
+              key={`${op.id}-${i}`}
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: 12,
@@ -438,9 +466,9 @@ function LiveOpsStrip() {
                   fontWeight: 500,
                   whiteSpace: "nowrap",
                   color:
-                    op.event === "Released"
+                    op.event === "Completed"
                       ? "var(--signal-go)"
-                      : op.event === "Submitted"
+                      : op.event === "Pending"
                       ? "var(--ink-faint)"
                       : "var(--harbor-700)",
                 }}
@@ -458,7 +486,7 @@ function LiveOpsStrip() {
                 {op.port}
               </span>
             </div>
-          ))}
+          )))}
         </div>
       </div>
     </section>
@@ -657,21 +685,44 @@ function Flow() {
    Verified agencies — show trust, never claim it
    ================================================================ */
 function Verified() {
+  const [agencies, setAgencies] = useState([]);
   const [verifiedCount, setVerifiedCount] = useState(null);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const rows = await searchCompanies({
-          keyword: "VerficationStatus",
-          keyvalue: "Verified",
-        });
+        const [companiesRes, averages] = await Promise.all([
+          listCompanies({ status: "Verified" }),
+          listReviewAverages().catch(() => []),
+        ]);
         if (!active) return;
-        setVerifiedCount(Array.isArray(rows) ? rows.length : 0);
+        const list = Array.isArray(companiesRes) ? companiesRes : companiesRes?.data || [];
+        const ratingMap = {};
+        for (const row of Array.isArray(averages) ? averages : []) {
+          if (row?.CompanyID != null) {
+            ratingMap[Number(row.CompanyID)] = {
+              avg: Number(row.AverageRating),
+              count: Number(row.ReviewCount),
+            };
+          }
+        }
+        setVerifiedCount(list.length);
+        // Top 6 as a preview; the full set lives behind "Browse all".
+        setAgencies(
+          list.slice(0, 6).map((c) => ({
+            id: c.CompanyID,
+            name: c.Name,
+            license: c.ComReg || "—",
+            ports: (c.ports || []).map((p) => p.PortName).filter(Boolean),
+            rating: ratingMap[Number(c.CompanyID)] || null,
+            live: (c.ports?.length || 0) > 0,
+          }))
+        );
       } catch {
         if (!active) return;
         setVerifiedCount(0);
+        setAgencies([]);
       }
     })();
     return () => { active = false; };
@@ -746,17 +797,25 @@ function Verified() {
             <span style={{ textAlign: "right" }}>Status</span>
           </div>
 
-          {VERIFIED_AGENCIES.map((a, i) => (
-            <div
-              key={a.license}
+          {agencies.length === 0 && (
+            <div style={{ padding: "20px", fontSize: 14, color: "var(--ink-faint)" }}>
+              {verifiedCount === null ? "Loading agencies…" : "No verified agencies are listed yet."}
+            </div>
+          )}
+          {agencies.map((a, i) => (
+            <Link
+              to={`/companies/${a.id}`}
+              key={a.id}
               style={{
                 display: "grid",
                 gridTemplateColumns:
                   "minmax(220px, 2fr) minmax(180px, 1.4fr) minmax(180px, 1.4fr) minmax(120px, 1fr) 80px",
                 padding: "16px 20px",
                 alignItems: "center",
+                textDecoration: "none",
+                color: "inherit",
                 borderBottom:
-                  i < VERIFIED_AGENCIES.length - 1
+                  i < agencies.length - 1
                     ? "1px solid var(--line)"
                     : "none",
               }}
@@ -780,7 +839,7 @@ function Verified() {
                 {a.license}
               </div>
               <div style={{ fontSize: 14, color: "var(--ink-soft)" }}>
-                {a.ports.join(" · ")}
+                {a.ports.length ? a.ports.join(" · ") : "—"}
               </div>
               <div
                 style={{
@@ -789,22 +848,30 @@ function Verified() {
                   gap: 8,
                 }}
               >
-                <span
-                  className="mono tabular"
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "var(--ink)",
-                  }}
-                >
-                  {a.rating.toFixed(1)}
-                </span>
-                <span
-                  className="mono"
-                  style={{ fontSize: 12, color: "var(--ink-faint)" }}
-                >
-                  ({a.reviews})
-                </span>
+                {a.rating && a.rating.count > 0 ? (
+                  <>
+                    <span
+                      className="mono tabular"
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {a.rating.avg.toFixed(1)}
+                    </span>
+                    <span
+                      className="mono"
+                      style={{ fontSize: 12, color: "var(--ink-faint)" }}
+                    >
+                      ({a.rating.count})
+                    </span>
+                  </>
+                ) : (
+                  <span className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
+                    No reviews
+                  </span>
+                )}
               </div>
               <div style={{ textAlign: "right" }}>
                 {a.live ? (
@@ -846,7 +913,7 @@ function Verified() {
                   </span>
                 )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -958,7 +1025,7 @@ function OperationalReach() {
 /* ================================================================
    CTA — flat dark band, factual
    ================================================================ */
-function CTA() {
+function CTA({ stats }) {
   const auth = useAuth();
   const isCompany = auth?.role === "company";
   /* Visibility rules:
@@ -1015,12 +1082,12 @@ function CTA() {
                 lineHeight: 1.6,
               }}
             >
-              Average activation time across the last thirty days:{" "}
+              Average activation time across the platform:{" "}
               <span
                 className="mono tabular"
                 style={{ color: "#fff", fontWeight: 600 }}
               >
-                2 min 14 sec
+                <Countdown seconds={stats?.avgActivationSeconds} />
               </span>
               . You only pay when the container is released to you.
             </p>
@@ -1062,17 +1129,32 @@ function CTA() {
    Page
    ================================================================ */
 function LandingPage() {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await getLandingStats();
+        if (active) setStats(data);
+      } catch {
+        if (active) setStats(null);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   return (
     <PublicLayout>
       <style>{landingMediaQueries}</style>
-      <Hero />
-      <Reveal as="div"><LiveOpsStrip /></Reveal>
+      <Hero stats={stats} />
+      <Reveal as="div"><LiveOpsStrip stats={stats} /></Reveal>
       <Reveal as="div" delay={40}><Principles /></Reveal>
       <Reveal as="div" delay={40}><Flow /></Reveal>
       <Reveal as="div" delay={40}><Verified /></Reveal>
       <Reveal as="div" delay={40}><OperationalReach /></Reveal>
       <Reveal as="div" delay={40}><WorkingPreview /></Reveal>
-      <Reveal as="div" delay={40}><CTA /></Reveal>
+      <Reveal as="div" delay={40}><CTA stats={stats} /></Reveal>
     </PublicLayout>
   );
 }
