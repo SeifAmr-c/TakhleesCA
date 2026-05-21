@@ -791,6 +791,10 @@ function PrintableTable({ open, onClose, title, subtitle, columns, rows }) {
   if (!open) return null;
 
   const today = new Date().toISOString().slice(0, 10);
+  // Wide tables (many columns) overflow a portrait page and get clipped on
+  // the right. Print them in landscape with a smaller font and allow cell
+  // content to wrap so every column fits within the page width.
+  const wide = columns.length > 6;
 
   const node = (
     <div
@@ -805,13 +809,24 @@ function PrintableTable({ open, onClose, title, subtitle, columns, rows }) {
     >
       <style>{`
         @media print {
+          @page { size: ${wide ? "A4 landscape" : "A4 portrait"}; margin: 12mm; }
           body * { visibility: hidden !important; }
           .print-paper, .print-paper * { visibility: visible !important; }
           .print-paper {
             position: absolute !important; left: 0 !important; top: 0 !important;
             width: 100% !important; max-width: none !important;
-            margin: 0 !important; padding: 24px !important;
+            margin: 0 !important; padding: 0 !important;
             box-shadow: none !important; border: none !important; border-radius: 0 !important;
+          }
+          .print-paper table {
+            table-layout: fixed !important; width: 100% !important;
+            font-size: ${wide ? "8.5px" : "11px"} !important;
+          }
+          .print-paper th, .print-paper td {
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+            padding: ${wide ? "4px 5px" : "6px 8px"} !important;
           }
           .print-no { display: none !important; }
         }
