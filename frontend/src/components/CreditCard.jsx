@@ -53,16 +53,20 @@ export function formatExpiry(value) {
   return digits.length <= 2 ? digits : digits.slice(0, 2) + "/" + digits.slice(2);
 }
 
-// Strict validation: returns an error string for a complete MM/YY in the past,
-// "" when valid or still incomplete.
+// Strict validation: returns an error string for a complete MM/YY that is the
+// current month or earlier; "" when valid (a future month) or still incomplete.
 export function expiryError(value) {
   if (!/^\d{2}\/\d{2}$/.test(value || "")) return "";
   const [mmStr, yyStr] = value.split("/");
   const month = Number(mmStr);
   if (month < 1 || month > 12) return "Invalid month.";
   const year = 2000 + Number(yyStr);
-  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-  if (endOfMonth < new Date()) return "This card has expired.";
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const expiryMonthStart = new Date(year, month - 1, 1);
+  if (expiryMonthStart < currentMonthStart) return "This card has expired.";
+  if (expiryMonthStart.getTime() === currentMonthStart.getTime())
+    return "Expiry must be a later month than the current one.";
   return "";
 }
 

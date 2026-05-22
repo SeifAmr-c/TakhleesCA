@@ -929,7 +929,7 @@ function CTA({ stats }) {
   const showButtons = showImporter || showAgency;
 
   return (
-    <section style={{ padding: "0 0 96px" }}>
+    <section style={{ padding: "72px 0 96px" }}>
       <div className="container">
         <div
           style={{
@@ -945,10 +945,14 @@ function CTA({ stats }) {
             flexWrap: "wrap",
           }}
         >
-          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0, textAlign: "center" }}>
             <span
               className="eyebrow"
-              style={{ color: "var(--safety)", marginBottom: 12 }}
+              style={{
+                color: "var(--safety)",
+                marginBottom: 12,
+                display: "block",
+              }}
             >
               Get started
             </span>
@@ -967,7 +971,7 @@ function CTA({ stats }) {
               style={{
                 color: "oklch(100% 0 0 / 0.74)",
                 fontSize: 16,
-                margin: 0,
+                margin: "0 auto",
                 maxWidth: 540,
                 lineHeight: 1.6,
               }}

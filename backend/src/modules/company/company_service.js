@@ -445,14 +445,29 @@ export const getCompanyDashboardStats = async (req, res, next) => {
     const CommPercentage = Number(company.Comm) || 0;
 
     /* Sum every payment amount across this company's Completed apps.
-       Payments live as an embedded array, so unwind then group. */
+       Commission is taken per transaction (rounded each payment), then
+       summed — not applied once to the aggregate revenue. Payments live
+       as an embedded array, so unwind then group. */
     const [agg] = await Application.aggregate([
       { $match: { CompanyID, Status: 'Completed' } },
       { $unwind: { path: '$payments', preserveNullAndEmptyArrays: false } },
-      { $group: { _id: null, total: { $sum: '$payments.Amount' } } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$payments.Amount' },
+          commission: {
+            $sum: {
+              $round: [
+                { $divide: [{ $multiply: ['$payments.Amount', CommPercentage] }, 100] },
+                2,
+              ],
+            },
+          },
+        },
+      },
     ]);
     const Revenue = Number(agg?.total ?? 0);
-    const CommissionAmount = (Revenue * CommPercentage) / 100;
+    const CommissionAmount = Number(agg?.commission ?? 0);
     const ListingFees = await sumListingFees(CompanyID);
     const NetEarnings = Math.max(0, Revenue - (ListingFees + CommissionAmount));
 
@@ -488,10 +503,23 @@ export const generatePerformanceReport = async (req, res, next) => {
     const [revAgg] = await Application.aggregate([
       { $match: { CompanyID, Status: 'Completed' } },
       { $unwind: { path: '$payments', preserveNullAndEmptyArrays: false } },
-      { $group: { _id: null, total: { $sum: '$payments.Amount' } } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$payments.Amount' },
+          commission: {
+            $sum: {
+              $round: [
+                { $divide: [{ $multiply: ['$payments.Amount', CommPercentage] }, 100] },
+                2,
+              ],
+            },
+          },
+        },
+      },
     ]);
     const TotalRevenue = Number(revAgg?.total ?? 0);
-    const CommissionAmount = (TotalRevenue * CommPercentage) / 100;
+    const CommissionAmount = Number(revAgg?.commission ?? 0);
     const ListingFees = await sumListingFees(CompanyID);
     const NetRevenue = Math.max(0, TotalRevenue - ListingFees - CommissionAmount);
 

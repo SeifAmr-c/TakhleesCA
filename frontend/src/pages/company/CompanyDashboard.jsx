@@ -506,6 +506,11 @@ function CompanyDashboard() {
       );
       if (status === "completed") {
         showNotice(`Application #${applicationId} marked as completed. Payment will be released.`);
+        // Completing an app releases its payment, so the revenue /
+        // commission / net-earnings KPIs change. Re-fetch the canonical
+        // stats so the dashboard updates without a manual refresh.
+        const statsRes = await getCompanyDashboardStats().catch(() => null);
+        if (statsRes?.data) setStats(statsRes.data);
       }
     } catch {
       showNotice(`Couldn't update application #${applicationId}.`);

@@ -255,14 +255,24 @@ export const cancelApplication = async (req, res, next) => {
             return res.status(400).json({ ok: false, message: "Invalid application id." });
         }
 
-        const result = await Application.deleteOne({
-            ApplicationID,
-            ClientID,
-            Status: 'Pending',
-        });
-        if (!result.deletedCount) {
+        const app = await Application.findOne({ ApplicationID, ClientID, Status: 'Pending' });
+        if (!app) {
             return res.status(400).json({ ok: false, message: "Application cannot be cancelled." });
         }
+
+        // Drop the uploaded files from Cloudinary before the subdocs vanish
+        // with the parent. Best-effort: destroyCloudinaryAsset swallows errors.
+        await Promise.all((app.documents ?? []).map((d) => destroyCloudinaryAsset(d.Path)));
+
+        // Remove the ledger rows opened by this app's payment(s) so no
+        // CompanyPayment is left pointing at a deleted application/payment.
+        const paymentIds = (app.payments ?? []).map((p) => p.PaymentID).filter((id) => id != null);
+        if (paymentIds.length) {
+            await CompanyPayment.deleteMany({ PaymentID: { $in: paymentIds } });
+        }
+
+        await Application.deleteOne({ ApplicationID, ClientID, Status: 'Pending' });
+
         return res.status(200).json({ ok: true, message: "Application cancelled successfully." });
     } catch (err) {
         return next(err);

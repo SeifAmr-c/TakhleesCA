@@ -31,7 +31,7 @@ const money = (n) =>
 const makeInitialDocuments = () =>
   Array.from({ length: REQUIRED_DOC_COUNT }, (_, i) => ({
     id: i + 1,
-    type: "",
+    type: DOCUMENT_TYPES[i],
     file: null,
   }));
 
@@ -181,11 +181,6 @@ function DocumentsStep({
   const setDocFieldError = (id, key, msg) =>
     setDocErrors((m) => ({ ...m, [id]: { ...(m[id] || {}), [key]: msg } }));
 
-  const updateType = (id, value) => {
-    setDocuments((list) => list.map((d) => (d.id === id ? { ...d, type: value } : d)));
-    if (value) setDocFieldError(id, "type", "");
-  };
-
   const updateFile = (id, file) =>
     setDocuments((list) => list.map((d) => (d.id === id ? { ...d, file } : d)));
 
@@ -271,22 +266,21 @@ function DocumentsStep({
                 className="grid"
                 style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 12 }}
               >
-                <label className="field">
-                  <span className="field-label">Document type *</span>
-                  <select
-                    className="select"
-                    value={d.type}
-                    onChange={(e) => updateType(d.id, e.target.value)}
-                    disabled={submitting}
-                    required
+                <div className="field">
+                  <span className="field-label">Document type</span>
+                  <div
+                    className="input"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      background: "var(--surface-2)",
+                      color: "var(--ink)",
+                      cursor: "default",
+                    }}
                   >
-                    <option value="">Select type…</option>
-                    {DOCUMENT_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                  <FieldError message={errs.type} />
-                </label>
+                    {d.type}
+                  </div>
+                </div>
 
                 <div className="field">
                   <span className="field-label">File *</span>
