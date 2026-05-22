@@ -1,5 +1,8 @@
 import Application from '../../Database/mongo/application.mongo.js';
+import Company from '../../Database/mongo/company.mongo.js';
+import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
 import { nextId } from '../../Database/mongo/counters.js';
+import { PLATFORM_FEE_RATE } from '../../config/fees.js';
 
 const PAYMENT_GATEWAYS = ['Credit Card', 'Bank Transfer'];
 
@@ -26,8 +29,8 @@ export const createPayment = async (req, res, next) => {
             });
         }
 
-        const exists = await Application.exists({ ApplicationID });
-        if (!exists) {
+        const app = await Application.findOne({ ApplicationID }).select({ CompanyID: 1 }).lean();
+        if (!app) {
             return res.status(404).json({ ok: false, message: `Application ${ApplicationID} not found.` });
         }
 
@@ -41,6 +44,31 @@ export const createPayment = async (req, res, next) => {
                 PaymentGateway: Gateway,
             } } }
         );
+
+        /* The client pays us a flat 5% on top of the service price at
+           checkout. Book it immediately as the first slice of this
+           payment's CompanyPayment ledger row; commission + the monthly
+           listing fee are added to the SAME row when the company accepts
+           (see updateApplication). Amount on the payment subdoc stays the
+           service price so commission is computed off the price, not our cut. */
+        const FixedFee = Math.round(Amount * PLATFORM_FEE_RATE * 100) / 100;
+        let companySnap = null;
+        if (app.CompanyID != null) {
+            const c = await Company.findOne({ CompanyID: app.CompanyID }).select({ Name: 1 }).lean();
+            if (c) companySnap = { Name: c.Name };
+        }
+        const CompanyPaymentID = await nextId('company_payment');
+        await CompanyPayment.create({
+            CompanyPaymentID,
+            PaymentDate: new Date(),
+            Amount: FixedFee,
+            FixedFee,
+            Commission: 0,
+            ListingFee: 0,
+            CompanyID: app.CompanyID ?? null,
+            PaymentID,
+            company: companySnap,
+        });
 
         return res.status(201).json({
             ok: true,

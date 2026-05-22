@@ -436,7 +436,7 @@ function CompanyDashboard() {
       activeJobs: accepted.length,
       completed,
       inProgress,
-      platformFee: Number(stats?.PlatformFee ?? 0),
+      listingFees: Number(stats?.ListingFees ?? 0),
       commissionAmount: Number(stats?.CommissionAmount ?? 0),
       commissionRate: Number(stats?.Comm ?? 0),
       netEarnings: Number(stats?.NetEarnings ?? 0),
@@ -575,7 +575,7 @@ function CompanyDashboard() {
             icon="receipt"
             label="Net earnings"
             value={`EGP ${totals.netEarnings.toLocaleString()}`}
-            sub={`After EGP ${totals.platformFee.toLocaleString()} platform fee + EGP ${totals.commissionAmount.toLocaleString()} commission (${totals.commissionRate}%)`}
+            sub={`After EGP ${totals.listingFees.toLocaleString()} listing fees + EGP ${totals.commissionAmount.toLocaleString()} commission (${totals.commissionRate}%)`}
             accent="success"
           />
           <StatCard

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import Cropper from "react-easy-crop";
 import { registerCompany } from "../../api/companies.js";
+import { friendlyError } from "../../api/client.js";
 import { getCroppedImage } from "../../utils/cropImage.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
@@ -21,16 +22,7 @@ const formatTaxNumber = (value) => {
   return parts.join("-");
 };
 
-const extractErrorMessage = (err) => {
-  const data = err?.response?.data;
-  if (data?.Message) return data.Message;
-  if (data?.message) return data.message;
-  if (data?.error) return data.error;
-  if (err?.code === "ERR_NETWORK") {
-    return "Cannot reach the server. Is the backend running on port 3000?";
-  }
-  return "Something went wrong. Please try again.";
-};
+const extractErrorMessage = (err) => friendlyError(err);
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 

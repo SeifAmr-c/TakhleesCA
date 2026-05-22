@@ -98,7 +98,7 @@ export const updateCompanyPricing = async (prices) => {
 
 // Backend contract (GET /company/dashboard-stats, requires company session):
 //   200: { ok: true, data: { CompanyID, CompletedRevenue, Comm,
-//                            CommissionAmount, PlatformFee, NetEarnings } }
+//                            CommissionAmount, ListingFees, NetEarnings } }
 export const getCompanyDashboardStats = async () => {
   const { data } = await api.get("/company/dashboard-stats");
   return data;

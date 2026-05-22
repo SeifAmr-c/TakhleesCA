@@ -159,7 +159,7 @@ function AdminDashboard() {
 
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <StatCard icon="package" label="Total requests" value={analytics.totalRequests.toLocaleString()} sub="All-time applications submitted" />
-          <StatCard icon="receipt" label="Website revenue" value={`EGP ${analytics.websiteRevenue.toLocaleString()}`} sub="Platform fees collected" accent="accent" />
+          <StatCard icon="receipt" label="Website revenue" value={`EGP ${analytics.websiteRevenue.toLocaleString()}`} sub="Total platform revenue" accent="accent" />
           <StatCard icon="check" label="Transactions" value={analytics.transactions.toLocaleString()} sub={`${conversionRate}% completion rate`} />
           <StatCard icon="user" label="Online users" value={analytics.onlineUsers} sub="Live sessions right now" />
         </div>

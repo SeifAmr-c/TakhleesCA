@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { register } from "../../api/auth.js";
+import { friendlyError } from "../../api/client.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
@@ -11,15 +12,7 @@ const NID_LEN = 14;
 
 const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
 
-const extractErrorMessage = (err) => {
-  const data = err?.response?.data;
-  if (data?.message) return data.message;
-  if (data?.error) return data.error;
-  if (err?.code === "ERR_NETWORK") {
-    return "Cannot reach the server. Is the backend running on port 3000?";
-  }
-  return "Something went wrong. Please try again.";
-};
+const extractErrorMessage = (err) => friendlyError(err);
 
 /* Tiny inline error rendered directly under an input. Keeping the
    component local to the file avoids dragging in another import for

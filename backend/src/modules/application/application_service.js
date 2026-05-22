@@ -7,6 +7,7 @@ import Category from '../../Database/mongo/category.mongo.js';
 import Port from '../../Database/mongo/port.mongo.js';
 import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
 import { nextId } from '../../Database/mongo/counters.js';
+import { LISTING_FEE } from '../../config/fees.js';
 
 const ALLOWED_PAYMENT_TYPES = ['FULL', 'PARTIAL'];
 const ALLOWED_DOC_TYPES = ['National ID / Passport', 'Proof Of Payment', 'Delegation', 'Shipping Document'];
@@ -273,10 +274,13 @@ export const cancelApplication = async (req, res, next) => {
    document/payment, or Cloudinary asset is left behind.
 
    Gating on Status: 'Pending' is the referential-integrity guarantee: a
-   Review (Review.ApplicationID) is only written after completion and a
-   CompanyPayment (CompanyPayment.PaymentID) only on accept, so a Pending
-   application is referenced by nothing outside its own doc. Deleting it
-   therefore cannot orphan a cross-collection reference. */
+   Review (Review.ApplicationID) is only written after completion, so a
+   Pending app has none. A CompanyPayment row, however, is opened at the
+   client's checkout (the 5% FixedFee) — before accept — and is keyed by
+   the payment's PaymentID. So we must drop those ledger rows too, otherwise
+   deleting the app would orphan them (and the client is owed that 5% back
+   anyway since the company refused the job). On a Pending app those rows
+   only carry the FixedFee — commission/listing are added on accept. */
 export const rejectApplication = async (req, res, next) => {
     try {
         const CompanyID = req.session?.companyId;
@@ -300,6 +304,13 @@ export const rejectApplication = async (req, res, next) => {
         // Drop the uploaded files from Cloudinary before the subdocs vanish
         // with the parent. Best-effort: destroyCloudinaryAsset swallows errors.
         await Promise.all((app.documents ?? []).map((d) => destroyCloudinaryAsset(d.Path)));
+
+        // Remove the ledger rows opened by this app's payment(s) so no
+        // CompanyPayment is left pointing at a deleted payment.
+        const paymentIds = (app.payments ?? []).map((p) => p.PaymentID).filter((id) => id != null);
+        if (paymentIds.length) {
+            await CompanyPayment.deleteMany({ PaymentID: { $in: paymentIds } });
+        }
 
         await Application.deleteOne({ ApplicationID, CompanyID, Status: 'Pending' });
 
@@ -470,8 +481,12 @@ export const updateApplication = async (req, res, next) => {
         };
         await Application.updateOne({ ApplicationID }, { $set });
 
-        /* On accept: book Takhlees' platform revenue into CompanyPayment.
-           Formula: 1600 + Amount * Comm / 100. */
+        /* On accept: finish booking platform revenue onto the SAME
+           CompanyPayment row the client's checkout already opened with the
+           5% FixedFee. We add Commission (price * Comm%) plus the listing
+           fee — but the listing fee is flat per company per CALENDAR MONTH,
+           so it's only applied if this company has no other row carrying a
+           ListingFee yet this month. */
         if (isAccepting) {
             const apDoc = await Application.findOne({ ApplicationID }).lean();
             const lastPayment = (apDoc?.payments ?? []).at(-1);
@@ -487,16 +502,49 @@ export const updateApplication = async (req, res, next) => {
                 throw e;
             }
             const comm = Number(company.Comm) || 0;
-            const revenue = 1600 + (Number(lastPayment.Amount) * (comm / 100));
-            const CompanyPaymentID = await nextId('company_payment');
-            await CompanyPayment.create({
-                CompanyPaymentID,
-                PaymentDate: new Date(),
-                Amount: revenue,
+            const Commission = Math.round(Number(lastPayment.Amount) * (comm / 100) * 100) / 100;
+
+            const now = new Date();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            const listingAlreadyCharged = await CompanyPayment.exists({
                 CompanyID,
-                PaymentID: lastPayment.PaymentID,
-                company: { Name: company.Name },
+                ListingFee: { $gt: 0 },
+                PaymentDate: { $gte: monthStart, $lt: nextMonthStart },
             });
+            const ListingFee = listingAlreadyCharged ? 0 : LISTING_FEE;
+
+            /* The ledger row was created at checkout keyed by this PaymentID;
+               update it in place so one record holds FixedFee + Commission +
+               ListingFee. Fall back to creating it if it's somehow missing
+               (e.g. legacy payment booked before this flow existed). */
+            const existing = await CompanyPayment.findOne({ PaymentID: lastPayment.PaymentID });
+            if (existing) {
+                const FixedFee = Number(existing.FixedFee) || 0;
+                await CompanyPayment.updateOne(
+                    { _id: existing._id },
+                    { $set: {
+                        Commission,
+                        ListingFee,
+                        Amount: Math.round((FixedFee + Commission + ListingFee) * 100) / 100,
+                        CompanyID,
+                        company: { Name: company.Name },
+                    } }
+                );
+            } else {
+                const CompanyPaymentID = await nextId('company_payment');
+                await CompanyPayment.create({
+                    CompanyPaymentID,
+                    PaymentDate: new Date(),
+                    Amount: Math.round((Commission + ListingFee) * 100) / 100,
+                    FixedFee: 0,
+                    Commission,
+                    ListingFee,
+                    CompanyID,
+                    PaymentID: lastPayment.PaymentID,
+                    company: { Name: company.Name },
+                });
+            }
         }
 
         return res.status(200).json({

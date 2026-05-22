@@ -16,31 +16,32 @@ const COMPANY_PUBLIC = {
   Governorate: 1, Address: 1, About: 1, LogoUrl: 1,
 };
 
-const PLATFORM_FEE = 1600;
-
-/* Aggregate platform revenue from Completed applications: each payment
-   contributes (1600 + Amount * Comm / 100). Joins each application to
-   its company doc to pull the Comm percentage. */
+/* Platform revenue is the CompanyPayment ledger: every row already carries
+   the platform's actual take (FixedFee + Commission + ListingFee) in Amount,
+   with the listing fee charged only once per company per month. So we sum
+   the ledger directly rather than re-deriving a per-application formula.
+   Each row is joined back to its application (via PaymentID) to recover the
+   category for the by-category breakdown; company name comes from the
+   ledger's own snapshot. */
 const aggregateRevenue = async (matchExtra = {}) => {
-  const rows = await Application.aggregate([
-    { $match: { Status: 'Completed', ...matchExtra } },
-    { $unwind: { path: '$payments', preserveNullAndEmptyArrays: false } },
+  const rows = await CompanyPayment.aggregate([
+    { $match: { ...matchExtra } },
     {
       $lookup: {
-        from: 'companies',
-        localField: 'CompanyID',
-        foreignField: 'CompanyID',
-        as: '_company',
+        from: 'applications',
+        localField: 'PaymentID',
+        foreignField: 'payments.PaymentID',
+        as: '_app',
       },
     },
-    { $unwind: { path: '$_company', preserveNullAndEmptyArrays: false } },
+    { $unwind: { path: '$_app', preserveNullAndEmptyArrays: true } },
     {
       $project: {
         CompanyID: 1,
-        CategoryID: 1,
-        'category.Type': 1,
-        '_company.Name': 1,
-        revenue: { $add: [PLATFORM_FEE, { $divide: [{ $multiply: ['$payments.Amount', '$_company.Comm'] }, 100] }] },
+        CategoryID: '$_app.CategoryID',
+        'category.Type': '$_app.category.Type',
+        '_company.Name': '$company.Name',
+        revenue: '$Amount',
       },
     },
   ]);
@@ -255,7 +256,7 @@ export const resolveTicket = async (req, res, next) => {
 
 export const generateExecutiveReport = async (req, res, next) => {
   try {
-    /* Platform revenue (same formula as /admin/stats). */
+    /* Platform revenue from the CompanyPayment ledger (same source as /admin/stats). */
     const revenueRows = await aggregateRevenue();
     const TotalWebsiteRevenue = revenueRows.reduce((s, r) => s + Number(r.revenue || 0), 0);
 
@@ -282,13 +283,13 @@ export const generateExecutiveReport = async (req, res, next) => {
     const byCompany = new Map();
     for (const r of revenueRows) {
       const key = r.CompanyID;
-      const cur = byCompany.get(key) || { CompanyID: key, Name: r._company?.Name ?? null, CompletedCount: 0, Revenue: 0 };
-      cur.CompletedCount += 1;
+      const cur = byCompany.get(key) || { CompanyID: key, Name: r._company?.Name ?? null, TransactionCount: 0, Revenue: 0 };
+      cur.TransactionCount += 1;
       cur.Revenue += Number(r.revenue || 0);
       byCompany.set(key, cur);
     }
     const topCompanies = Array.from(byCompany.values())
-      .sort((a, b) => (b.Revenue - a.Revenue) || (b.CompletedCount - a.CompletedCount))
+      .sort((a, b) => (b.Revenue - a.Revenue) || (b.TransactionCount - a.TransactionCount))
       .slice(0, 3);
 
     const FulfilledApplications = await Application.countDocuments({ Status: 'Completed' });
@@ -363,7 +364,7 @@ export const generateExecutiveReport = async (req, res, next) => {
     doc.moveDown(0.3);
     if (!topCompanies.length) {
       doc.font("Helvetica-Oblique").fontSize(10).fillColor("#000000")
-        .text("No completed business activity yet.", LEFT, doc.y, { width: PAGE_WIDTH, align: "center" });
+        .text("No revenue activity yet.", LEFT, doc.y, { width: PAGE_WIDTH, align: "center" });
     } else {
       doc.font("Helvetica-Bold").fontSize(10).fillColor("#000000")
         .text("Top 3 Companies", LEFT, doc.y, { width: PAGE_WIDTH });
@@ -373,7 +374,7 @@ export const generateExecutiveReport = async (req, res, next) => {
         doc.font("Helvetica-Bold").fontSize(10).fillColor("#000000")
           .text(`${i + 1}. ${c.Name ?? '—'}`, LEFT, y);
         doc.font("Helvetica").fillColor("#000000")
-          .text(`${c.CompletedCount} completed · ${fmtMoney(c.Revenue)}`, LEFT, y, { width: PAGE_WIDTH, align: "right" });
+          .text(`${c.TransactionCount} transactions · ${fmtMoney(c.Revenue)}`, LEFT, y, { width: PAGE_WIDTH, align: "right" });
         doc.moveDown(0.3);
       });
     }

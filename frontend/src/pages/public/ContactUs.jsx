@@ -5,6 +5,7 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { submitSupportTicket } from "../../api/payments.js";
+import { friendlyError } from "../../api/client.js";
 import { useAuth } from "../../api/authState.js";
 
 const CONTACTS = [
@@ -64,11 +65,7 @@ function ContactUs() {
       setSuccess(true);
       setTimeout(() => navigate("/"), 1500);
     } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Could not send your message. Please try again."
-      );
+      setError(friendlyError(err, "Could not send your message. Please try again."));
     } finally {
       setSubmitting(false);
     }

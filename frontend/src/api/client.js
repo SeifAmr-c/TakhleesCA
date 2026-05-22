@@ -17,6 +17,22 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Turns any API/network error into a safe message for the UI. We never
+// surface raw server text or infrastructure details to users:
+//   - no response  -> the request never reached the server (offline, etc.)
+//   - 4xx          -> deliberate, user-safe copy the API chose to send
+//   - 5xx / other  -> unexpected; collapse to the generic fallback
+export const friendlyError = (err, fallback = "Something went wrong. Please try again.") => {
+  const res = err?.response;
+  if (!res) {
+    return "Can't reach the server. Please check your internet connection and try again.";
+  }
+  if (res.status >= 400 && res.status < 500) {
+    return res.data?.message || res.data?.Message || res.data?.error || fallback;
+  }
+  return fallback;
+};
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {

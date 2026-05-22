@@ -419,7 +419,17 @@ export const updateCompanyPricing = async (req, res, next) => {
   }
 };
 
-const PLATFORM_FEE = 1600;
+/* Sum the listing fees this company has actually been charged. The fee is
+   flat per company per calendar month (booked into CompanyPayment.ListingFee
+   on accept), so the real deduction is "1600 × months active", not a single
+   flat fee — reading the ledger keeps the earnings view honest. */
+const sumListingFees = async (CompanyID) => {
+  const [agg] = await CompanyPayment.aggregate([
+    { $match: { CompanyID } },
+    { $group: { _id: null, listing: { $sum: '$ListingFee' } } },
+  ]);
+  return Number(agg?.listing ?? 0);
+};
 
 export const getCompanyDashboardStats = async (req, res, next) => {
   try {
@@ -443,7 +453,8 @@ export const getCompanyDashboardStats = async (req, res, next) => {
     ]);
     const Revenue = Number(agg?.total ?? 0);
     const CommissionAmount = (Revenue * CommPercentage) / 100;
-    const NetEarnings = Math.max(0, Revenue - (PLATFORM_FEE + CommissionAmount));
+    const ListingFees = await sumListingFees(CompanyID);
+    const NetEarnings = Math.max(0, Revenue - (ListingFees + CommissionAmount));
 
     return res.status(200).json({
       ok: true,
@@ -452,7 +463,7 @@ export const getCompanyDashboardStats = async (req, res, next) => {
         CompletedRevenue: Revenue,
         Comm: CommPercentage,
         CommissionAmount,
-        PlatformFee: PLATFORM_FEE,
+        ListingFees,
         NetEarnings,
       },
     });
@@ -481,7 +492,8 @@ export const generatePerformanceReport = async (req, res, next) => {
     ]);
     const TotalRevenue = Number(revAgg?.total ?? 0);
     const CommissionAmount = (TotalRevenue * CommPercentage) / 100;
-    const NetRevenue = Math.max(0, TotalRevenue - PLATFORM_FEE - CommissionAmount);
+    const ListingFees = await sumListingFees(CompanyID);
+    const NetRevenue = Math.max(0, TotalRevenue - ListingFees - CommissionAmount);
 
     const statusAgg = await Application.aggregate([
       { $match: { CompanyID } },
@@ -587,7 +599,7 @@ export const generatePerformanceReport = async (req, res, next) => {
     sectionTitle("Financials");
     row("Total Revenue", fmtMoney(TotalRevenue));
     row(`Commission (${CommPercentage}%)`, fmtMoney(CommissionAmount));
-    row("Platform Fee", fmtMoney(PLATFORM_FEE));
+    row("Listing Fees", fmtMoney(ListingFees));
     row("Net Revenue", fmtMoney(NetRevenue));
 
     sectionTitle("Applications Status");

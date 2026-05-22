@@ -2,19 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { loginCompany } from "../../api/companies.js";
 import { setAuth } from "../../api/authState.js";
+import { friendlyError } from "../../api/client.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import styles from "./Auth.module.css";
 
-const extractErrorMessage = (err) => {
-  const data = err?.response?.data;
-  if (data?.message) return data.message;
-  if (data?.error) return data.error;
-  if (err?.code === "ERR_NETWORK") {
-    return "Cannot reach the server. Is the backend running on port 3000?";
-  }
-  return "Something went wrong. Please try again.";
-};
+const extractErrorMessage = (err) => friendlyError(err);
 
 function CompanyLogin() {
   const [contactEmail, setContactEmail] = useState("");

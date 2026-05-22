@@ -5,6 +5,7 @@ import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { recommendCompanies } from "../../api/companies.js";
+import { friendlyError } from "../../api/client.js";
 import { useAuth } from "../../api/authState.js";
 
 /* Alphabetical list of Egypt governorates — hard-coded so the wizard
@@ -190,11 +191,7 @@ function RecommendationWizard() {
         navigate("/login", { replace: false });
         return;
       }
-      setError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Couldn't fetch recommendations. Please try again."
-      );
+      setError(friendlyError(err, "Couldn't fetch recommendations. Please try again."));
     } finally {
       setSubmitting(false);
     }

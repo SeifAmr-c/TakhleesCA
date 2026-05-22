@@ -6,6 +6,7 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import CreditCard, { detectNetwork, expiryError } from "../../components/CreditCard.jsx";
 import { createApplication, listCategories } from "../../api/applications.js";
+import { friendlyError } from "../../api/client.js";
 import { listCompanyPorts } from "../../api/ports.js";
 import { submitPayment } from "../../api/payments.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
@@ -19,6 +20,13 @@ const DOCUMENT_TYPES = [
 ];
 
 const REQUIRED_DOC_COUNT = 4;
+
+/* Flat platform fee the client pays us on top of the service price.
+   Mirrors PLATFORM_FEE_RATE on the backend (config/fees.js) — display
+   only; the server recomputes it when booking revenue. */
+const PLATFORM_FEE_RATE = 0.05;
+const money = (n) =>
+  Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const makeInitialDocuments = () =>
   Array.from({ length: REQUIRED_DOC_COUNT }, (_, i) => ({
@@ -378,6 +386,11 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
 
   const isCard = payment.Gateway === "Credit Card";
 
+  const servicePrice = Number(payment.Amount) || 0;
+  const platformFee = Math.round(servicePrice * PLATFORM_FEE_RATE * 100) / 100;
+  const totalDue = servicePrice + platformFee;
+  const hasPrice = servicePrice > 0;
+
   return (
     <div className="card card-pad-lg">
       <h3 className="card-title">Payment</h3>
@@ -386,30 +399,64 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
       </p>
 
       <div className="stack">
-        <label className="field">
-          <span className="field-label">Total amount (EGP) *</span>
-          <div className="input-with-icon">
-            <span className="input-icon"><Icon name="receipt" size={16} /></span>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={payment.Amount}
-              readOnly
-              tabIndex={-1}
-              aria-readonly="true"
-              placeholder={priceLoading ? "Loading price…" : "Select a category to view price"}
-              style={{ backgroundColor: "var(--surface-2)", cursor: "not-allowed", textAlign: "center" }}
-            />
-          </div>
+        <div className="field">
+          <span className="field-label">Amount due (EGP) *</span>
+          {hasPrice ? (
+            <div
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-md)",
+                padding: 16,
+                background: "var(--surface-2)",
+              }}
+            >
+              <div className="stack" style={{ gap: 10, fontSize: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--ink-faint)" }}>Service fee</span>
+                  <span className="mono tabular" style={{ color: "var(--ink)" }}>EGP {money(servicePrice)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--ink-faint)" }}>Platform fee (5%)</span>
+                  <span className="mono tabular" style={{ color: "var(--ink)" }}>EGP {money(platformFee)}</span>
+                </div>
+              </div>
+              <hr className="divider" />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontWeight: 600,
+                  fontSize: 16,
+                  color: "var(--ink)",
+                }}
+              >
+                <span>Total due</span>
+                <span className="mono tabular">EGP {money(totalDue)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="input-with-icon">
+              <span className="input-icon"><Icon name="receipt" size={16} /></span>
+              <input
+                className="input"
+                value=""
+                readOnly
+                tabIndex={-1}
+                aria-readonly="true"
+                placeholder={priceLoading ? "Loading price…" : "Select a category to view price"}
+                style={{ backgroundColor: "var(--surface-2)", cursor: "not-allowed", textAlign: "center" }}
+              />
+            </div>
+          )}
           <span className="hint">
             {priceLoading
               ? "Looking up this company's price for the selected category…"
               : priceUnavailable
               ? "This company hasn't published a price for the selected category."
-              : "Auto-calculated from the company's price list. Funds are held until the milestone “Released”."}
+              : "Service fee is the company's published price; the 5% platform fee is added on top. Funds are held until the milestone “Released”."}
           </span>
           <FieldError message={errors.Amount} />
-        </label>
+        </div>
 
         <div className="field">
           <span className="field-label">Payment gateway *</span>
@@ -882,11 +929,7 @@ function FillApplication() {
       });
       setStep(3);
     } catch (err) {
-      setSubmitError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Could not submit the application. Please try again."
-      );
+      setSubmitError(friendlyError(err, "Could not submit the application. Please try again."));
     } finally {
       setSubmitting(false);
     }

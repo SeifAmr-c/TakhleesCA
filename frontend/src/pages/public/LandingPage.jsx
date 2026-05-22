@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
-import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import InteractiveMap from "../../components/InteractiveMap.jsx";
 import { listCompanies } from "../../api/companies.js";
@@ -868,61 +867,6 @@ function Verified() {
 }
 
 /* ================================================================
-   Working preview — shows the spinner in context
-   ================================================================ */
-function WorkingPreview() {
-  return (
-    <section
-      style={{
-        padding: "48px 0 24px",
-        borderTop: "1px solid var(--line)",
-        background: "var(--surface)",
-      }}
-    >
-      <div
-        className="container"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto 1fr",
-          gap: 32,
-          alignItems: "center",
-        }}
-      >
-        <ContainerSpinner size={88} label="Watching the port" />
-        <div>
-          <div
-            className="mono"
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--ink-faint)",
-              marginBottom: 8,
-            }}
-          >
-            How loading looks on Takhlees
-          </div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 15.5,
-              color: "var(--ink-soft)",
-              lineHeight: 1.6,
-              maxWidth: 60 + "ch",
-            }}
-          >
-            Every long-running operation in the product is fronted by a
-            container assembling itself, piece by piece. It is the only loading
-            indicator the product uses.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ================================================================
    Operational reach — interactive map of active ports
    ================================================================ */
 function OperationalReach() {
@@ -1099,7 +1043,6 @@ function LandingPage() {
       <Reveal as="div" delay={40}><Flow /></Reveal>
       <Reveal as="div" delay={40}><Verified /></Reveal>
       <Reveal as="div" delay={40}><OperationalReach /></Reveal>
-      <Reveal as="div" delay={40}><WorkingPreview /></Reveal>
       <Reveal as="div" delay={40}><CTA stats={stats} /></Reveal>
     </PublicLayout>
   );

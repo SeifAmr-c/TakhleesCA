@@ -8,6 +8,7 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
 import { listApplications, cancelApplication } from "../../api/applications.js";
 import { submitReview, checkApplicationReviewed } from "../../api/reviews.js";
+import { friendlyError } from "../../api/client.js";
 import { useAuth } from "../../api/authState.js";
 
 const STATUS_BADGE = {
@@ -381,9 +382,7 @@ function Tracking() {
         setCancelTarget(null);
       }
     } catch (err) {
-      setCancelError(
-        err?.response?.data?.message || "Couldn't cancel this application."
-      );
+      setCancelError(friendlyError(err, "Couldn't cancel this application."));
       setCancellingId(null);
       setCancelTarget(null);
     }
@@ -411,11 +410,7 @@ function Tracking() {
       setReviewedIds((prev) => new Set([...prev, Number(reviewTarget.ApplicationID)]));
       setReviewSent(true);
     } catch (err) {
-      setReviewError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Couldn't submit your review. Please try again."
-      );
+      setReviewError(friendlyError(err, "Couldn't submit your review. Please try again."));
     } finally {
       setReviewSubmitting(false);
     }

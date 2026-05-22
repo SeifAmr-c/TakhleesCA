@@ -19,6 +19,7 @@ import {
   resolveTicket,
 } from "../../api/admin.js";
 import { updateCompanyCommission } from "../../api/companies.js";
+import { friendlyError } from "../../api/client.js";
 import {
   listPortsWithUsage,
   createPort,
@@ -421,7 +422,7 @@ function AddPortForm({ onCreate, busy }) {
       setType("Sea");
       setEstDate("");
     } catch (err) {
-      setError(err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add port.");
+      setError(friendlyError(err, "Couldn't add port."));
     }
   };
 
@@ -589,7 +590,7 @@ function AddCategoryForm({ onCreate, busy }) {
       await onCreate({ Type: name.trim() });
       setName("");
     } catch (err) {
-      setError(err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add category.");
+      setError(friendlyError(err, "Couldn't add category."));
     }
   };
 
@@ -1214,11 +1215,7 @@ function AdminManagement() {
       showNotice(`${target.Name} rejected and removed.`);
     } catch (err) {
       console.error("rejectCompany failed:", err?.response?.status, err?.response?.data || err);
-      const msg = err?.response?.data?.message
-        || err?.response?.data?.error
-        || err?.message
-        || "Couldn't reject the company. Please try again.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't reject the company. Please try again."));
     } finally {
       setRejectBusy(false);
       setCompanyBusyId(null);
@@ -1236,8 +1233,7 @@ function AdminManagement() {
       setCommSavedAt((s) => ({ ...s, [companyId]: Date.now() }));
       showNotice(`Commission updated to ${newComm}%.`);
     } catch (err) {
-      const msg = err?.response?.data?.message || "Couldn't update the commission. Please try again.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't update the commission. Please try again."));
     } finally {
       setCommBusyId(null);
     }
@@ -1261,8 +1257,7 @@ function AdminManagement() {
       await refreshPorts();
       showNotice(`Port "${body.PortName}" updated.`);
     } catch (err) {
-      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't update the port.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't update the port."));
       throw err;
     } finally {
       setPortBusyId(null);
@@ -1276,8 +1271,7 @@ function AdminManagement() {
       await refreshCategories();
       showNotice(`Category "${body.Type}" added.`);
     } catch (err) {
-      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add category.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't add category."));
       throw err;
     } finally {
       setCategoryAdding(false);
@@ -1291,8 +1285,7 @@ function AdminManagement() {
       await refreshCategories();
       showNotice(`Category renamed to "${body.Type}".`);
     } catch (err) {
-      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't update the category.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't update the category."));
       throw err;
     } finally {
       setCategoryBusyId(null);
@@ -1310,8 +1303,7 @@ function AdminManagement() {
       await refreshCategories();
       showNotice(`Category "${target.Type}" deleted.`);
     } catch (err) {
-      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't delete the category.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't delete the category."));
     } finally {
       setDeleteCategoryBusy(false);
       setCategoryBusyId(null);
@@ -1329,8 +1321,7 @@ function AdminManagement() {
       await refreshPorts();
       showNotice(`Port "${target.PortName}" deleted.`);
     } catch (err) {
-      const msg = err?.response?.data?.Message || err?.response?.data?.message || "Couldn't delete the port.";
-      showNotice(msg);
+      showNotice(friendlyError(err, "Couldn't delete the port."));
     } finally {
       setDeletePortBusy(false);
       setPortBusyId(null);
