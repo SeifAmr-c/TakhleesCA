@@ -6,6 +6,8 @@ import LandingPage from "./pages/public/LandingPage.jsx";
 import AboutUs from "./pages/public/AboutUs.jsx";
 import ContactUs from "./pages/public/ContactUs.jsx";
 import BrowseCompanies from "./pages/public/BrowseCompanies.jsx";
+import PrivacyPolicy from "./pages/public/PrivacyPolicy.jsx";
+import TermsOfService from "./pages/public/TermsOfService.jsx";
 
 import UserLogin from "./pages/auth/UserLogin.jsx";
 import UserRegister from "./pages/auth/UserRegister.jsx";
@@ -59,6 +61,8 @@ function App() {
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/companies" element={<BrowseCompanies />} />
+        <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+        <Route path="/legal/terms" element={<TermsOfService />} />
 
         {/* Auth */}
         <Route path="/login" element={<UserLogin />} />

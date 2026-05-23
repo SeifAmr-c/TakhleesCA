@@ -312,8 +312,8 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                 </div>
                 <div>
                   <h4>Legal</h4>
-                  <Link to="/legal/privacy">Privacy</Link>
-                  <Link to="/legal/terms">Terms</Link>
+                  <Link to="/legal/privacy">Privacy Policy</Link>
+                  <Link to="/legal/terms">Terms of Service</Link>
                 </div>
               </div>
               <hr
