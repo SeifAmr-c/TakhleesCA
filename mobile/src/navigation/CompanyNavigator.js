@@ -2,6 +2,7 @@ import { Platform, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import ApplicationsScreen from '../screens/ApplicationsScreen';
 import ScannerScreen from '../screens/ScannerScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import TabIcon from './TabIcon';
 import { brand, colors } from '../theme';
 
@@ -57,6 +58,16 @@ export default function CompanyNavigator({ session, onSignOut }) {
         }}
       >
         {() => <ScannerScreen session={session} onSignOut={onSignOut} />}
+      </Tab.Screen>
+      <Tab.Screen
+        name="Settings"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="settings" color={color} focused={focused} />
+          ),
+        }}
+      >
+        {() => <SettingsScreen session={session} onSignOut={onSignOut} />}
       </Tab.Screen>
     </Tab.Navigator>
   );

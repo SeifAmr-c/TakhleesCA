@@ -49,6 +49,19 @@ export default function TabIcon({ name, color, focused }) {
       </View>
     );
   }
+  if (name === 'settings') {
+    /* Gear stand-in: a hairline ring with four notches arranged around
+       it. Doesn't try to be a literal cog because the rest of the icon
+       set is also stylized geometry. */
+    return (
+      <View style={styles.box}>
+        <View style={[styles.gearTeeth, styles.gearTeethV, { backgroundColor: stroke }]} />
+        <View style={[styles.gearTeeth, styles.gearTeethH, { backgroundColor: stroke }]} />
+        <View style={[styles.gearRing, { borderColor: stroke }]} />
+        <View style={[styles.gearHub, { backgroundColor: stroke }]} />
+      </View>
+    );
+  }
   return (
     <View style={styles.box}>
       <Text style={{ color: stroke }}>•</Text>
@@ -113,5 +126,30 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 999,
+  },
+  gearRing: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  gearHub: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 999,
+  },
+  gearTeeth: {
+    position: 'absolute',
+    borderRadius: 1,
+  },
+  gearTeethV: {
+    width: 2,
+    height: 20,
+  },
+  gearTeethH: {
+    width: 20,
+    height: 2,
   },
 });

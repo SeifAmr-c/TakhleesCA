@@ -35,7 +35,12 @@ Configuration comes from a `.env` file in `backend/` (loaded via `dotenv` in `ba
 
 `src/index.js` → connects to MongoDB → `bootstrap()` in `src/app.controller.js` → mounts one Express router per domain at `/<domain>`.
 
-`bootstrap()` is the single place that wires middleware (JSON body parser, `express-session` backed by `connect-mongo`), mounts routers, and installs the 404 + central error handler. Session cookies have a 30-minute `maxAge` and are `httpOnly` + `sameSite: 'lax'`; the session store creates a `sessions` collection in MongoDB on first boot, with a TTL index that auto-prunes expired sessions.
+`bootstrap()` is the single place that wires middleware (JSON body parser, `express-session` backed by `connect-mongo`), mounts routers, and installs the 404 + central error handler. Sessions roll on every request (`rolling: true`). A small middleware after `session()` inspects the `X-Client-Platform` header and chooses one of two windows per request:
+
+- **Mobile** (header `X-Client-Platform: mobile`, set by `mobile/src/api.js` on every fetch): cookie `maxAge` stays at the default **1 year**. The mobile app stays signed in across long gaps between launches; only an explicit Sign-out or account deletion ends the session.
+- **Web** (no header, browser fetch): cookie `maxAge` is overridden per request to the historical **30-minute** rolling window.
+
+Cookies are `httpOnly` and `sameSite: 'lax'` (or `'none'` in production for cross-site Vercel→Render auth). The session store creates a `sessions` collection in MongoDB on first boot with a TTL index that auto-prunes expired sessions, and `touchAfter: 60` throttles the rolling-session writes to at most once a minute per session.
 
 ### Module convention (controller / service split)
 

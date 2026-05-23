@@ -846,18 +846,19 @@ function PrintableTable({ open, onClose, title, subtitle, columns, rows }) {
           fontFamily: "Georgia, 'Times New Roman', serif",
         }}
       >
-        {/* Top action bar — hidden during print */}
+        {/* Top action bar — hidden during print. Eyebrow on its own
+            line, actions centered underneath. */}
         <div
           className="print-no"
           style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
             marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid #e2e8f0",
           }}
         >
           <span style={{ fontSize: 12, color: "#64748b", letterSpacing: "0.05em", textTransform: "uppercase" }}>
             Print preview
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
             <button
               type="button" onClick={onClose}
               style={{

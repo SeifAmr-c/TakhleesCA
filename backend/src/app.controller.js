@@ -46,13 +46,23 @@ export const bootstrap = () => {
 
   app.use(express.json());
 
+  /* Default cookie lifetime is a year so the mobile app can hold a
+     session across long gaps between launches. The web client doesn't
+     get this treatment — see the override middleware below. */
+  const MOBILE_SESSION_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
+  const WEB_SESSION_MAX_AGE_MS = 30 * 60 * 1000;
+
   const sessionStore = MongoStore.create({
     mongoUrl: process.env.Mongo_url,
     dbName: 'Takhlees',
     collectionName: 'sessions',
-    /* Mongo auto-removes expired sessions via a TTL index; matches the
-       cookie maxAge below so dead sessions don't linger. */
-    ttl: 30 * 60,
+    /* Store TTL is the upper bound; the per-session expires field
+       (driven by req.session.cookie.maxAge) is what actually decides
+       when each session is pruned. */
+    ttl: MOBILE_SESSION_MAX_AGE_SECONDS,
+    /* Throttle session-touch writes (the bookkeeping `rolling: true`
+       does on every request) to at most once a minute per session, so
+       a busy client doesn't hammer the sessions collection. */
     touchAfter: 60,
   });
 
@@ -61,8 +71,14 @@ export const bootstrap = () => {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    /* Slide the expiry on every request. Combined with the per-request
+       maxAge override below, this means:
+        - mobile clients (X-Client-Platform: mobile) keep a year-long
+          rolling window — they stay signed in until they tap Sign out
+        - web clients keep the historical 30-minute idle window */
+    rolling: true,
     cookie: {
-      maxAge: 30 * 60 * 1000,
+      maxAge: MOBILE_SESSION_MAX_AGE_SECONDS * 1000,
       httpOnly: true,
       /* In production the frontend (Vercel) and backend (Render) are on
          different sites, so the session cookie must be SameSite=None to
@@ -73,6 +89,19 @@ export const bootstrap = () => {
       secure: process.env.NODE_ENV === 'production',
     },
   }));
+
+  /* Mobile sessions persist for a year so users don't get bounced to the
+     sign-in screen when they reopen the app after hours/days. Web
+     sessions stay at the original 30-minute rolling window. We detect
+     the client via the X-Client-Platform header set by mobile/src/api.js
+     on every fetch — its absence (browser fetch) flips the per-request
+     cookie maxAge down to 30 minutes. */
+  app.use((req, _res, next) => {
+    if (req.session && req.headers['x-client-platform'] !== 'mobile') {
+      req.session.cookie.maxAge = WEB_SESSION_MAX_AGE_MS;
+    }
+    next();
+  });
 
   app.use("/user", userRouter);
   app.use("/application", applicationRouter);

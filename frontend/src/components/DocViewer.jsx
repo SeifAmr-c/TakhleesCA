@@ -61,12 +61,14 @@ function DocViewer({ url, title, onClose }) {
         padding: fullscreen ? 0 : 16,
       }}
     >
-      {/* Toolbar */}
+      {/* Toolbar — title on its own line, controls centered underneath
+          so the action buttons aren't pinned to the right edge. */}
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
+          flexDirection: "column",
           alignItems: "center",
+          gap: 8,
           width: fullscreen ? "100%" : "min(900px, 92vw)",
           padding: fullscreen ? "8px 16px" : "0 0 10px",
           flexShrink: 0,
@@ -78,7 +80,7 @@ function DocViewer({ url, title, onClose }) {
           <Icon name="doc" size={15} color="#fff" />
           {title || "Document"}
         </span>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
           <button type="button" style={btnStyle} onClick={() => setFullscreen((v) => !v)}>
             {fullscreen ? "⤡ Exit fullscreen" : "⤢ Fullscreen"}
           </button>

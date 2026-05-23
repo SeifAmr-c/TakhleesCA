@@ -4,6 +4,12 @@ import { API_URL } from '../config';
 const COOKIE_KEY = 'takhlees.sessionCookie';
 const SESSION_KEY = 'takhlees.session';
 
+/* Every mobile request advertises itself with this header. The backend's
+   session middleware uses it to keep mobile sessions alive for a year
+   while leaving web sessions on the original 30-minute rolling window.
+   Spread into every fetch headers object below — don't drop it. */
+const MOBILE_PLATFORM_HEADERS = { 'X-Client-Platform': 'mobile' };
+
 /* Reduce any messy cookie string down to a single canonical
    `connect.sid=<value>` pair. Handles:
     - duplication from RN merging native-jar + manual headers
@@ -144,7 +150,11 @@ export async function loginCompany(email, password) {
   const res = await fetch(`${API_URL}/company/login`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...MOBILE_PLATFORM_HEADERS,
+    },
     body: JSON.stringify({ ContactEmail: email, Password: password }),
   });
 
@@ -170,7 +180,11 @@ export async function loginUser(email, password) {
   const res = await fetch(`${API_URL}/user/login`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...MOBILE_PLATFORM_HEADERS,
+    },
     body: JSON.stringify({ Email: email, Password: password }),
   });
 
@@ -212,6 +226,7 @@ async function authedGet(path) {
     headers: {
       Accept: 'application/json',
       Cookie: cleanCookie,
+      ...MOBILE_PLATFORM_HEADERS,
     },
   });
   const body = await res.json().catch(() => null);
@@ -258,6 +273,7 @@ export async function completeViaQr(qrPayload) {
     'Content-Type': 'application/json',
     Accept: 'application/json',
     Cookie: cleanCookie,
+    ...MOBILE_PLATFORM_HEADERS,
   };
 
   /* NOTE: deliberately NOT using `credentials: 'include'` here.
@@ -286,7 +302,10 @@ export async function logoutCompany() {
   try {
     await fetch(`${API_URL}/company/logout`, {
       method: 'POST',
-      headers: { ...(cleanCookie ? { Cookie: cleanCookie } : {}) },
+      headers: {
+        ...(cleanCookie ? { Cookie: cleanCookie } : {}),
+        ...MOBILE_PLATFORM_HEADERS,
+      },
     });
   } catch {
     /* best-effort */
@@ -300,11 +319,77 @@ export async function logoutUser() {
   try {
     await fetch(`${API_URL}/user/logout`, {
       method: 'POST',
-      headers: { ...(cleanCookie ? { Cookie: cleanCookie } : {}) },
+      headers: {
+        ...(cleanCookie ? { Cookie: cleanCookie } : {}),
+        ...MOBILE_PLATFORM_HEADERS,
+      },
     });
   } catch {
     /* best-effort */
   }
   await clearStoredCookie();
   await clearStoredSession();
+}
+
+/* Apple's App Review Guideline 5.1.1(v) requires apps that let users
+   create an account to also let them delete it from inside the app.
+   The web has the same two endpoints under the same routes; the
+   handlers run inside a transaction, anonymize historical Application
+   rows (so completed shipments stay on the books), drop the user's
+   support tickets, and destroy the server session. We mirror that by
+   wiping the stored cookie + role blob on this side. */
+async function authedSend(path, method) {
+  const cleanCookie = sanitizeConnectSid(await getStoredCookie());
+  if (!cleanCookie) {
+    const err = new Error('Session expired. Please sign in again.');
+    err.status = 401;
+    throw err;
+  }
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      Cookie: cleanCookie,
+      ...MOBILE_PLATFORM_HEADERS,
+    },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok === false) {
+    const message = body?.message || `Request failed (${res.status}).`;
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+  return body;
+}
+
+export async function canDeleteUser() {
+  return authedSend('/user/can-delete', 'GET');
+}
+
+export async function canDeleteCompanyAccount() {
+  return authedSend('/company/can-delete', 'GET');
+}
+
+export async function deleteUserAccount() {
+  try {
+    const body = await authedSend('/user/profile', 'DELETE');
+    return body;
+  } finally {
+    /* The server destroys the session and clears the cookie on its
+       end; mirror that locally so the next launch can't replay a
+       half-dead session and the UI returns to the sign-in screen. */
+    await clearStoredCookie();
+    await clearStoredSession();
+  }
+}
+
+export async function deleteCompanyAccount() {
+  try {
+    const body = await authedSend('/company/profile', 'DELETE');
+    return body;
+  } finally {
+    await clearStoredCookie();
+    await clearStoredSession();
+  }
 }
