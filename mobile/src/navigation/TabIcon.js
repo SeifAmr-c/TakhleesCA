@@ -51,20 +51,22 @@ export default function TabIcon({ name, color, focused }) {
     );
   }
   if (name === 'settings') {
-    /* Proper cog: eight teeth around a ring with a hub. SVG keeps the
-       teeth precisely radial without fighting with rotated View boxes. */
+    /* Eight-tooth cog drawn from polar coordinates: outer radius 9 for
+       the tooth tips, inner radius 7 for the valleys, hub 2.8. Rendered
+       at 20×20 inside the 22×22 box so the teeth don't kiss the edges
+       like the other icons. */
     return (
       <View style={styles.box}>
-        <Svg width={ICON} height={ICON} viewBox="0 0 24 24" fill="none">
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
           <Path
-            d="M12 1.6l1.5 2.4 2.8-.6.6 2.8 2.4 1.5-1 2.7 1 2.7-2.4 1.5-.6 2.8-2.8-.6L12 22.4l-1.5-2.4-2.8.6-.6-2.8-2.4-1.5 1-2.7-1-2.7 2.4-1.5.6-2.8 2.8.6L12 1.6z"
+            d="M10.24 3.17L13.76 3.17L13.36 5.13L15.89 6.18L17 4.52L19.48 7L17.82 8.11L18.87 10.64L20.83 10.24L20.83 13.76L18.87 13.36L17.82 15.89L19.48 17L17 19.48L15.89 17.82L13.36 18.87L13.76 20.83L10.24 20.83L10.64 18.87L8.11 17.82L7 19.48L4.52 17L6.18 15.89L5.13 13.36L3.17 13.76L3.17 10.24L5.13 10.64L6.18 8.11L4.52 7L7 4.52L8.11 6.18L10.64 5.13Z"
             stroke={stroke}
             strokeWidth={1.6}
             strokeLinejoin="round"
             fill={focused ? stroke : 'none'}
             fillOpacity={focused ? 0.12 : 0}
           />
-          <Circle cx={12} cy={12} r={3.2} stroke={stroke} strokeWidth={1.6} fill="none" />
+          <Circle cx={12} cy={12} r={2.8} stroke={stroke} strokeWidth={1.6} fill="none" />
         </Svg>
       </View>
     );
