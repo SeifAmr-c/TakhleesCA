@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 /* Tiny glyph icons rendered with stacked View primitives so the app
    doesn't need to pull in an icon font. Each shape is intentionally
@@ -50,15 +51,21 @@ export default function TabIcon({ name, color, focused }) {
     );
   }
   if (name === 'settings') {
-    /* Gear stand-in: a hairline ring with four notches arranged around
-       it. Doesn't try to be a literal cog because the rest of the icon
-       set is also stylized geometry. */
+    /* Proper cog: eight teeth around a ring with a hub. SVG keeps the
+       teeth precisely radial without fighting with rotated View boxes. */
     return (
       <View style={styles.box}>
-        <View style={[styles.gearTeeth, styles.gearTeethV, { backgroundColor: stroke }]} />
-        <View style={[styles.gearTeeth, styles.gearTeethH, { backgroundColor: stroke }]} />
-        <View style={[styles.gearRing, { borderColor: stroke }]} />
-        <View style={[styles.gearHub, { backgroundColor: stroke }]} />
+        <Svg width={ICON} height={ICON} viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M12 1.6l1.5 2.4 2.8-.6.6 2.8 2.4 1.5-1 2.7 1 2.7-2.4 1.5-.6 2.8-2.8-.6L12 22.4l-1.5-2.4-2.8.6-.6-2.8-2.4-1.5 1-2.7-1-2.7 2.4-1.5.6-2.8 2.8.6L12 1.6z"
+            stroke={stroke}
+            strokeWidth={1.6}
+            strokeLinejoin="round"
+            fill={focused ? stroke : 'none'}
+            fillOpacity={focused ? 0.12 : 0}
+          />
+          <Circle cx={12} cy={12} r={3.2} stroke={stroke} strokeWidth={1.6} fill="none" />
+        </Svg>
       </View>
     );
   }
@@ -126,30 +133,5 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 999,
-  },
-  gearRing: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 999,
-    borderWidth: 1.5,
-  },
-  gearHub: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-    borderRadius: 999,
-  },
-  gearTeeth: {
-    position: 'absolute',
-    borderRadius: 1,
-  },
-  gearTeethV: {
-    width: 2,
-    height: 20,
-  },
-  gearTeethH: {
-    width: 20,
-    height: 2,
   },
 });

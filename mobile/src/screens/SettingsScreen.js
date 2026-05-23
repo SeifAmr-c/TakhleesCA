@@ -141,8 +141,6 @@ export default function SettingsScreen({ session, onSignOut }) {
     ? session?.company?.ContactEmail || '—'
     : session?.user?.Email || '—';
 
-  const accountId = isCompany ? session?.companyId : session?.userId;
-
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [phrase, setPhrase] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -244,7 +242,7 @@ export default function SettingsScreen({ session, onSignOut }) {
             <Text style={styles.accountName} numberOfLines={1}>{displayName}</Text>
             <Text style={styles.accountEmail} numberOfLines={1}>{displayEmail}</Text>
             <Text style={styles.accountMeta} numberOfLines={1}>
-              {isCompany ? 'Company' : 'Client'} {accountId ? `· ID ${accountId}` : ''}
+              {isCompany ? 'Company' : 'Client'}
             </Text>
           </View>
         </View>
