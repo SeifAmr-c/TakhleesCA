@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import BrandHeader from '../components/BrandHeader';
+import LoadingState from '../components/LoadingState';
 import { listCompanyApplications } from '../api';
 import { brand, colors, statusPalette } from '../theme';
 
@@ -134,9 +134,7 @@ export default function ApplicationsScreen({ session, onSignOut }) {
       <BrandHeader name={companyName} role="company" onSignOut={onSignOut} />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={brand.tabActive} />
-        </View>
+        <LoadingState />
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.errorTitle}>Could not load applications</Text>

@@ -10,6 +10,33 @@ const SESSION_KEY = 'takhlees.session';
    Spread into every fetch headers object below — don't drop it. */
 const MOBILE_PLATFORM_HEADERS = { 'X-Client-Platform': 'mobile' };
 
+/* The backend runs on a free tier that spins down when idle, so the
+   first request after a gap can stall while the server cold starts. Cap
+   every request so a genuinely stuck socket eventually surfaces a
+   retryable error instead of an indefinite spinner. The window is
+   generous on purpose — a real cold start can take well over a minute,
+   and we'd rather wait than abort a request that's about to succeed. */
+const REQUEST_TIMEOUT_MS = 120000;
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      const e = new Error(
+        'The server took too long to respond. It may be waking up — please try again.'
+      );
+      e.status = 0;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* Reduce any messy cookie string down to a single canonical
    `connect.sid=<value>` pair. Handles:
     - duplication from RN merging native-jar + manual headers
@@ -147,7 +174,7 @@ async function persistCookieFromResponse(res) {
 }
 
 export async function loginCompany(email, password) {
-  const res = await fetch(`${API_URL}/company/login`, {
+  const res = await fetchWithTimeout(`${API_URL}/company/login`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -177,7 +204,7 @@ export async function loginCompany(email, password) {
 }
 
 export async function loginUser(email, password) {
-  const res = await fetch(`${API_URL}/user/login`, {
+  const res = await fetchWithTimeout(`${API_URL}/user/login`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -221,7 +248,7 @@ async function authedGet(path) {
     err.status = 401;
     throw err;
   }
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetchWithTimeout(`${API_URL}${path}`, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
@@ -281,7 +308,7 @@ export async function completeViaQr(qrPayload) {
      cookies from its own jar — combined with our manual `Cookie`
      header it produces `connect.sid=X,connect.sid=X`, which
      cookie-parser then rejects, breaking the session lookup. */
-  const res = await fetch(`${API_URL}/application/complete-via-qr`, {
+  const res = await fetchWithTimeout(`${API_URL}/application/complete-via-qr`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ qrPayload }),
@@ -300,7 +327,7 @@ export async function completeViaQr(qrPayload) {
 export async function logoutCompany() {
   const cleanCookie = sanitizeConnectSid(await getStoredCookie());
   try {
-    await fetch(`${API_URL}/company/logout`, {
+    await fetchWithTimeout(`${API_URL}/company/logout`, {
       method: 'POST',
       headers: {
         ...(cleanCookie ? { Cookie: cleanCookie } : {}),
@@ -317,7 +344,7 @@ export async function logoutCompany() {
 export async function logoutUser() {
   const cleanCookie = sanitizeConnectSid(await getStoredCookie());
   try {
-    await fetch(`${API_URL}/user/logout`, {
+    await fetchWithTimeout(`${API_URL}/user/logout`, {
       method: 'POST',
       headers: {
         ...(cleanCookie ? { Cookie: cleanCookie } : {}),
@@ -345,7 +372,7 @@ async function authedSend(path, method) {
     err.status = 401;
     throw err;
   }
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetchWithTimeout(`${API_URL}${path}`, {
     method,
     headers: {
       Accept: 'application/json',

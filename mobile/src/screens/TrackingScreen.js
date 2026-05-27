@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import BrandHeader from '../components/BrandHeader';
+import LoadingState from '../components/LoadingState';
 import { listClientApplications } from '../api';
 import { brand, colors, statusPalette } from '../theme';
 
@@ -251,9 +251,7 @@ export default function TrackingScreen({ session, onSignOut }) {
       <BrandHeader name={displayName} role="user" onSignOut={onSignOut} />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={brand.tabActive} />
-        </View>
+        <LoadingState />
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.errorTitle}>Could not load shipments</Text>

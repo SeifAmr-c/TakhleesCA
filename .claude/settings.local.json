@@ -36,7 +36,20 @@
       "Bash(netstat -ano)",
       "Bash(taskkill //PID 8096 //F)",
       "Bash(taskkill //PID 25008 //F)",
-      "Bash(grep -nA 60 \"export const updateCompanyPricing\" \"src/modules/company/company_service.js\")"
+      "Bash(grep -nA 60 \"export const updateCompanyPricing\" \"src/modules/company/company_service.js\")",
+      "PowerShell(npm *)",
+      "PowerShell(npm run *)",
+      "Bash(npm run *)",
+      "Bash(grep -nA12 \"const PUBLIC_COMPANY_FIELDS\" src/modules/company/company_service.js)",
+      "Bash(where mongodump *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(grep -vE \"fillApp\\\\.|XXXX|MM/YY|var\\\\\\(|//|DOC_TYPE|className|aria-label|name=\\\\\"\")",
+      "Bash(ls -la frontend/.env*)",
+      "Bash(ls -la frontend/vercel.json vercel.json render.yaml backend/render.yaml)",
+      "Bash(git check-ignore *)",
+      "Bash(git grep *)",
+      "Bash(rm -f backend/fix_duplicate_collections.mjs)",
+      "Bash(ls backend/fix_duplicate_collections.mjs)"
     ]
   }
 }
