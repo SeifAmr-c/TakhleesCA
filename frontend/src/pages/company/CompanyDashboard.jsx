@@ -11,6 +11,7 @@ import {
 import { getCompanyDashboardStats, exportCompanyReport } from "../../api/companies.js";
 import { listApplicationDocuments } from "../../api/documents.js";
 import { useAuth } from "../../api/authState.js";
+import { useTranslation } from "../../i18n";
 
 /* DB ENUM 'Pending' | 'In Progress' | 'Completed'  →  internal lower-case
    sentinels the dashboard uses everywhere ('pending', 'in_progress',
@@ -30,20 +31,18 @@ const normalizeStatus = (raw) => {
   }
 };
 
-const STATUS_BADGE = {
-  pending: ["badge-pending", "Pending"],
-  in_progress: ["badge-info", "In progress"],
-  completed: ["badge-success", "Completed"],
+/* status sentinel → badge class (display label resolved via dashboard.status) */
+const STATUS_BADGE_CLASS = {
+  pending: "badge-pending",
+  in_progress: "badge-info",
+  completed: "badge-success",
 };
 
-const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
+/* timeline step order → translation key under dashboard.steps */
+const STEP_KEYS = ["submitted", "accepted", "clearing", "released"];
 
-const FILTERS = [
-  { id: "all", label: "All" },
-  { id: "pending", label: "Pending" },
-  { id: "in_progress", label: "In progress" },
-  { id: "completed", label: "Completed" },
-];
+/* filter ids drive the list filter + counts; labels come from dashboard.filters */
+const FILTER_IDS = ["all", "pending", "in_progress", "completed"];
 
 function statusToStepIndex(status) {
   switch (status) {
@@ -71,13 +70,13 @@ const formatDate = (input) => {
 };
 
 /* Map a raw application row from the backend into the shape the cards render. */
-const shapeApplication = (a) => ({
+const shapeApplication = (a, t) => ({
   ApplicationID: a.ApplicationID,
   Status: normalizeStatus(a.Status),
   ClientID: a.ClientID,
-  ClientName: (a.ClientName || "").trim() || `Client #${a.ClientID}`,
+  ClientName: (a.ClientName || "").trim() || t("dashboard.clientFallback", { id: a.ClientID }),
   ClientInitials: initialsOf(a.ClientName),
-  CategoryName: a.CategoryName || "Service",
+  CategoryName: a.CategoryName || t("dashboard.serviceFallback"),
   PortName: a.PortName || "",
   PortType: a.PortType || "",
   DeliveryAddress: a.DeliveryAddress || "",
@@ -114,6 +113,7 @@ function StatCard({ icon, label, value, sub, accent }) {
 }
 
 function DocumentsDrawer({ applicationId, applicationStatus }) {
+  const { t } = useTranslation("company");
   const [open, setOpen] = React.useState(false);
   const [docs, setDocs] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
@@ -138,14 +138,14 @@ function DocumentsDrawer({ applicationId, applicationStatus }) {
   return (
     <>
       <button type="button" className="btn btn-ghost btn-sm" onClick={toggle}>
-        <Icon name="doc" size={14} /> {open ? "Hide documents" : "View documents"}
+        <Icon name="doc" size={14} /> {open ? t("dashboard.docs.hide") : t("dashboard.docs.view")}
       </button>
       {open && (
         <div style={{ marginTop: 10 }}>
           {loading ? (
-            <ContainerSpinner inline size={14} label="Loading…" />
+            <ContainerSpinner inline size={14} label={t("dashboard.docs.loading")} />
           ) : !docs || docs.length === 0 ? (
-            <span className="muted" style={{ fontSize: 13 }}>No documents attached.</span>
+            <span className="muted" style={{ fontSize: 13 }}>{t("dashboard.docs.none")}</span>
           ) : (
             <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column" }}>
               {docs.map((d) => (
@@ -176,9 +176,9 @@ function DocumentsDrawer({ applicationId, applicationStatus }) {
                         alignItems: "center",
                         gap: 4,
                       }}
-                      title={`Open ${d.DocType} in a new tab`}
+                      title={t("dashboard.docs.openTitle", { type: d.DocType })}
                     >
-                      {d.DocType}
+                      <bdi>{d.DocType}</bdi>
                       <Icon name="arrow_right" size={11} />
                     </a>
                   </div>
@@ -203,7 +203,9 @@ function DocumentsDrawer({ applicationId, applicationStatus }) {
                         display: "inline-block",
                       }}
                     />
-                    {isCompleted ? "Completed" : d.VerficationStatus}
+                    {isCompleted
+                      ? t("dashboard.docs.completed")
+                      : t(`dashboard.docStatus.${String(d.VerficationStatus || "").toLowerCase()}`, { defaultValue: d.VerficationStatus })}
                   </span>
                 </li>
               ))}
@@ -216,7 +218,9 @@ function DocumentsDrawer({ applicationId, applicationStatus }) {
 }
 
 function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
-  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status];
+  const { t } = useTranslation("company");
+  const badgeClass = STATUS_BADGE_CLASS[a.Status] || "badge-info";
+  const label = t(`dashboard.status.${a.Status}`, { defaultValue: a.Status });
   const stepIdx = statusToStepIndex(a.Status);
   const isPending = a.Status === "pending";
 
@@ -227,7 +231,7 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
           <div className="avatar avatar-lg">{a.ClientInitials}</div>
           <div>
             <div className="row-meta">
-              #{a.ApplicationID} · {a.CategoryName} · {a.CreatedAt || "—"}
+              <bdi>#{a.ApplicationID}</bdi> · {a.CategoryName} · <bdi>{a.CreatedAt || "—"}</bdi>
             </div>
             <div className="row-title" style={{ fontSize: 15 }}>
               {a.ClientName}
@@ -254,7 +258,7 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
             </div>
           </div>
         </div>
-        <div style={{ textAlign: "right", minWidth: 140 }}>
+        <div style={{ textAlign: "end", minWidth: 140 }}>
           <span className={`badge ${badgeClass}`}>
             <span className="dot" />
             {label}
@@ -263,7 +267,7 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
             className="mono tabular"
             style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}
           >
-            EGP {a.Amount.toLocaleString()}
+            {t("dashboard.currency")} <bdi>{a.Amount.toLocaleString()}</bdi>
           </div>
         </div>
       </div>
@@ -271,13 +275,13 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
       <hr className="divider" />
 
       <div className="timeline">
-        {STEPS.map((s, i) => (
+        {STEP_KEYS.map((key, i) => (
           <div
-            key={s}
+            key={key}
             className={`timeline-step ${i < stepIdx ? "done" : i === stepIdx ? "active" : ""}`}
           >
             <span className="dot" />
-            {s}
+            {t(`dashboard.steps.${key}`)}
           </div>
         ))}
       </div>
@@ -293,14 +297,14 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
               disabled={busy}
               onClick={() => onDecision(a.ApplicationID, "rejected")}
             >
-              Reject
+              {t("dashboard.row.reject")}
             </button>
             <button
               className="btn btn-primary btn-sm"
               disabled={busy}
               onClick={() => onDecision(a.ApplicationID, "accepted")}
             >
-              <Icon name="check" size={14} /> Accept
+              <Icon name="check" size={14} /> {t("dashboard.row.accept")}
             </button>
           </div>
         ) : (() => {
@@ -319,10 +323,10 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
               value={a.Status}
               onChange={(e) => onStatusChange(a.ApplicationID, e.target.value)}
               disabled={busy || isCompleted}
-              title={isCompleted ? "This application is completed and can no longer be changed." : undefined}
+              title={isCompleted ? t("dashboard.row.completedLocked") : undefined}
             >
-              <option value="in_progress">In progress</option>
-              <option value="completed">Completed</option>
+              <option value="in_progress">{t("dashboard.status.in_progress")}</option>
+              <option value="completed">{t("dashboard.status.completed")}</option>
             </select>
           );
         })()}
@@ -333,6 +337,7 @@ function ApplicationRow({ a, onDecision, onStatusChange, busy }) {
 
 /* ---------- Main page ---------- */
 function CompanyDashboard() {
+  const { t } = useTranslation("company");
   const auth = useAuth();
   const companyId = auth?.kind === "company" ? auth?.company?.CompanyID : null;
 
@@ -367,12 +372,12 @@ function CompanyDashboard() {
       ]);
       console.log("FRONTEND: Stats response", statsRes);
       const list = Array.isArray(appsRes) ? appsRes : appsRes?.data || [];
-      setApplications(list.map(shapeApplication));
+      setApplications(list.map((x) => shapeApplication(x, t)));
       setStats(statsRes?.data ?? null);
       setErrorBanner("");
     } catch (err) {
       console.error("FRONTEND: reloadApplications threw", err);
-      setErrorBanner("Couldn't load your applications. Please refresh.");
+      setErrorBanner(t("dashboard.loadError"));
       setApplications([]);
       setStats(null);
     } finally {
@@ -415,8 +420,8 @@ function CompanyDashboard() {
 
   const counts = useMemo(() => {
     const c = { all: applications.length };
-    for (const f of FILTERS.slice(1)) {
-      c[f.id] = applications.filter((a) => a.Status === f.id).length;
+    for (const id of FILTER_IDS.slice(1)) {
+      c[id] = applications.filter((a) => a.Status === id).length;
     }
     return c;
   }, [applications]);
@@ -458,16 +463,16 @@ function CompanyDashboard() {
             a.ApplicationID === applicationId ? { ...a, Status: "in_progress" } : a
           )
         );
-        showNotice(`Accepted application #${applicationId} — moved to In progress.`);
+        showNotice(t("dashboard.notices.accepted", { id: applicationId }));
       } else {
         // Reject = delete: removes the application, its embedded
         // documents/payments, and the documents' Cloudinary files.
         await rejectApplication(applicationId);
         setApplications((list) => list.filter((a) => a.ApplicationID !== applicationId));
-        showNotice(`Rejected application #${applicationId} — removed permanently.`);
+        showNotice(t("dashboard.notices.rejected", { id: applicationId }));
       }
     } catch {
-      showNotice(`Couldn't update application #${applicationId}.`);
+      showNotice(t("dashboard.notices.updateFailed", { id: applicationId }));
     } finally {
       setBusyId(null);
     }
@@ -486,10 +491,10 @@ function CompanyDashboard() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      showNotice("Performance report downloaded.");
+      showNotice(t("dashboard.notices.reportDownloaded"));
     } catch (err) {
       console.error("Export failed:", err);
-      showNotice("Couldn't generate the report. Please try again.");
+      showNotice(t("dashboard.notices.reportFailed"));
     } finally {
       setExporting(false);
     }
@@ -505,7 +510,7 @@ function CompanyDashboard() {
         )
       );
       if (status === "completed") {
-        showNotice(`Application #${applicationId} marked as completed. Payment will be released.`);
+        showNotice(t("dashboard.notices.completed", { id: applicationId }));
         // Completing an app releases its payment, so the revenue /
         // commission / net-earnings KPIs change. Re-fetch the canonical
         // stats so the dashboard updates without a manual refresh.
@@ -513,7 +518,7 @@ function CompanyDashboard() {
         if (statsRes?.data) setStats(statsRes.data);
       }
     } catch {
-      showNotice(`Couldn't update application #${applicationId}.`);
+      showNotice(t("dashboard.notices.updateFailed", { id: applicationId }));
     } finally {
       setBusyId(null);
     }
@@ -521,8 +526,8 @@ function CompanyDashboard() {
 
   return (
     <PublicLayout
-      title="Company dashboard"
-      subtitle="Monitor every application your company has received — pending, in progress and completed."
+      title={t("dashboard.title")}
+      subtitle={t("dashboard.subtitle")}
       role="Company"
       actions={
         <div className="row" style={{ gap: 8 }}>
@@ -530,12 +535,12 @@ function CompanyDashboard() {
             className="btn btn-secondary btn-sm"
             onClick={handleExportReport}
             disabled={exporting || !companyId}
-            title="Download a PDF performance report"
+            title={t("dashboard.exportTitle")}
           >
-            <Icon name="doc" size={14} /> {exporting ? "Generating…" : "Export as PDF"}
+            <Icon name="doc" size={14} /> {exporting ? t("dashboard.generating") : t("dashboard.exportPdf")}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={reloadApplications}>
-            <Icon name="bell" size={14} /> Refresh
+            <Icon name="bell" size={14} /> {t("dashboard.refresh")}
           </button>
         </div>
       }
@@ -555,7 +560,7 @@ function CompanyDashboard() {
       {!companyId && (
         <div className="banner-error">
           <Icon name="bell" size={16} />
-          You're not signed in as a company. Sign in to see real applications and pricing.
+          {t("dashboard.notCompany")}
         </div>
       )}
 
@@ -563,38 +568,43 @@ function CompanyDashboard() {
       <Reveal as="section" style={{ marginBottom: 36 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <div>
-            <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>Overview</span>
-            <h2 className="h3" style={{ fontSize: 20 }}>Revenue and pipeline</h2>
+            <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>{t("dashboard.overview.eyebrow")}</span>
+            <h2 className="h3" style={{ fontSize: 20 }}>{t("dashboard.overview.title")}</h2>
           </div>
-          <span className="muted" style={{ fontSize: 13 }}>All-time</span>
+          <span className="muted" style={{ fontSize: 13 }}>{t("dashboard.overview.allTime")}</span>
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <StatCard
             icon="trending"
-            label="Completed revenue"
-            value={`EGP ${totals.revenue.toLocaleString()}`}
-            sub={`${totals.completed} completed jobs`}
+            label={t("dashboard.overview.completedRevenue")}
+            value={<>{t("dashboard.currency")} <bdi>{totals.revenue.toLocaleString()}</bdi></>}
+            sub={t("dashboard.overview.completedJobs", { count: totals.completed })}
           />
           <StatCard
             icon="receipt"
-            label="Net earnings"
-            value={`EGP ${totals.netEarnings.toLocaleString()}`}
-            sub={`After EGP ${totals.listingFees.toLocaleString()} listing fees + EGP ${totals.commissionAmount.toLocaleString()} commission (${totals.commissionRate}%)`}
+            label={t("dashboard.overview.netEarnings")}
+            value={<>{t("dashboard.currency")} <bdi>{totals.netEarnings.toLocaleString()}</bdi></>}
+            sub={t("dashboard.overview.netEarningsSub", {
+              currency: t("dashboard.currency"),
+              listing: totals.listingFees.toLocaleString(),
+              commission: totals.commissionAmount.toLocaleString(),
+              rate: totals.commissionRate,
+            })}
             accent="success"
           />
           <StatCard
             icon="package"
-            label="Pending value"
-            value={`EGP ${totals.pendingValue.toLocaleString()}`}
-            sub={`${pending.length} request${pending.length === 1 ? "" : "s"} waiting`}
+            label={t("dashboard.overview.pendingValue")}
+            value={<>{t("dashboard.currency")} <bdi>{totals.pendingValue.toLocaleString()}</bdi></>}
+            sub={t("dashboard.overview.requestsWaiting", { count: pending.length })}
             accent="accent"
           />
           <StatCard
             icon="check"
-            label="Active jobs"
-            value={totals.activeJobs}
-            sub={`${totals.inProgress} in progress · ${totals.completed} completed`}
+            label={t("dashboard.overview.activeJobs")}
+            value={<bdi>{totals.activeJobs}</bdi>}
+            sub={t("dashboard.overview.activeJobsSub", { inProgress: totals.inProgress, completed: totals.completed })}
           />
         </div>
       </Reveal>
@@ -603,11 +613,11 @@ function CompanyDashboard() {
       <Reveal as="section" style={{ marginBottom: 24 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <div>
-            <span className="eyebrow">Monitor</span>
-            <h2 className="h3" style={{ fontSize: 20 }}>All received applications</h2>
+            <span className="eyebrow">{t("dashboard.monitor.eyebrow")}</span>
+            <h2 className="h3" style={{ fontSize: 20 }}>{t("dashboard.monitor.title")}</h2>
           </div>
           <span className="muted" style={{ fontSize: 13 }}>
-            {filteredApplications.length} of {applications.length} shown
+            {t("dashboard.monitor.shown", { shown: filteredApplications.length, total: applications.length })}
           </span>
         </div>
 
@@ -624,17 +634,17 @@ function CompanyDashboard() {
           }}
         >
           <div className="row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
-            {FILTERS.map((f) => {
-              const active = filter === f.id;
+            {FILTER_IDS.map((id) => {
+              const active = filter === id;
               return (
                 <button
-                  key={f.id}
+                  key={id}
                   type="button"
-                  onClick={() => setFilter(f.id)}
+                  onClick={() => setFilter(id)}
                   className={`btn btn-sm ${active ? "btn-primary" : "btn-ghost"}`}
                   style={{ gap: 6 }}
                 >
-                  {f.label}
+                  {t(`dashboard.filters.${id}`)}
                   <span
                     className="mono"
                     style={{
@@ -651,7 +661,7 @@ function CompanyDashboard() {
                         : "1px solid var(--line)",
                     }}
                   >
-                    {counts[f.id] ?? 0}
+                    <bdi>{counts[id] ?? 0}</bdi>
                   </span>
                 </button>
               );
@@ -665,7 +675,7 @@ function CompanyDashboard() {
             <span className="input-icon"><Icon name="search" size={16} /></span>
             <input
               className="input"
-              placeholder="Search by client, ID, port, address…"
+              placeholder={t("dashboard.monitor.searchPlaceholder")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -674,16 +684,16 @@ function CompanyDashboard() {
 
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
-            <ContainerSpinner size={72} label="Loading applications" />
+            <ContainerSpinner size={72} label={t("dashboard.monitor.loading")} />
           </div>
         ) : filteredApplications.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: 48 }}>
             <Icon name="package" size={28} color="var(--ink-faint)" />
-            <h3 className="h3" style={{ marginTop: 12 }}>No applications match</h3>
+            <h3 className="h3" style={{ marginTop: 12 }}>{t("dashboard.monitor.emptyTitle")}</h3>
             <p className="muted" style={{ margin: 0 }}>
               {applications.length === 0
-                ? "You haven't received any applications yet."
-                : "Try a different filter or clear the search."}
+                ? t("dashboard.monitor.emptyNone")
+                : t("dashboard.monitor.emptyFiltered")}
             </p>
           </div>
         ) : (

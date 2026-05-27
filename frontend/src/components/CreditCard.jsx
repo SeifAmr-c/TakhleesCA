@@ -125,7 +125,7 @@ export default function CreditCard({ number, name, expiry, cvc, network, flipped
   };
 
   return (
-    <div style={{ perspective: 1400, width: "min(360px, 100%)", margin: "0 auto 22px" }}>
+    <div dir="ltr" style={{ perspective: 1400, width: "min(360px, 100%)", margin: "0 auto 22px" }}>
       <div
         style={{
           position: "relative",

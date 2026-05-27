@@ -1,0 +1,354 @@
+{
+  "companyDetails": {
+    "loading": "Loading company",
+    "backToCompanies": "Back to companies",
+    "loadError": "Couldn’t load company — showing sample data.",
+    "logoAlt": "{{name}} logo",
+    "verified": "Verified",
+    "reviewCount_one": "{{count}} review",
+    "reviewCount_other": "{{count}} reviews",
+    "stats": {
+      "jobsCompleted": "Jobs completed",
+      "onTimeRate": "On-time rate",
+      "avgResponse": "Avg. response"
+    },
+    "about": "About",
+    "aboutFallback": "Trusted clearance company on the Takhlees marketplace.",
+    "portsTitle": "Ports of operation",
+    "pricingTitle": "Service pricing",
+    "pricingUnavailable": "Pricing information not currently available.",
+    "currency": "EGP",
+    "reviewsTitle": "Reviews",
+    "noReviews": "No reviews yet.",
+    "anonymous": "Anonymous",
+    "cta": {
+      "title": "Ready to ship?",
+      "subtitle": "Submit an application and the company will pick it up.",
+      "apply": "Apply for service",
+      "benefit1": "No charge until accepted",
+      "benefit2": "Real-time milestone updates",
+      "benefit3": "Secure payment held until release"
+    },
+    "fallback": {
+      "name": "Sample Clearance Co.",
+      "governorate": "Cairo",
+      "about": "Full-service port clearance with 12 years of experience handling commercial and personal shipments through Cairo and Alexandria ports."
+    }
+  },
+  "tracking": {
+    "title": "Your shipments",
+    "subtitle": "Real-time status across all your applications.",
+    "currency": "EGP",
+    "newApplication": "New application",
+    "signedOut": {
+      "title": "Sign in to see your shipments",
+      "desc": "Only signed-in clients can view their applications.",
+      "signIn": "Sign in"
+    },
+    "summary": {
+      "active": "Active",
+      "activeHint": "Pending or in progress",
+      "completed": "Completed",
+      "completedHint": "Lifetime",
+      "total": "Total submitted"
+    },
+    "loadError": "Couldn’t load your shipments. Please try again.",
+    "loading": "Loading shipments",
+    "empty": {
+      "title": "No shipments yet",
+      "desc": "Browse companies and file your first application.",
+      "browse": "Browse companies"
+    },
+    "status": {
+      "pending": "Pending review",
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "unknown": "Unknown"
+    },
+    "steps": {
+      "submitted": "Submitted",
+      "accepted": "Accepted",
+      "clearing": "Clearing",
+      "released": "Released"
+    },
+    "fallback": {
+      "company": "Company #{{id}}",
+      "unknown": "—",
+      "originPort": "Origin port",
+      "deliveryAddress": "Delivery address"
+    },
+    "qr": {
+      "eyebrow": "Completion handshake",
+      "hiddenNote": "Your QR code is hidden for security. Reveal it only when a clearance officer is ready to scan.",
+      "reveal": "Reveal QR Code",
+      "scanNote": "Hold your screen up to the clearance officer's scanner.",
+      "close": "Close"
+    },
+    "cancel": {
+      "button": "Cancel application",
+      "cancelling": "Cancelling…",
+      "modalTitle": "Cancel Application",
+      "successTitle": "Application cancelled",
+      "message": "Are you sure you want to cancel this application? This action cannot be undone.",
+      "confirm": "Cancel Application",
+      "keep": "Keep Application",
+      "successMessage": "Application cancelled successfully.",
+      "error": "Couldn’t cancel this application."
+    },
+    "review": {
+      "reviewed": "Reviewed",
+      "reviewedTitle": "You’ve already reviewed this shipment",
+      "leave": "Leave a review",
+      "appNumber": "Application #{{id}}",
+      "modalTitle": "Leave a review",
+      "close": "Close",
+      "success": "Thanks — your review for {{company}} has been recorded.",
+      "rating": "Rating",
+      "starAria_one": "{{count}} star",
+      "starAria_other": "{{count}} stars",
+      "ratingValue": "{{rating}} / 5",
+      "textLabel": "Tell others how it went",
+      "textPlaceholder": "What did the company do well? Anything they could improve?",
+      "error": "Couldn’t submit your review. Please try again.",
+      "cancel": "Cancel",
+      "submit": "Submit review",
+      "submitting": "Submitting…"
+    }
+  },
+  "fillApp": {
+    "title": "New application",
+    "currency": "EGP",
+    "steps": {
+      "details": "Details",
+      "documents": "Documents",
+      "payment": "Payment",
+      "tracking": "Tracking"
+    },
+    "subtitles": {
+      "details": "Tell the company what you're shipping and where it's headed.",
+      "documents": "Attach the supporting documents the company will need.",
+      "payment": "Choose how to pay and review your selection.",
+      "tracking": "Track your shipment from submission to release."
+    },
+    "nav": {
+      "cancel": "Cancel",
+      "back": "Back",
+      "continue": "Continue",
+      "submit": "Submit application",
+      "submitting": "Submitting…",
+      "goToShipments": "Go to my shipments",
+      "fileAnother": "File another application"
+    },
+    "details": {
+      "title": "Shipment details",
+      "subtitle": "Tell the company what you're clearing and where it should go.",
+      "category": "Service category",
+      "categorySelect": "Select a category…",
+      "categoryLoading": "Loading categories…",
+      "port": "Port",
+      "portSelect": "Select a port…",
+      "portNone": "No ports available for this company",
+      "address": "Delivery address",
+      "addressPlaceholder": "Street, district, city",
+      "addressHint": "Where the shipment should be delivered after clearance."
+    },
+    "docs": {
+      "title": "Supporting documents",
+      "subtitle": "Enter your ACID number and attach all four required documents.",
+      "acid": "ACID Number",
+      "acidPlaceholder": "19-digit ACID number",
+      "acidHint": "Must be exactly 19 digits",
+      "docLabel": "Document #{{number}} (required)",
+      "type": "Document type",
+      "file": "File",
+      "clickReplace": "Click to replace",
+      "clickUpload": "Click to upload",
+      "uploadHint": "PDF or image · max 5 MB",
+      "types": {
+        "nationalId": "National ID / Passport",
+        "proofOfPayment": "Proof Of Payment",
+        "delegation": "Delegation",
+        "shippingDocument": "Shipping Document"
+      }
+    },
+    "payment": {
+      "title": "Payment",
+      "subtitle": "Pay the full amount upfront. Funds are held in escrow until release.",
+      "amountDue": "Amount due (EGP)",
+      "serviceFee": "Service fee",
+      "platformFee": "Platform fee ({{percent}}%)",
+      "totalDue": "Total due",
+      "loadingPrice": "Loading price…",
+      "selectCategoryPrice": "Select a category to view price",
+      "hintLoading": "Looking up this company's price for the selected category…",
+      "hintUnavailable": "This company hasn't published a price for the selected category.",
+      "hintDefault": "Service fee is the company's published price; the {{percent}}% platform fee is added on top. Funds are held until the milestone “Released”.",
+      "gateway": "Payment gateway",
+      "creditCard": "Credit Card",
+      "creditCardDesc": "Visa or Mastercard. Held in escrow.",
+      "cardNumber": "Card number",
+      "cardName": "Cardholder name",
+      "expiry": "Expiry",
+      "cvc": "CVC",
+      "secured": "Secured by 256-bit TLS · PCI-DSS compliant"
+    },
+    "tracking": {
+      "lockedTitle": "Tracking unlocks after submission",
+      "lockedDesc": "Complete the previous steps to start tracking your shipment in real time.",
+      "appNumber": "Application",
+      "liveTitle": "Live shipment status",
+      "liveDesc": "Updates here are mirrored from the company's dashboard in real time.",
+      "status": {
+        "completed": "Completed",
+        "pending": "Pending",
+        "inProgress": "In progress"
+      },
+      "steps": {
+        "submitted": "Submitted",
+        "accepted": "Accepted",
+        "clearing": "Clearing",
+        "released": "Released"
+      },
+      "viewAll": "View all shipments",
+      "leaveReview": "Leave a review"
+    },
+    "errors": {
+      "category": "Please select a service category.",
+      "port": "Please select a port.",
+      "address": "Delivery address is required.",
+      "acid": "ACID must be exactly 19 digits.",
+      "docCount": "Exactly {{num}} documents are required.",
+      "docType": "Choose a document type.",
+      "docFile": "Attach a file.",
+      "fileSize": "File must be 5 MB or smaller.",
+      "priceUnavailable": "This company has not published a price for the selected category. Please choose a different category.",
+      "priceLoading": "Still loading the company's price — please wait a moment.",
+      "priceSelect": "Select a service category to load the price.",
+      "gateway": "Choose a payment gateway.",
+      "cardNumber": "Enter a valid 16-digit card number.",
+      "cardName": "Cardholder name is required.",
+      "expiry": "Expiry must be MM/YY.",
+      "cvc": "CVC must be exactly 3 digits.",
+      "submitFailed": "Could not submit the application. Please try again."
+    }
+  },
+  "paymentPage": {
+    "title": "Complete your payment",
+    "subtitle": "Application #{{id}} — funds are held until the company confirms completion.",
+    "currency": "EGP",
+    "steps": {
+      "details": "Details",
+      "documents": "Documents",
+      "payment": "Payment",
+      "tracking": "Tracking"
+    },
+    "card": {
+      "title": "Card details",
+      "subtitle": "We use bank-grade encryption — your details never touch our servers.",
+      "number": "Card number",
+      "name": "Cardholder name",
+      "expiry": "Expiry",
+      "cvc": "CVC"
+    },
+    "pay": "Pay",
+    "processing": "Processing…",
+    "secured": "Secured by 256-bit TLS · PCI-DSS compliant",
+    "summary": {
+      "title": "Order summary",
+      "application": "Application",
+      "serviceFee": "Service fee",
+      "platformFee": "Platform fee",
+      "vat": "VAT",
+      "vatIncluded": "Included",
+      "totalDue": "Total due",
+      "heldUntil": "Held until milestone “Released”"
+    },
+    "errors": {
+      "cardNumber": "Enter a valid card number.",
+      "cardName": "Cardholder name is required.",
+      "expiry": "Expiry must be MM/YY.",
+      "cvc": "CVC must be 3 or 4 digits.",
+      "failed": "Payment failed. Please try again."
+    },
+    "success": "Payment confirmed. Redirecting to tracking…"
+  },
+  "recommend": {
+    "title": "Find a Company",
+    "subtitle": "Tell us what you're clearing and we'll match you with the best-fitting companies.",
+    "currency": "EGP",
+    "yourShipments": "Your shipments",
+    "signedOut": {
+      "title": "Sign in to use the matchmaker",
+      "desc": "The recommendation wizard is available to signed-in clients.",
+      "signIn": "Sign in"
+    },
+    "form": {
+      "eyebrow": "Smart Matchmaker",
+      "title": "A few quick questions",
+      "subtitle": "We'll rank companies serving your governorate by fulfilled applications, then average rating.",
+      "governorate": "Governorate",
+      "governorateSelect": "Select a governorate…",
+      "category": "Category",
+      "categorySelect": "Select a category…",
+      "fees": "Approximate fees",
+      "feesSelect": "Select a price range…",
+      "matching": "Matching…",
+      "submit": "Find My Match",
+      "error": "Couldn’t fetch recommendations. Please try again."
+    },
+    "results": {
+      "matchCount_one": "{{count}} match",
+      "matchCount_other": "{{count}} matches",
+      "title": "Your recommended companies",
+      "subtitle": "Ranked by fulfilled applications, then average rating.",
+      "startOver": "Start over",
+      "emptyTitle": "No matches found",
+      "emptyDesc": "Try a wider price range or a different governorate.",
+      "adjust": "Adjust filters"
+    },
+    "card": {
+      "verified": "Verified",
+      "rating": "Rating",
+      "fulfilled": "Fulfilled",
+      "noReviews": "No reviews yet",
+      "apply": "Apply Now"
+    },
+    "priceRanges": {
+      "under5k": "Under 5,000 EGP",
+      "5to10k": "5,000 – 10,000 EGP",
+      "10to12k": "10,000 – 12,000 EGP",
+      "12to20k": "12,000 – 20,000 EGP",
+      "20to50k": "20,000 – 50,000 EGP",
+      "above50k": "Above 50,000 EGP"
+    }
+  },
+  "profile": {
+    "back": "Back",
+    "title": "Edit profile",
+    "subtitle": "Your name and email are visible to companies you work with.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "saving": "Saving…",
+    "save": "Save changes",
+    "success": "Profile updated successfully.",
+    "updateError": "Couldn’t update your profile.",
+    "errors": {
+      "firstName": "First name must be at least 2 characters.",
+      "lastName": "Last name must be at least 2 characters.",
+      "email": "Enter a valid email."
+    },
+    "delete": {
+      "note": "Deleting your account is permanent and removes your profile data.",
+      "deleting": "Deleting…",
+      "button": "Delete account",
+      "blocked": "Account deletion is disabled because you have active applications.",
+      "modalTitle": "Delete your account?",
+      "successTitle": "Account deleted",
+      "message": "Are you sure you want to delete your account? This action cannot be undone.",
+      "confirm": "Delete Account",
+      "cancel": "Cancel",
+      "successMessage": "Your account has been deleted. Redirecting to the login page..."
+    }
+  }
+}

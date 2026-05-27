@@ -1,0 +1,75 @@
+{
+  "brand": {
+    "name": "Takhlees",
+    "homeAria": "Takhlees, home"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "companies": "Companies",
+    "support": "Support",
+    "users": "Users",
+    "commissions": "Commissions",
+    "about": "About",
+    "contact": "Contact",
+    "shipments": "Shipments",
+    "recommend": "Find a Company"
+  },
+  "profile": {
+    "userAria": "User profile",
+    "adminAria": "Admin profile",
+    "companyAria": "Company profile"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "getStarted": "Get started",
+    "signUp": "Sign up",
+    "companyLogin": "Company login",
+    "logout": "Logout"
+  },
+  "layout": {
+    "greeting": "Hello <strong>{{name}}</strong>"
+  },
+  "footer": {
+    "tagline": "Instrumented port clearance for Egyptian importers and exporters. Verified agencies, escrowed payments, live status from gate-in to release.",
+    "product": "Product",
+    "browseCompanies": "Browse companies",
+    "listCompany": "List your company",
+    "company": "Company",
+    "aboutUs": "About us",
+    "contact": "Contact",
+    "legal": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "copyright": "© {{year}} TAKHLEES · ALL RIGHTS RESERVED"
+  },
+  "governorates": {
+    "Al Daqahliyah": "Dakahlia",
+    "Red Sea": "Red Sea",
+    "Al Buhayrah": "Beheira",
+    "Al Fayyum": "Faiyum",
+    "Al Gharbiyah": "Gharbia",
+    "Alexandria": "Alexandria",
+    "Ismailia": "Ismailia",
+    "Giza": "Giza",
+    "Al Minufiyah": "Monufia",
+    "Al Minya": "Minya",
+    "Cairo": "Cairo",
+    "Al Qalyubiyah": "Qalyubia",
+    "Luxor": "Luxor",
+    "New Valley": "New Valley",
+    "Suez": "Suez",
+    "Ash Sharqiyah": "Sharqia",
+    "Aswan": "Aswan",
+    "Asyut": "Asyut",
+    "Bani Suwayf": "Beni Suef",
+    "Port Said": "Port Said",
+    "Damietta": "Damietta",
+    "South Sinai": "South Sinai",
+    "Kafr ash Shaykh": "Kafr El Sheikh",
+    "Matruh": "Matrouh",
+    "Qina": "Qena",
+    "North Sinai": "North Sinai",
+    "Suhaj": "Sohag"
+  }
+}

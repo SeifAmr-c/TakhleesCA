@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { register } from "../../api/auth.js";
-import { friendlyError } from "../../api/client.js";
+import { friendlyError, errorCode } from "../../api/client.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
+import { useTranslation } from "../../i18n";
 import styles from "./Auth.module.css";
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -12,7 +13,24 @@ const NID_LEN = 14;
 
 const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
 
-const extractErrorMessage = (err) => friendlyError(err);
+// Routes a backend error code to the input it concerns. Codes the form
+// can't attribute to a field (network, unknown) fall through to the
+// generic banner above the submit button.
+const FIELD_BY_CODE = {
+  FIRST_NAME_REQUIRED: "FirstName",
+  LAST_NAME_REQUIRED: "LastName",
+  EMAIL_INVALID: "Email",
+  EMAIL_IN_USE: "Email",
+  PASSWORD_TOO_SHORT: "Password",
+  PASSWORD_WEAK: "Password",
+  PHONE_REQUIRED: "PhoneNumber",
+  PHONE_INVALID: "PhoneNumber",
+  PHONE_IN_USE: "PhoneNumber",
+  NATIONAL_ID_REQUIRED: "NationalID",
+  NATIONAL_ID_INVALID: "NationalID",
+  NATIONAL_ID_IN_USE: "NationalID",
+  ADDRESS_REQUIRED: "Address",
+};
 
 /* Tiny inline error rendered directly under an input. Keeping the
    component local to the file avoids dragging in another import for
@@ -28,6 +46,7 @@ const FieldError = ({ message }) =>
   ) : null;
 
 function UserRegister() {
+  const { t } = useTranslation(["auth", "errors"]);
   const [form, setForm] = useState({
     FirstName: "", LastName: "", Email: "", Password: "",
     PhoneNumber: "", NationalID: "", Address: "",
@@ -61,44 +80,35 @@ function UserRegister() {
      clean and we can hit the API. */
   const validate = () => {
     const errs = {};
-    if (form.FirstName.trim().length < 2) errs.FirstName = "First name must be at least 2 characters.";
-    if (form.LastName.trim().length < 2) errs.LastName = "Last name must be at least 2 characters.";
-    if (!isValidEmail(form.Email.trim())) errs.Email = "Please enter a valid email.";
+    if (form.FirstName.trim().length < 2) errs.FirstName = t("userRegister.validation.firstName");
+    if (form.LastName.trim().length < 2) errs.LastName = t("userRegister.validation.lastName");
+    if (!isValidEmail(form.Email.trim())) errs.Email = t("userRegister.validation.email");
     if (form.Password.length < 8) {
-      errs.Password = "Password must be at least 8 characters long.";
+      errs.Password = t("userRegister.validation.passwordShort");
     } else if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password)) {
-      errs.Password = "Password must contain at least one letter and one number.";
+      errs.Password = t("userRegister.validation.passwordWeak");
     }
     if (form.PhoneNumber.length !== PHONE_LEN || !/^\d+$/.test(form.PhoneNumber))
-      errs.PhoneNumber = `Phone number must be exactly ${PHONE_LEN} digits.`;
+      errs.PhoneNumber = t("userRegister.validation.phone", { digits: PHONE_LEN });
     if (form.NationalID.length !== NID_LEN || !/^\d+$/.test(form.NationalID))
-      errs.NationalID = `National ID must be exactly ${NID_LEN} digits.`;
-    if (!form.Address.trim()) errs.Address = "Address is required.";
+      errs.NationalID = t("userRegister.validation.nationalId", { digits: NID_LEN });
+    if (!form.Address.trim()) errs.Address = t("userRegister.validation.address");
     return errs;
   };
 
-  /* Best-effort mapping from a server error message to a specific
-     input. Falls through to a generic error if no field fits. */
-  const assignServerError = (message) => {
-    const text = String(message || "");
-    const lower = text.toLowerCase();
-    if (lower.includes("email")) {
-      setErrors((m) => ({ ...m, Email: text }));
-      return;
+  /* Routes a server error to its input by code (errors namespace),
+     translating the message. Codes the form can't attribute to a field
+     fall through to the generic banner above the submit button. */
+  const routeServerError = (err) => {
+    const code = errorCode(err);
+    const fallback = friendlyError(err);
+    const text = code ? t(code, { ns: "errors", defaultValue: fallback }) : fallback;
+    const field = code && FIELD_BY_CODE[code];
+    if (field) {
+      setErrors((m) => ({ ...m, [field]: text }));
+    } else {
+      setGenericError(text || t("userRegister.validation.failed"));
     }
-    if (lower.includes("phone")) {
-      setErrors((m) => ({ ...m, PhoneNumber: text }));
-      return;
-    }
-    if (lower.includes("national")) {
-      setErrors((m) => ({ ...m, NationalID: text }));
-      return;
-    }
-    if (lower.includes("password")) {
-      setErrors((m) => ({ ...m, Password: text }));
-      return;
-    }
-    setGenericError(text || "Registration failed.");
   };
 
   const handleSubmit = async (e) => {
@@ -123,7 +133,7 @@ function UserRegister() {
     try {
       const res = await register(payload);
       if (!res?.ok) {
-        assignServerError(res?.message);
+        routeServerError({ response: { status: 400, data: res } });
         setSubmitting(false);
         return;
       }
@@ -134,7 +144,7 @@ function UserRegister() {
       setSucceeded(true);
       setTimeout(() => navigate("/login", { replace: true }), 2000);
     } catch (err) {
-      assignServerError(extractErrorMessage(err));
+      routeServerError(err);
       setSubmitting(false);
     }
   };
@@ -146,39 +156,39 @@ function UserRegister() {
   return (
     <div className={styles.shell}>
       <section className={styles.formSide}>
-        <Link to="/" className={styles.brandRow} aria-label="Takhlees, home">
+        <Link to="/" className={styles.brandRow} aria-label={t("brandAria")}>
           <span className={styles.brandText}>Takhlees</span>
         </Link>
 
         <div className={`${styles.formInner} ${styles.formInnerWide}`}>
           <div className={styles.tabs}>
             <NavLink to="/register" end className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ""}`}>
-              <Icon name="user" size={14} /> Personal
+              <Icon name="user" size={14} /> {t("tabs.personal")}
             </NavLink>
             <NavLink to="/company/register" className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ""}`}>
-              <Icon name="building" size={14} /> Company
+              <Icon name="building" size={14} /> {t("tabs.company")}
             </NavLink>
           </div>
 
-          <h1 className={styles.title}>Create your account</h1>
-          <p className={styles.subtitle}>Get started in minutes — no credit card required.</p>
+          <h1 className={styles.title}>{t("userRegister.title")}</h1>
+          <p className={styles.subtitle}>{t("userRegister.subtitle")}</p>
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
             <div className={styles.row}>
               <label className="field">
-                <span className="field-label">First name</span>
+                <span className="field-label">{t("userRegister.firstName")}</span>
                 <input className="input" autoComplete="given-name" value={form.FirstName} onChange={update("FirstName")} required disabled={submitting || succeeded} />
                 <FieldError message={errors.FirstName} />
               </label>
               <label className="field">
-                <span className="field-label">Last name</span>
+                <span className="field-label">{t("userRegister.lastName")}</span>
                 <input className="input" autoComplete="family-name" value={form.LastName} onChange={update("LastName")} required disabled={submitting || succeeded} />
                 <FieldError message={errors.LastName} />
               </label>
             </div>
 
             <label className="field">
-              <span className="field-label">Email</span>
+              <span className="field-label">{t("userRegister.email")}</span>
               <div className="input-with-icon">
                 <span className="input-icon"><Icon name="email" size={16} /></span>
                 <input type="email" className="input" autoComplete="email" value={form.Email} onChange={update("Email")} required disabled={submitting || succeeded} />
@@ -187,7 +197,7 @@ function UserRegister() {
             </label>
 
             <label className="field">
-              <span className="field-label">Password</span>
+              <span className="field-label">{t("userRegister.password")}</span>
               <div className={styles.passwordWrap}>
                 <div className="input-with-icon">
                   <span className="input-icon"><Icon name="lock" size={16} /></span>
@@ -199,40 +209,39 @@ function UserRegister() {
                     onChange={update("Password")}
                     required
                     disabled={submitting || succeeded}
-                    placeholder="At least 8 characters with a number"
+                    placeholder={t("userRegister.passwordPlaceholder")}
                   />
                 </div>
                 <button type="button" className={styles.togglePassword} onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? t("hide") : t("show")}
                 </button>
               </div>
-              <span className="hint">Minimum 8 characters with at least one letter and one number.</span>
+              <span className="hint">{t("userRegister.passwordHint")}</span>
               <FieldError message={errors.Password} />
             </label>
 
             <div className={styles.row}>
               <label className="field">
-                <span className="field-label">Phone</span>
+                <span className="field-label">{t("userRegister.phone")}</span>
                 <div className="input-with-icon">
                   <span className="input-icon"><Icon name="phone" size={16} /></span>
                   <input
-                    type="tel"
                     inputMode="numeric"
                     pattern="\d{11}"
                     maxLength={PHONE_LEN}
                     className="input"
                     value={form.PhoneNumber}
                     onChange={updateDigits("PhoneNumber", PHONE_LEN)}
-                    placeholder="11-digit phone number"
+                    placeholder={t("userRegister.phonePlaceholder")}
                     required
                     disabled={submitting || succeeded}
                   />
                 </div>
-                <span className="hint">Exactly {PHONE_LEN} digits, numbers only.</span>
+                <span className="hint">{t("userRegister.phoneHint", { digits: PHONE_LEN })}</span>
                 <FieldError message={errors.PhoneNumber} />
               </label>
               <label className="field">
-                <span className="field-label">National ID</span>
+                <span className="field-label">{t("userRegister.nationalId")}</span>
                 <input
                   className="input"
                   inputMode="numeric"
@@ -240,16 +249,16 @@ function UserRegister() {
                   maxLength={NID_LEN}
                   value={form.NationalID}
                   onChange={updateDigits("NationalID", NID_LEN)}
-                  placeholder="14-digit national ID"
+                  placeholder={t("userRegister.nationalIdPlaceholder")}
                   required
                   disabled={submitting || succeeded}
                 />
-                <span className="hint">Exactly {NID_LEN} digits, numbers only.</span>
+                <span className="hint">{t("userRegister.nationalIdHint", { digits: NID_LEN })}</span>
                 <FieldError message={errors.NationalID} />
               </label>
             </div>
             <label className="field">
-              <span className="field-label">Address</span>
+              <span className="field-label">{t("userRegister.address")}</span>
               <div className="input-with-icon">
                 <span className="input-icon"><Icon name="pin" size={16} /></span>
                 <input className="input" value={form.Address} onChange={update("Address")} required disabled={submitting || succeeded} />
@@ -274,25 +283,25 @@ function UserRegister() {
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={buttonDisabled}>
               {succeeded ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  Account created successfully
-                  <ContainerSpinner inline size={18} label="Redirecting…" />
+                  {t("userRegister.success")}
+                  <ContainerSpinner inline size={18} label={t("userRegister.redirecting")} />
                 </span>
               ) : submitting ? (
-                <ContainerSpinner inline size={20} label="Creating account…" />
+                <ContainerSpinner inline size={20} label={t("userRegister.submitting")} />
               ) : (
-                <>Create account <Icon name="arrow_right" size={16} /></>
+                <>{t("userRegister.submit")} <Icon name="arrow_right" size={16} className="icon-flip" /></>
               )}
             </button>
           </form>
 
           <p className={styles.footerLinks}>
-            Already have an account? <Link to="/login" className={styles.footerLink}>Sign in</Link>
+            {t("userRegister.footerPrompt")} <Link to="/login" className={styles.footerLink}>{t("userRegister.footerLink")}</Link>
           </p>
         </div>
 
         <div className={styles.bottom}>
-          <span>&copy; {new Date().getFullYear()} Takhlees</span>
-          <span style={{ color: "var(--ink-faint)" }}>By continuing, you agree to our terms.</span>
+          <span>{t("copyright", { year: new Date().getFullYear() })}</span>
+          <span style={{ color: "var(--ink-faint)" }}>{t("userRegister.terms")}</span>
         </div>
       </section>
     </div>

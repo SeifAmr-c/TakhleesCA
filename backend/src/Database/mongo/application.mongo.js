@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { LocalizedStringSchema } from './_shared.js';
 
 /* Documents and Payments are always read with their parent Application
    and never queried independently, so they live as embedded arrays. */
@@ -45,12 +46,12 @@ const CompanySnapSchema = new mongoose.Schema(
 );
 
 const CategorySnapSchema = new mongoose.Schema(
-    { Type: String },
+    { Type: LocalizedStringSchema },
     { _id: false }
 );
 
 const PortSnapSchema = new mongoose.Schema(
-    { PortName: String, PortType: { type: String, enum: ['Air', 'Sea'] } },
+    { PortName: LocalizedStringSchema, PortType: { type: String, enum: ['Air', 'Sea'] } },
     { _id: false }
 );
 

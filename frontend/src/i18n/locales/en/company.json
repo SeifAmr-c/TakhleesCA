@@ -1,0 +1,201 @@
+{
+  "dashboard": {
+    "title": "Company dashboard",
+    "subtitle": "Monitor every application your company has received — pending, in progress and completed.",
+    "currency": "EGP",
+    "clientFallback": "Client #{{id}}",
+    "serviceFallback": "Service",
+    "exportTitle": "Download a PDF performance report",
+    "generating": "Generating…",
+    "exportPdf": "Export as PDF",
+    "refresh": "Refresh",
+    "loadError": "Couldn’t load your applications. Please refresh.",
+    "notCompany": "You're not signed in as a company. Sign in to see real applications and pricing.",
+    "notices": {
+      "accepted": "Accepted application #{{id}} — moved to In progress.",
+      "rejected": "Rejected application #{{id}} — removed permanently.",
+      "updateFailed": "Couldn’t update application #{{id}}.",
+      "reportDownloaded": "Performance report downloaded.",
+      "reportFailed": "Couldn’t generate the report. Please try again.",
+      "completed": "Application #{{id}} marked as completed. Payment will be released."
+    },
+    "overview": {
+      "eyebrow": "Overview",
+      "title": "Revenue and pipeline",
+      "allTime": "All-time",
+      "completedRevenue": "Completed revenue",
+      "completedJobs_one": "{{count}} completed job",
+      "completedJobs_other": "{{count}} completed jobs",
+      "netEarnings": "Net earnings",
+      "netEarningsSub": "After {{currency}} {{listing}} listing fees + {{currency}} {{commission}} commission ({{rate}}%)",
+      "pendingValue": "Pending value",
+      "requestsWaiting_one": "{{count}} request waiting",
+      "requestsWaiting_other": "{{count}} requests waiting",
+      "activeJobs": "Active jobs",
+      "activeJobsSub": "{{inProgress}} in progress · {{completed}} completed"
+    },
+    "monitor": {
+      "eyebrow": "Monitor",
+      "title": "All received applications",
+      "shown": "{{shown}} of {{total}} shown",
+      "searchPlaceholder": "Search by client, ID, port, address…",
+      "loading": "Loading applications",
+      "emptyTitle": "No applications match",
+      "emptyNone": "You haven't received any applications yet.",
+      "emptyFiltered": "Try a different filter or clear the search."
+    },
+    "filters": {
+      "all": "All",
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Completed"
+    },
+    "status": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Completed"
+    },
+    "steps": {
+      "submitted": "Submitted",
+      "accepted": "Accepted",
+      "clearing": "Clearing",
+      "released": "Released"
+    },
+    "row": {
+      "reject": "Reject",
+      "accept": "Accept",
+      "completedLocked": "This application is completed and can no longer be changed."
+    },
+    "docs": {
+      "view": "View documents",
+      "hide": "Hide documents",
+      "loading": "Loading…",
+      "none": "No documents attached.",
+      "openTitle": "Open {{type}} in a new tab",
+      "completed": "Completed"
+    },
+    "docStatus": {
+      "pending": "Pending",
+      "verified": "Verified",
+      "rejected": "Rejected"
+    }
+  },
+  "profile": {
+    "back": "Back to dashboard",
+    "title": "Edit Profile",
+    "subtitle": "Update your basic info and per-category pricing.",
+    "currency": "EGP",
+    "signedOut": {
+      "title": "Edit profile",
+      "subtitle": "Update your company info and pricing.",
+      "message": "You need to be signed in as a company.",
+      "signIn": "Sign in"
+    },
+    "loading": "Loading profile",
+    "loadErrorNotFound": "Couldn’t find your company record.",
+    "loadError": "Couldn’t load your profile. Please try again.",
+    "logo": {
+      "title": "Company logo",
+      "subtitle": "Shown on your public profile and in the navigation bar. PNG or JPG, up to 4MB.",
+      "errorType": "Logo must be an image file.",
+      "errorSize": "Logo image must be 4MB or smaller.",
+      "updated": "Logo updated.",
+      "updateError": "Couldn’t update the logo.",
+      "change": "Change logo",
+      "upload": "Upload logo",
+      "cropHint": "You'll be able to crop and zoom before saving.",
+      "current": "Current company logo",
+      "none": "No logo uploaded yet",
+      "zoom": "Zoom",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "save": "Save logo"
+    },
+    "form": {
+      "title": "Basic info",
+      "subtitle": "Visible to clients on your public profile.",
+      "governorate": "Governorate",
+      "governorateSelect": "Select a Governorate",
+      "address": "Address",
+      "addressPlaceholder": "Street, building, city",
+      "contactEmail": "Contact email",
+      "about": "About",
+      "aboutPlaceholder": "A short description of your company",
+      "aboutHint": "Max 255 characters. Shown on your public profile.",
+      "saving": "Saving…",
+      "save": "Save profile",
+      "saved": "Profile saved.",
+      "saveError": "Couldn’t save the profile.",
+      "errors": {
+        "governorate": "Pick a governorate.",
+        "address": "Address is required.",
+        "email": "Enter a valid email.",
+        "about": "About must be 255 characters or fewer."
+      }
+    },
+    "pricing": {
+      "title": "Service pricing",
+      "subtitle": "Add the categories you service from the catalog and set a price for each. A category can't be removed while you have an active application using it.",
+      "loading": "Loading pricing",
+      "empty": "You haven't priced any categories yet.",
+      "currentPrice": "Current price: {{currency}} {{price}}",
+      "priceAria": "Price for {{type}}",
+      "saving": "Saving…",
+      "save": "Save",
+      "remove": "Remove",
+      "noneAvailable": "No more categories available",
+      "pricePlaceholder": "Price (EGP)",
+      "chooseAria": "Choose a category to add",
+      "newPriceAria": "Price for new category",
+      "adding": "Adding…",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "add": "Add category",
+      "allPriced": "You've already priced every available category.",
+      "chooseError": "Choose a category.",
+      "priceError": "Enter a price greater than 0.",
+      "addError": "Couldn’t add category.",
+      "added": "Added {{type}}.",
+      "priceForError": "Enter a price greater than 0 for {{type}}.",
+      "updated": "Updated price for {{type}}.",
+      "saveError": "Couldn’t save price.",
+      "removed": "Removed {{type}}.",
+      "removeError": "Couldn’t remove category.",
+      "inUse_one": "Can't remove {{type}} — {{count}} active application still using it.",
+      "inUse_other": "Can't remove {{type}} — {{count}} active applications still using it."
+    },
+    "ports": {
+      "title": "Ports of operation",
+      "subtitle": "Add ports from the catalog where you provide clearance services. A port can't be removed while you have an active application using it.",
+      "loading": "Loading ports",
+      "empty": "You haven't added any ports yet.",
+      "removing": "Removing…",
+      "remove": "Remove",
+      "noneAvailable": "No more ports available",
+      "chooseAria": "Choose a port to add",
+      "adding": "Adding…",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "add": "Add port",
+      "allAdded": "You've already added every available port.",
+      "added": "Added {{name}}.",
+      "addError": "Couldn’t add port.",
+      "removed": "Removed {{name}}.",
+      "removeError": "Couldn’t remove port.",
+      "inUse_one": "Can't remove {{name}} — {{count}} active application still using it.",
+      "inUse_other": "Can't remove {{name}} — {{count}} active applications still using it."
+    },
+    "danger": {
+      "note": "Deleting your company is permanent. You won't be able to do this while you have any active applications.",
+      "deleting": "Deleting…",
+      "button": "Delete account",
+      "blocked": "Account deletion is disabled because you have active applications.",
+      "modalTitle": "Delete your account?",
+      "successTitle": "Account deleted",
+      "message": "Are you sure you want to delete your account? This action cannot be undone.",
+      "confirm": "Delete Account",
+      "cancel": "Cancel",
+      "successMessage": "Your account has been deleted. Redirecting to the login page..."
+    }
+  }
+}

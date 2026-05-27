@@ -6,6 +6,7 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
 import { useAuth, setAuth, clearAuth } from "../../api/authState.js";
 import { updateUserProfile, deleteUserAccount, canDeleteUser } from "../../api/auth.js";
+import { useTranslation } from "../../i18n";
 
 const isValidEmail = (email) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
@@ -21,6 +22,7 @@ const FieldError = ({ message }) =>
   ) : null;
 
 function UserProfileEdit() {
+  const { t } = useTranslation("client");
   const auth = useAuth();
   const navigate = useNavigate();
   const user = auth?.user;
@@ -92,13 +94,13 @@ function UserProfileEdit() {
   const validate = () => {
     const errs = {};
     if (!form.FirstName.trim() || form.FirstName.trim().length < 2) {
-      errs.FirstName = "First name must be at least 2 characters.";
+      errs.FirstName = t("profile.errors.firstName");
     }
     if (!form.LastName.trim() || form.LastName.trim().length < 2) {
-      errs.LastName = "Last name must be at least 2 characters.";
+      errs.LastName = t("profile.errors.lastName");
     }
     if (!isValidEmail(form.Email)) {
-      errs.Email = "Enter a valid email.";
+      errs.Email = t("profile.errors.email");
     }
     return errs;
   };
@@ -120,13 +122,13 @@ function UserProfileEdit() {
       });
       if (res?.ok && res?.data?.user) {
         setAuth({ ...auth, user: { ...(auth?.user || {}), ...res.data.user } });
-        setSuccess("Profile updated successfully.");
+        setSuccess(t("profile.success"));
       } else {
-        setServerError(res?.message || "Couldn't update your profile.");
+        setServerError(res?.message || t("profile.updateError"));
       }
     } catch (err) {
       setServerError(
-        err?.response?.data?.message || "Couldn't update your profile."
+        err?.response?.data?.message || t("profile.updateError")
       );
     } finally {
       setSubmitting(false);
@@ -180,7 +182,7 @@ function UserProfileEdit() {
             style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
           >
             <Icon name="arrow_left" size={14} />
-            Back
+            {t("profile.back")}
           </button>
         </div>
         <form
@@ -197,14 +199,14 @@ function UserProfileEdit() {
             background: "var(--surface, #fff)",
           }}
         >
-          <h3 className="card-title" style={{ marginTop: 0 }}>Edit profile</h3>
+          <h3 className="card-title" style={{ marginTop: 0 }}>{t("profile.title")}</h3>
           <p className="card-subtitle">
-            Your name and email are visible to companies you work with.
+            {t("profile.subtitle")}
           </p>
 
         <div className="stack">
           <label className="field">
-            <span className="field-label">First name *</span>
+            <span className="field-label">{t("profile.firstName")} *</span>
             <div className="input-with-icon">
               <span className="input-icon"><Icon name="user" size={16} /></span>
               <input
@@ -219,7 +221,7 @@ function UserProfileEdit() {
           </label>
 
           <label className="field">
-            <span className="field-label">Last name *</span>
+            <span className="field-label">{t("profile.lastName")} *</span>
             <div className="input-with-icon">
               <span className="input-icon"><Icon name="user" size={16} /></span>
               <input
@@ -234,7 +236,7 @@ function UserProfileEdit() {
           </label>
 
           <label className="field">
-            <span className="field-label">Email *</span>
+            <span className="field-label">{t("profile.email")} *</span>
             <div className="input-with-icon">
               <span className="input-icon"><Icon name="email" size={16} /></span>
               <input
@@ -264,9 +266,9 @@ function UserProfileEdit() {
             disabled={submitting}
           >
             {submitting ? (
-              <ContainerSpinner inline size={20} label="Saving…" />
+              <ContainerSpinner inline size={20} label={t("profile.saving")} />
             ) : (
-              <>Save changes <Icon name="check" size={16} /></>
+              <>{t("profile.save")} <Icon name="check" size={16} /></>
             )}
           </button>
         </div>
@@ -303,7 +305,7 @@ function UserProfileEdit() {
                 }}
               >
                 <p style={{ margin: 0, fontSize: 13, color: "var(--ink-soft)", textAlign: "center" }}>
-                  Deleting your account is permanent and removes your profile data.
+                  {t("profile.delete.note")}
                 </p>
                 <button
                   type="button"
@@ -323,11 +325,11 @@ function UserProfileEdit() {
                     gap: 8,
                   }}
                 >
-                  {deleting ? "Deleting…" : "Delete account"}
+                  {deleting ? t("profile.delete.deleting") : t("profile.delete.button")}
                 </button>
                 {hasActiveApplications === true && (
                   <span style={{ fontSize: 12, color: "var(--ink-soft, #64748b)", textAlign: "center" }}>
-                    Account deletion is disabled because you have active applications.
+                    {t("profile.delete.blocked")}
                   </span>
                 )}
               </div>
@@ -338,14 +340,14 @@ function UserProfileEdit() {
 
       <ConfirmModal
         open={confirmOpen}
-        title={deleteSuccess ? "Account deleted" : "Delete your account?"}
-        message="Are you sure you want to delete your account? This action cannot be undone."
-        confirmLabel="Delete Account"
-        cancelLabel="Cancel"
+        title={deleteSuccess ? t("profile.delete.successTitle") : t("profile.delete.modalTitle")}
+        message={t("profile.delete.message")}
+        confirmLabel={t("profile.delete.confirm")}
+        cancelLabel={t("profile.delete.cancel")}
         variant="danger"
         busy={deleting}
         isSuccess={deleteSuccess}
-        successMessage="Your account has been deleted. Redirecting to the login page..."
+        successMessage={t("profile.delete.successMessage")}
         onConfirm={confirmDeleteAccount}
         onCancel={() => { if (!deleting && !deleteSuccess) setConfirmOpen(false); }}
       />

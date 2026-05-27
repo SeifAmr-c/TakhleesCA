@@ -10,14 +10,26 @@ import { friendlyError } from "../../api/client.js";
 import { listCompanyPorts } from "../../api/ports.js";
 import { submitPayment } from "../../api/payments.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
+import { useTranslation } from "../../i18n";
 import dropStyles from "../auth/Auth.module.css";
 
+/* Canonical DocType values — these are sent to the backend (which enforces
+   them as an enum) so they must NOT be translated. Display labels are
+   resolved separately via DOC_TYPE_KEYS. */
 const DOCUMENT_TYPES = [
   "National ID / Passport",
   "Proof Of Payment",
   "Delegation",
   "Shipping Document",
 ];
+
+/* Canonical DocType → translation key for display only. */
+const DOC_TYPE_KEYS = {
+  "National ID / Passport": "fillApp.docs.types.nationalId",
+  "Proof Of Payment": "fillApp.docs.types.proofOfPayment",
+  "Delegation": "fillApp.docs.types.delegation",
+  "Shipping Document": "fillApp.docs.types.shippingDocument",
+};
 
 const REQUIRED_DOC_COUNT = 4;
 
@@ -37,7 +49,7 @@ const makeInitialDocuments = () =>
 
 const MAX_DOC_BYTES = 5 * 1024 * 1024;
 
-const STEPS = ["Details", "Documents", "Payment", "Tracking"];
+const STEP_KEYS = ["details", "documents", "payment", "tracking"];
 
 /* Inline error renderer — red text directly under the offending input. */
 const FieldError = ({ message }) =>
@@ -86,16 +98,17 @@ const MastercardLogo = () => (
 
 /* ---------- Step components ---------- */
 function Stepper({ current }) {
+  const { t } = useTranslation("client");
   return (
     <div className="card" style={{ padding: 20, marginBottom: 24 }}>
       <div className="timeline">
-        {STEPS.map((s, i) => (
+        {STEP_KEYS.map((k, i) => (
           <div
-            key={s}
+            key={k}
             className={`timeline-step ${i < current ? "done" : i === current ? "active" : ""}`}
           >
             <span className="dot" />
-            {s}
+            {t(`fillApp.steps.${k}`)}
           </div>
         ))}
       </div>
@@ -104,14 +117,15 @@ function Stepper({ current }) {
 }
 
 function DetailsStep({ form, update, categories, ports, errors, submitting }) {
+  const { t } = useTranslation("client");
   return (
     <div className="card card-pad-lg">
-      <h3 className="card-title">Shipment details</h3>
-      <p className="card-subtitle">Tell the company what you're clearing and where it should go.</p>
+      <h3 className="card-title">{t("fillApp.details.title")}</h3>
+      <p className="card-subtitle">{t("fillApp.details.subtitle")}</p>
 
       <div className="stack">
         <label className="field">
-          <span className="field-label">Service category *</span>
+          <span className="field-label">{t("fillApp.details.category")} *</span>
           <select
             className="select"
             value={form.CategoryID}
@@ -119,7 +133,7 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
             disabled={submitting || !categories.length}
           >
             <option value="">
-              {categories.length ? "Select a category…" : "Loading categories…"}
+              {categories.length ? t("fillApp.details.categorySelect") : t("fillApp.details.categoryLoading")}
             </option>
             {categories.map((c) => (
               <option key={c.CategoryID} value={c.CategoryID}>{c.Type}</option>
@@ -129,7 +143,7 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
         </label>
 
         <label className="field">
-          <span className="field-label">Port *</span>
+          <span className="field-label">{t("fillApp.details.port")} *</span>
           <select
             className="select"
             value={form.PortID}
@@ -137,7 +151,7 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
             disabled={submitting || !ports.length}
           >
             <option value="">
-              {ports.length ? "Select a port…" : "No ports available for this company"}
+              {ports.length ? t("fillApp.details.portSelect") : t("fillApp.details.portNone")}
             </option>
             {ports.map((p) => (
               <option key={p.PortID} value={p.PortID}>
@@ -149,7 +163,7 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
         </label>
 
         <label className="field">
-          <span className="field-label">Delivery address *</span>
+          <span className="field-label">{t("fillApp.details.address")} *</span>
           <div className="input-with-icon">
             <span className="input-icon"><Icon name="pin" size={16} /></span>
             <input
@@ -157,10 +171,10 @@ function DetailsStep({ form, update, categories, ports, errors, submitting }) {
               value={form.DeliveryAddress}
               onChange={update("DeliveryAddress")}
               disabled={submitting}
-              placeholder="Street, district, city"
+              placeholder={t("fillApp.details.addressPlaceholder")}
             />
           </div>
-          <span className="hint">Where the shipment should be delivered after clearance.</span>
+          <span className="hint">{t("fillApp.details.addressHint")}</span>
           <FieldError message={errors.DeliveryAddress} />
         </label>
       </div>
@@ -178,6 +192,7 @@ function DocumentsStep({
   docErrors,
   setDocErrors,
 }) {
+  const { t } = useTranslation("client");
   const setDocFieldError = (id, key, msg) =>
     setDocErrors((m) => ({ ...m, [id]: { ...(m[id] || {}), [key]: msg } }));
 
@@ -191,7 +206,7 @@ function DocumentsStep({
       return;
     }
     if (file.size > MAX_DOC_BYTES) {
-      setDocFieldError(id, "file", "File must be 5 MB or smaller.");
+      setDocFieldError(id, "file", t("fillApp.errors.fileSize"));
       e.target.value = "";
       updateFile(id, null);
       return;
@@ -207,14 +222,14 @@ function DocumentsStep({
 
   return (
     <div className="card card-pad-lg">
-      <h3 className="card-title">Supporting documents</h3>
+      <h3 className="card-title">{t("fillApp.docs.title")}</h3>
       <p className="card-subtitle">
-        Enter your ACID number and attach all four required documents.
+        {t("fillApp.docs.subtitle")}
       </p>
 
       <div className="stack">
         <label className="field">
-          <span className="field-label">ACID Number *</span>
+          <span className="field-label">{t("fillApp.docs.acid")} *</span>
           <div className="input-with-icon">
             <span className="input-icon"><Icon name="lock" size={16} /></span>
             <input
@@ -226,10 +241,10 @@ function DocumentsStep({
               value={acid}
               onChange={handleAcidChange}
               disabled={submitting}
-              placeholder="19-digit ACID number"
+              placeholder={t("fillApp.docs.acidPlaceholder")}
             />
           </div>
-          <span className="hint">Must be exactly 19 digits</span>
+          <span className="hint">{t("fillApp.docs.acidHint")}</span>
           <FieldError message={acidError} />
         </label>
 
@@ -258,7 +273,7 @@ function DocumentsStep({
                     color: "var(--ink-faint)",
                   }}
                 >
-                  Document #{i + 1} (required)
+                  {t("fillApp.docs.docLabel", { number: i + 1 })}
                 </span>
               </div>
 
@@ -267,7 +282,7 @@ function DocumentsStep({
                 style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr)", gap: 12 }}
               >
                 <div className="field">
-                  <span className="field-label">Document type</span>
+                  <span className="field-label">{t("fillApp.docs.type")}</span>
                   <div
                     className="input"
                     style={{
@@ -278,12 +293,12 @@ function DocumentsStep({
                       cursor: "default",
                     }}
                   >
-                    {d.type}
+                    {t(DOC_TYPE_KEYS[d.type] || "", { defaultValue: d.type })}
                   </div>
                 </div>
 
                 <div className="field">
-                  <span className="field-label">File *</span>
+                  <span className="field-label">{t("fillApp.docs.file")} *</span>
                   <label
                     className={`${dropStyles.dropzone} ${d.file ? dropStyles.dropzoneFilled : ""}`}
                   >
@@ -301,12 +316,12 @@ function DocumentsStep({
                     {d.file ? (
                       <>
                         <span className={dropStyles.dropzoneFilename}>{d.file.name}</span>
-                        <span className={dropStyles.dropzoneSubtext}>Click to replace</span>
+                        <span className={dropStyles.dropzoneSubtext}>{t("fillApp.docs.clickReplace")}</span>
                       </>
                     ) : (
                       <>
-                        <span className={dropStyles.dropzoneTitle}>Click to upload</span>
-                        <span className={dropStyles.dropzoneSubtext}>PDF or image · max 5 MB</span>
+                        <span className={dropStyles.dropzoneTitle}>{t("fillApp.docs.clickUpload")}</span>
+                        <span className={dropStyles.dropzoneSubtext}>{t("fillApp.docs.uploadHint")}</span>
                       </>
                     )}
                   </label>
@@ -322,6 +337,8 @@ function DocumentsStep({
 }
 
 function PaymentStep({ payment, setPayment, errors, setErrors, submitting, priceLoading, priceUnavailable }) {
+  const { t } = useTranslation("client");
+  const feePercent = Math.round(PLATFORM_FEE_RATE * 100);
   const [flipped, setFlipped] = useState(false);
   const network = detectNetwork(payment.CardNumber);
 
@@ -387,14 +404,14 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
 
   return (
     <div className="card card-pad-lg">
-      <h3 className="card-title">Payment</h3>
+      <h3 className="card-title">{t("fillApp.payment.title")}</h3>
       <p className="card-subtitle">
-        Pay the full amount upfront. Funds are held in escrow until release.
+        {t("fillApp.payment.subtitle")}
       </p>
 
       <div className="stack">
         <div className="field">
-          <span className="field-label">Amount due (EGP) *</span>
+          <span className="field-label">{t("fillApp.payment.amountDue")} *</span>
           {hasPrice ? (
             <div
               style={{
@@ -406,12 +423,12 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
             >
               <div className="stack" style={{ gap: 10, fontSize: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--ink-faint)" }}>Service fee</span>
-                  <span className="mono tabular" style={{ color: "var(--ink)" }}>EGP {money(servicePrice)}</span>
+                  <span style={{ color: "var(--ink-faint)" }}>{t("fillApp.payment.serviceFee")}</span>
+                  <span className="mono tabular" style={{ color: "var(--ink)" }}>{t("fillApp.currency")} <bdi>{money(servicePrice)}</bdi></span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--ink-faint)" }}>Platform fee (5%)</span>
-                  <span className="mono tabular" style={{ color: "var(--ink)" }}>EGP {money(platformFee)}</span>
+                  <span style={{ color: "var(--ink-faint)" }}>{t("fillApp.payment.platformFee", { percent: feePercent })}</span>
+                  <span className="mono tabular" style={{ color: "var(--ink)" }}>{t("fillApp.currency")} <bdi>{money(platformFee)}</bdi></span>
                 </div>
               </div>
               <hr className="divider" />
@@ -424,8 +441,8 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                   color: "var(--ink)",
                 }}
               >
-                <span>Total due</span>
-                <span className="mono tabular">EGP {money(totalDue)}</span>
+                <span>{t("fillApp.payment.totalDue")}</span>
+                <span className="mono tabular">{t("fillApp.currency")} <bdi>{money(totalDue)}</bdi></span>
               </div>
             </div>
           ) : (
@@ -437,23 +454,23 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                 readOnly
                 tabIndex={-1}
                 aria-readonly="true"
-                placeholder={priceLoading ? "Loading price…" : "Select a category to view price"}
+                placeholder={priceLoading ? t("fillApp.payment.loadingPrice") : t("fillApp.payment.selectCategoryPrice")}
                 style={{ backgroundColor: "var(--surface-2)", cursor: "not-allowed", textAlign: "center" }}
               />
             </div>
           )}
           <span className="hint">
             {priceLoading
-              ? "Looking up this company's price for the selected category…"
+              ? t("fillApp.payment.hintLoading")
               : priceUnavailable
-              ? "This company hasn't published a price for the selected category."
-              : "Service fee is the company's published price; the 5% platform fee is added on top. Funds are held until the milestone “Released”."}
+              ? t("fillApp.payment.hintUnavailable")
+              : t("fillApp.payment.hintDefault", { percent: feePercent })}
           </span>
           <FieldError message={errors.Amount} />
         </div>
 
         <div className="field">
-          <span className="field-label">Payment gateway *</span>
+          <span className="field-label">{t("fillApp.payment.gateway")} *</span>
           <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 12 }}>
             <label style={optionStyle(isCard)}>
               <input
@@ -467,10 +484,10 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
               />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>
-                  Credit Card
+                  {t("fillApp.payment.creditCard")}
                 </div>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  Visa or Mastercard. Held in escrow.
+                  {t("fillApp.payment.creditCardDesc")}
                 </div>
               </div>
               <div className="row" style={{ gap: 8 }} aria-hidden="true">
@@ -484,6 +501,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
 
         {isCard && (
           <div
+            dir="ltr"
             style={{
               border: "1px solid var(--line)",
               borderRadius: "var(--radius-md)",
@@ -501,7 +519,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
             />
             <div className="stack">
               <label className="field">
-                <span className="field-label">Card number</span>
+                <span className="field-label">{t("fillApp.payment.cardNumber")}</span>
                 <div className="input-with-icon">
                   <span className="input-icon"><Icon name="lock" size={16} /></span>
                   <input
@@ -518,7 +536,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                 <FieldError message={errors.CardNumber} />
               </label>
               <label className="field">
-                <span className="field-label">Cardholder name</span>
+                <span className="field-label">{t("fillApp.payment.cardName")}</span>
                 <input
                   className="input"
                   value={payment.CardName}
@@ -530,7 +548,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
               </label>
               <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label className="field">
-                  <span className="field-label">Expiry</span>
+                  <span className="field-label">{t("fillApp.payment.expiry")}</span>
                   <input
                     className="input"
                     inputMode="numeric"
@@ -544,7 +562,7 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
                   <FieldError message={errors.Expiry} />
                 </label>
                 <label className="field">
-                  <span className="field-label">CVC</span>
+                  <span className="field-label">{t("fillApp.payment.cvc")}</span>
                   <input
                     className="input"
                     inputMode="numeric"
@@ -571,14 +589,14 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
             color: "var(--ink-faint)",
           }}
         >
-          <Icon name="shield" size={13} /> Secured by 256-bit TLS · PCI-DSS compliant
+          <Icon name="shield" size={13} /> {t("fillApp.payment.secured")}
         </div>
       </div>
     </div>
   );
 }
 
-const TRACKING_STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
+const TRACKING_STEP_KEYS = ["submitted", "accepted", "clearing", "released"];
 
 function trackingStepIndex(status) {
   switch (String(status || "").toLowerCase()) {
@@ -598,13 +616,14 @@ function trackingStepIndex(status) {
 }
 
 function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
+  const { t } = useTranslation("client");
   if (!submitted) {
     return (
       <div className="card card-pad-lg" style={{ textAlign: "center" }}>
         <Icon name="package" size={28} color="var(--ink-faint)" />
-        <h3 className="h3" style={{ marginTop: 12 }}>Tracking unlocks after submission</h3>
+        <h3 className="h3" style={{ marginTop: 12 }}>{t("fillApp.tracking.lockedTitle")}</h3>
         <p className="muted" style={{ margin: 0 }}>
-          Complete the previous steps to start tracking your shipment in real time.
+          {t("fillApp.tracking.lockedDesc")}
         </p>
       </div>
     );
@@ -618,11 +637,11 @@ function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
-            Application #{applicationId}
+            {t("fillApp.tracking.appNumber")} <bdi>#{applicationId}</bdi>
           </span>
-          <h3 className="card-title">Live shipment status</h3>
+          <h3 className="card-title">{t("fillApp.tracking.liveTitle")}</h3>
           <p className="card-subtitle">
-            Updates here are mirrored from the company's dashboard in real time.
+            {t("fillApp.tracking.liveDesc")}
           </p>
         </div>
         <span
@@ -635,20 +654,20 @@ function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
           }`}
         >
           <span className="dot" />
-          {isCompleted ? "Completed" : stepIdx === 0 ? "Pending" : "In progress"}
+          {isCompleted ? t("fillApp.tracking.status.completed") : stepIdx === 0 ? t("fillApp.tracking.status.pending") : t("fillApp.tracking.status.inProgress")}
         </span>
       </div>
 
       <hr className="divider" />
 
       <div className="timeline">
-        {TRACKING_STEPS.map((s, i) => (
+        {TRACKING_STEP_KEYS.map((k, i) => (
           <div
-            key={s}
+            key={k}
             className={`timeline-step ${i < stepIdx ? "done" : i === stepIdx ? "active" : ""}`}
           >
             <span className="dot" />
-            {s}
+            {t(`fillApp.tracking.steps.${k}`)}
           </div>
         ))}
       </div>
@@ -657,7 +676,7 @@ function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
 
       <div className="row" style={{ justifyContent: "space-between" }}>
         <Link to="/tracking" className="btn btn-ghost btn-sm">
-          <Icon name="package" size={14} /> View all shipments
+          <Icon name="package" size={14} /> {t("fillApp.tracking.viewAll")}
         </Link>
         {isCompleted && (
           <button
@@ -665,7 +684,7 @@ function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
             className="btn btn-accent"
             onClick={onLeaveReview}
           >
-            <Icon name="star" size={14} filled /> Leave a review
+            <Icon name="star" size={14} filled /> {t("fillApp.tracking.leaveReview")}
           </button>
         )}
       </div>
@@ -675,6 +694,7 @@ function TrackingStep({ submitted, applicationId, status, onLeaveReview }) {
 
 /* ---------- Main page ---------- */
 function FillApplication() {
+  const { t } = useTranslation("client");
   const { companyId } = useParams();
   const navigate = useNavigate();
 
@@ -796,24 +816,24 @@ function FillApplication() {
 
   const validateDetails = () => {
     const errs = {};
-    if (!form.CategoryID) errs.CategoryID = "Please select a service category.";
-    if (!form.PortID) errs.PortID = "Please select a port.";
-    if (!form.DeliveryAddress.trim()) errs.DeliveryAddress = "Delivery address is required.";
+    if (!form.CategoryID) errs.CategoryID = t("fillApp.errors.category");
+    if (!form.PortID) errs.PortID = t("fillApp.errors.port");
+    if (!form.DeliveryAddress.trim()) errs.DeliveryAddress = t("fillApp.errors.address");
     return errs;
   };
 
   const validateDocuments = () => {
     const errs = {};
     if (!/^\d{19}$/.test(form.ACID || "")) {
-      errs.__acid = "ACID must be exactly 19 digits.";
+      errs.__acid = t("fillApp.errors.acid");
     }
     if (documents.length !== REQUIRED_DOC_COUNT) {
-      errs.__global = `Exactly ${REQUIRED_DOC_COUNT} documents are required.`;
+      errs.__global = t("fillApp.errors.docCount", { num: REQUIRED_DOC_COUNT });
     }
     for (const d of documents) {
       const e = {};
-      if (!d.type) e.type = "Choose a document type.";
-      if (!d.file) e.file = "Attach a file.";
+      if (!d.type) e.type = t("fillApp.errors.docType");
+      if (!d.file) e.file = t("fillApp.errors.docFile");
       if (Object.keys(e).length) errs[d.id] = e;
     }
     return errs;
@@ -824,22 +844,22 @@ function FillApplication() {
     const amt = Number(payment.Amount);
     if (!amt || amt <= 0) {
       errs.Amount = priceUnavailable
-        ? "This company has not published a price for the selected category. Please choose a different category."
+        ? t("fillApp.errors.priceUnavailable")
         : priceLoading
-        ? "Still loading the company's price — please wait a moment."
-        : "Select a service category to load the price.";
+        ? t("fillApp.errors.priceLoading")
+        : t("fillApp.errors.priceSelect");
     }
-    if (!payment.Gateway) errs.Gateway = "Choose a payment gateway.";
+    if (!payment.Gateway) errs.Gateway = t("fillApp.errors.gateway");
     if (payment.Gateway === "Credit Card") {
       if (payment.CardNumber.replace(/\D/g, "").length !== 16)
-        errs.CardNumber = "Enter a valid 16-digit card number.";
-      if (!payment.CardName.trim()) errs.CardName = "Cardholder name is required.";
-      if (!/^\d{2}\/\d{2}$/.test(payment.Expiry)) errs.Expiry = "Expiry must be MM/YY.";
+        errs.CardNumber = t("fillApp.errors.cardNumber");
+      if (!payment.CardName.trim()) errs.CardName = t("fillApp.errors.cardName");
+      if (!/^\d{2}\/\d{2}$/.test(payment.Expiry)) errs.Expiry = t("fillApp.errors.expiry");
       else {
         const expErr = expiryError(payment.Expiry);
         if (expErr) errs.Expiry = expErr;
       }
-      if (!/^\d{3}$/.test(payment.CVC)) errs.CVC = "CVC must be exactly 3 digits.";
+      if (!/^\d{3}$/.test(payment.CVC)) errs.CVC = t("fillApp.errors.cvc");
     }
     return errs;
   };
@@ -923,7 +943,7 @@ function FillApplication() {
       });
       setStep(3);
     } catch (err) {
-      setSubmitError(friendlyError(err, "Could not submit the application. Please try again."));
+      setSubmitError(friendlyError(err, t("fillApp.errors.submitFailed")));
     } finally {
       setSubmitting(false);
     }
@@ -931,17 +951,17 @@ function FillApplication() {
 
   const subtitle = useMemo(() => {
     switch (step) {
-      case 0: return "Tell the company what you're shipping and where it's headed.";
-      case 1: return "Attach the supporting documents the company will need.";
-      case 2: return "Choose how to pay and review your selection.";
-      case 3: return "Track your shipment from submission to release.";
+      case 0: return t("fillApp.subtitles.details");
+      case 1: return t("fillApp.subtitles.documents");
+      case 2: return t("fillApp.subtitles.payment");
+      case 3: return t("fillApp.subtitles.tracking");
       default: return "";
     }
-  }, [step]);
+  }, [step, t]);
 
   return (
     <PublicLayout
-      title="New application"
+      title={t("fillApp.title")}
       subtitle={subtitle}
       role="Client"
     >
@@ -1013,6 +1033,7 @@ function FillApplication() {
         {step < 3 && (
           <div
             className="row"
+            dir="ltr"
             style={{ justifyContent: "space-between", marginTop: 20 }}
           >
             <button
@@ -1021,7 +1042,7 @@ function FillApplication() {
               onClick={step === 0 ? () => navigate(-1) : goBack}
               disabled={submitting}
             >
-              {step === 0 ? "Cancel" : "Back"}
+              {step === 0 ? t("fillApp.nav.cancel") : t("fillApp.nav.back")}
             </button>
             <button
               type="button"
@@ -1030,11 +1051,11 @@ function FillApplication() {
               disabled={submitting}
             >
               {submitting ? (
-                <ContainerSpinner inline size={20} label="Submitting…" />
+                <ContainerSpinner inline size={20} label={t("fillApp.nav.submitting")} />
               ) : step === 2 ? (
-                <>Submit application <Icon name="arrow_right" size={16} /></>
+                <><Icon name="arrow_right" size={16} />{t("fillApp.nav.submit")}</>
               ) : (
-                <>Continue <Icon name="arrow_right" size={16} /></>
+                <><Icon name="arrow_right" size={16} />{t("fillApp.nav.continue")}</>
               )}
             </button>
           </div>
@@ -1046,10 +1067,10 @@ function FillApplication() {
             style={{ justifyContent: "space-between", marginTop: 20 }}
           >
             <Link to="/tracking" className="btn btn-secondary">
-              <Icon name="package" size={14} /> Go to my shipments
+              <Icon name="package" size={14} /> {t("fillApp.nav.goToShipments")}
             </Link>
             <Link to="/companies" className="btn btn-primary">
-              File another application <Icon name="arrow_right" size={16} />
+              {t("fillApp.nav.fileAnother")} <Icon name="arrow_right" size={16} />
             </Link>
           </div>
         )}

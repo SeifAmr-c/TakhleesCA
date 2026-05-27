@@ -17,6 +17,21 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Stamp every request with the active UI language so the backend's
+// language middleware (mounted in Phase 6) can localize reference data.
+// Reads `app:lang` directly from localStorage to avoid a circular import
+// with the i18n provider; the provider is the only writer of that key.
+api.interceptors.request.use((config) => {
+  try {
+    const lang = window.localStorage.getItem("app:lang") || "en";
+    config.headers = config.headers || {};
+    config.headers["Accept-Language"] = lang;
+  } catch (_) {
+    // localStorage unavailable (SSR / privacy mode) — fall back to EN implicitly
+  }
+  return config;
+});
+
 // Turns any API/network error into a safe message for the UI. We never
 // surface raw server text or infrastructure details to users:
 //   - no response  -> the request never reached the server (offline, etc.)
@@ -31,6 +46,14 @@ export const friendlyError = (err, fallback = "Something went wrong. Please try 
     return res.data?.message || res.data?.Message || res.data?.error || fallback;
   }
   return fallback;
+};
+
+// Pull the backend's stable error code (if any) off a thrown axios error
+// or a non-throwing response body. Callers map it to the `errors` i18n
+// namespace via t(`errors:${code}`), falling back to friendlyError(err).
+export const errorCode = (errOrData) => {
+  const data = errOrData?.response?.data ?? errOrData;
+  return data?.code || null;
 };
 
 api.interceptors.response.use(

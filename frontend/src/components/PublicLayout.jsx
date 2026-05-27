@@ -1,23 +1,29 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Trans } from "react-i18next";
 import Icon from "./Icon.jsx";
+import LanguageSwitcher from "./LanguageSwitcher.jsx";
 import logo from "../assets/logo.png";
 import { useAuth, clearAuth } from "../api/authState.js";
 import { logout as apiLogout } from "../api/auth.js";
 import { logoutCompany as apiLogoutCompany } from "../api/companies.js";
+import { useTranslation, useLanguage } from "../i18n";
 
 function Brand() {
+  const { t } = useTranslation("common");
   return (
-    <Link to="/" className="topnav-brand" aria-label="Takhlees, home">
+    <Link to="/" className="topnav-brand" aria-label={t("brand.homeAria")}>
       <span className="logo-mark">
         <img src={logo} alt="" />
       </span>
-      <span>Takhlees</span>
+      <span>{t("brand.name")}</span>
     </Link>
   );
 }
 
 function PublicLayout({ children, title, subtitle, actions, role: _role }) {
+  const { t } = useTranslation("common");
+  const { lang, setLang } = useLanguage();
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +32,13 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
   const isCompany = auth?.role === "company";
   const isAdmin = auth?.role === "admin";
   const isUser = auth?.kind === "user" && !isAdmin;
+
+  /* The admin console is English-only — it has no Arabic translations and
+     must stay LTR. If a previous client session left the persisted language
+     as Arabic, snap it back to English while an admin is signed in. */
+  useEffect(() => {
+    if (isAdmin && lang !== "en") setLang("en");
+  }, [isAdmin, lang, setLang]);
   const companyName = auth?.company?.Name;
   const userFirstName = auth?.user?.FirstName;
   const greetingName = isCompany
@@ -76,51 +89,59 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                   whiteSpace: "nowrap",
                 }}
               >
-                Hello <strong style={{ fontWeight: 700, color: "var(--ink)" }}>{greetingName}</strong>
+                <Trans
+                  i18nKey="layout.greeting"
+                  ns="common"
+                  values={{ name: greetingName }}
+                  components={{
+                    strong: <strong style={{ fontWeight: 700, color: "var(--ink)" }} />,
+                  }}
+                />
               </span>
             )}
           </div>
           <div className="topnav-links">
             {isAdmin ? (
               <>
-                <NavLink to="/admin/dashboard" end>Dashboard</NavLink>
+                <NavLink to="/admin/dashboard" end>{t("nav.dashboard")}</NavLink>
                 <a href="/admin/management#companies" onClick={goToAdminTab("companies")}>
-                  Companies
+                  {t("nav.companies")}
                 </a>
                 <a href="/admin/management#support" onClick={goToAdminTab("support")}>
-                  Support
+                  {t("nav.support")}
                 </a>
                 <a href="/admin/management#users" onClick={goToAdminTab("users")}>
-                  Users
+                  {t("nav.users")}
                 </a>
                 <a href="/admin/management#users/commissions" onClick={goToAdminTab("users/commissions")}>
-                  Commissions
+                  {t("nav.commissions")}
                 </a>
               </>
             ) : isCompany ? (
               <>
-                <NavLink to="/company/dashboard">Dashboard</NavLink>
-                <NavLink to="/about">About</NavLink>
-                <NavLink to="/contact">Contact</NavLink>
+                <NavLink to="/company/dashboard">{t("nav.dashboard")}</NavLink>
+                <NavLink to="/about">{t("nav.about")}</NavLink>
+                <NavLink to="/contact">{t("nav.contact")}</NavLink>
               </>
             ) : (
               <>
-                <NavLink to="/companies">Companies</NavLink>
-                {isUser && <NavLink to="/tracking">Shipments</NavLink>}
-                {isUser && <NavLink to="/recommend">Find a Company</NavLink>}
-                <NavLink to="/about">About</NavLink>
-                <NavLink to="/contact">Contact</NavLink>
+                <NavLink to="/companies">{t("nav.companies")}</NavLink>
+                {isUser && <NavLink to="/tracking">{t("nav.shipments")}</NavLink>}
+                {isUser && <NavLink to="/recommend">{t("nav.recommend")}</NavLink>}
+                <NavLink to="/about">{t("nav.about")}</NavLink>
+                <NavLink to="/contact">{t("nav.contact")}</NavLink>
               </>
             )}
             <div className="topnav-cta">
+              {!isAdmin && <LanguageSwitcher />}
               {auth ? (
                 <>
                   {isUser && (
                     <button
                       type="button"
                       onClick={() => navigate("/user/profile")}
-                      aria-label="User profile"
-                      title="User profile"
+                      aria-label={t("profile.userAria")}
+                      title={t("profile.userAria")}
                       className={profileActive ? "active" : ""}
                       style={{
                         display: "inline-flex",
@@ -142,8 +163,8 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                   {isAdmin && (
                     <NavLink
                       to="/admin/profile"
-                      aria-label="Admin profile"
-                      title="Admin profile"
+                      aria-label={t("profile.adminAria")}
+                      title={t("profile.adminAria")}
                       className={({ isActive }) => isActive ? "active" : ""}
                       style={({ isActive }) => ({
                         display: "inline-flex",
@@ -166,8 +187,8 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                   {isCompany && (
                     <NavLink
                       to="/company/profile"
-                      aria-label="Company profile"
-                      title="Company profile"
+                      aria-label={t("profile.companyAria")}
+                      title={t("profile.companyAria")}
                       className={({ isActive }) => isActive ? "active" : ""}
                       style={({ isActive }) => ({
                         display: "inline-flex",
@@ -208,15 +229,15 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                     style={{ gap: 6 }}
                   >
                     <Icon name="logout" size={14} />
-                    Sign out
+                    {t("auth.signOut")}
                   </button>
                 </>
               ) : (
                 <>
-                  <Link to="/login" className="btn btn-secondary btn-sm">Sign in</Link>
+                  <Link to="/login" className="btn btn-secondary btn-sm">{t("auth.signIn")}</Link>
                   <Link to="/register" className="btn btn-secondary btn-sm">
-                    Get started
-                    <Icon name="arrow_right" size={14} />
+                    {t("auth.getStarted")}
+                    <Icon name="arrow_right" size={14} className="icon-flip" />
                   </Link>
                 </>
               )}
@@ -273,22 +294,21 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                       lineHeight: 1.6,
                     }}
                   >
-                    Instrumented port clearance for Egyptian importers and exporters.
-                    Verified agencies, escrowed payments, live status from gate-in to release.
+                    {t("footer.tagline")}
                   </p>
                 </div>
                 {!isCompany && (
                   <div>
-                    <h4>Product</h4>
-                    <Link to="/companies">Browse companies</Link>
-                    {!auth && <Link to="/register">Sign up</Link>}
-                    <Link to="/company/register">List your company</Link>
+                    <h4>{t("footer.product")}</h4>
+                    <Link to="/companies">{t("footer.browseCompanies")}</Link>
+                    {!auth && <Link to="/register">{t("auth.signUp")}</Link>}
+                    <Link to="/company/register">{t("footer.listCompany")}</Link>
                   </div>
                 )}
                 <div>
-                  <h4>Company</h4>
-                  <Link to="/about">About us</Link>
-                  <Link to="/contact">Contact</Link>
+                  <h4>{t("footer.company")}</h4>
+                  <Link to="/about">{t("footer.aboutUs")}</Link>
+                  <Link to="/contact">{t("footer.contact")}</Link>
                   {auth ? (
                     <button
                       type="button"
@@ -301,19 +321,19 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
                         cursor: "pointer",
                         font: "inherit",
                         color: "inherit",
-                        textAlign: "left",
+                        textAlign: "start",
                       }}
                     >
-                      Logout
+                      {t("auth.logout")}
                     </button>
                   ) : (
-                    <Link to="/company/login">Company login</Link>
+                    <Link to="/company/login">{t("auth.companyLogin")}</Link>
                   )}
                 </div>
                 <div>
-                  <h4>Legal</h4>
-                  <Link to="/legal/privacy">Privacy Policy</Link>
-                  <Link to="/legal/terms">Terms of Service</Link>
+                  <h4>{t("footer.legal")}</h4>
+                  <Link to="/legal/privacy">{t("footer.privacy")}</Link>
+                  <Link to="/legal/terms">{t("footer.terms")}</Link>
                 </div>
               </div>
               <hr
@@ -337,7 +357,7 @@ function PublicLayout({ children, title, subtitle, actions, role: _role }) {
             }}
           >
             <span>
-              &copy; {new Date().getFullYear()} TAKHLEES · ALL RIGHTS RESERVED
+              {t("footer.copyright", { year: new Date().getFullYear() })}
             </span>
           </div>
         </div>

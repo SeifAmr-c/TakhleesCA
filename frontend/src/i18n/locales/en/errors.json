@@ -1,0 +1,22 @@
+{
+  "INVALID_CREDENTIALS": "Invalid email or password.",
+  "EMAIL_INVALID": "Please enter a valid email.",
+  "PASSWORD_REQUIRED": "Password is required.",
+  "PASSWORD_TOO_SHORT": "Password must be at least 8 characters long.",
+  "PASSWORD_WEAK": "Password must contain at least one letter and one number.",
+  "EMAIL_IN_USE": "That email is already registered.",
+  "RATE_LIMITED": "Too many login attempts. Please try again in a minute.",
+  "FIRST_NAME_REQUIRED": "First name is required.",
+  "LAST_NAME_REQUIRED": "Last name is required.",
+  "PHONE_REQUIRED": "Phone number is required.",
+  "NATIONAL_ID_REQUIRED": "National ID is required.",
+  "ADDRESS_REQUIRED": "Address is required.",
+  "PHONE_INVALID": "Please enter a valid phone number.",
+  "NATIONAL_ID_INVALID": "Please enter a valid national ID.",
+  "PHONE_IN_USE": "That phone number is already registered.",
+  "NATIONAL_ID_IN_USE": "That national ID is already registered.",
+  "TYPE_INVALID": "Invalid account type.",
+  "NAME_REQUIRED": "Company name is required.",
+  "TAX_IN_USE": "That tax number is already registered.",
+  "GENERIC": "Something went wrong. Please try again."
+}

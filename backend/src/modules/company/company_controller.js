@@ -39,7 +39,7 @@ const loginLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { ok: false, message: "Too many login attempts. Please try again in a minute." },
+  message: { ok: false, code: "RATE_LIMITED", message: "Too many login attempts. Please try again in a minute." },
 });
 
 router.post(

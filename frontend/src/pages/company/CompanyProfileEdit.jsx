@@ -22,17 +22,10 @@ import {
 import { listPorts, listCompanyPorts, addCompanyPort, removeCompanyPort } from "../../api/ports.js";
 import { useAuth, setAuth, clearAuth } from "../../api/authState.js";
 import { getCroppedImage } from "../../utils/cropImage.js";
+import { useTranslation } from "../../i18n";
+import { GOVERNORATES } from "../../data/governorates.js";
 
 const MAX_LOGO_BYTES = 4 * 1024 * 1024;
-
-/* Mirror the governorate list used during company registration (CompanyRegister.jsx). */
-const GOVERNORATES = [
-  "Al Daqahliyah", "Red Sea", "Al Buhayrah", "Al Fayyum", "Al Gharbiyah",
-  "Alexandria", "Ismailia", "Giza", "Al Minufiyah", "Al Minya", "Cairo",
-  "Al Qalyubiyah", "Luxor", "New Valley", "Suez", "Ash Sharqiyah", "Aswan",
-  "Asyut", "Bani Suwayf", "Port Said", "Damietta", "South Sinai",
-  "Kafr ash Shaykh", "Matruh", "Qina", "North Sinai", "Suhaj",
-];
 
 const isValidEmail = (email) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
@@ -112,6 +105,7 @@ function useAutoHideStatus() {
    and is bubbled up to the page via onSaved so the navbar avatar and
    the page-level company state refresh immediately. */
 function LogoCard({ initial, onSaved }) {
+  const { t } = useTranslation("company");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useAutoHideStatus();
 
@@ -146,11 +140,11 @@ function LogoCard({ initial, onSaved }) {
     if (!file) return;
     setStatus({ kind: "", text: "" });
     if (!/^image\//.test(file.type)) {
-      setStatus({ kind: "error", text: "Logo must be an image file." });
+      setStatus({ kind: "error", text: t("profile.logo.errorType") });
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
-      setStatus({ kind: "error", text: "Logo image must be 4MB or smaller." });
+      setStatus({ kind: "error", text: t("profile.logo.errorSize") });
       return;
     }
     setCropperSrc(URL.createObjectURL(file));
@@ -194,16 +188,16 @@ function LogoCard({ initial, onSaved }) {
         URL.revokeObjectURL(cropperSrc);
         setCropperSrc("");
         setCroppedAreaPixels(null);
-        setStatus({ kind: "success", text: "Logo updated." });
+        setStatus({ kind: "success", text: t("profile.logo.updated") });
       } else {
         if (previewUrl) URL.revokeObjectURL(previewUrl);
-        setStatus({ kind: "error", text: res?.message || "Couldn't update the logo." });
+        setStatus({ kind: "error", text: res?.message || t("profile.logo.updateError") });
       }
     } catch (err) {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setStatus({
         kind: "error",
-        text: err?.response?.data?.message || "Couldn't update the logo.",
+        text: err?.response?.data?.message || t("profile.logo.updateError"),
       });
     } finally {
       setCropping(false);
@@ -219,9 +213,9 @@ function LogoCard({ initial, onSaved }) {
 
   return (
     <div className="card card-pad-lg">
-      <h3 className="card-title">Company logo</h3>
+      <h3 className="card-title">{t("profile.logo.title")}</h3>
       <p className="card-subtitle">
-        Shown on your public profile and in the navigation bar. PNG or JPG, up to 4MB.
+        {t("profile.logo.subtitle")}
       </p>
 
       <input
@@ -236,7 +230,7 @@ function LogoCard({ initial, onSaved }) {
         /* Default state — current avatar + "Change Logo" trigger. */
         <div style={{ textAlign: "center", marginTop: 16 }}>
           <div
-            aria-label={displayLogo ? "Current company logo" : "No logo uploaded yet"}
+            aria-label={displayLogo ? t("profile.logo.current") : t("profile.logo.none")}
             style={{
               width: 128,
               height: 128,
@@ -255,7 +249,7 @@ function LogoCard({ initial, onSaved }) {
             {displayLogo ? (
               <img
                 src={displayLogo}
-                alt="Current company logo"
+                alt={t("profile.logo.current")}
                 style={{
                   position: "absolute",
                   inset: 0,
@@ -276,11 +270,11 @@ function LogoCard({ initial, onSaved }) {
               onClick={() => fileInputRef.current?.click()}
               disabled={submitting}
             >
-              {displayLogo ? "Change logo" : "Upload logo"}
+              {displayLogo ? t("profile.logo.change") : t("profile.logo.upload")}
             </button>
           </div>
           <p className="hint" style={{ marginTop: 8 }}>
-            You'll be able to crop and zoom before saving.
+            {t("profile.logo.cropHint")}
           </p>
           <div style={{ marginTop: 8 }}>
             <InlineStatus status={status} />
@@ -335,7 +329,7 @@ function LogoCard({ initial, onSaved }) {
               fontSize: 13,
             }}
           >
-            <span style={{ color: "var(--ink-soft, #475569)", minWidth: 40 }}>Zoom</span>
+            <span style={{ color: "var(--ink-soft, #475569)", minWidth: 40 }}>{t("profile.logo.zoom")}</span>
             <input
               type="range"
               min={0.5}
@@ -362,7 +356,7 @@ function LogoCard({ initial, onSaved }) {
               onClick={cancelCrop}
               disabled={cropping || submitting}
             >
-              Cancel
+              {t("profile.logo.cancel")}
             </button>
             <button
               type="button"
@@ -370,7 +364,7 @@ function LogoCard({ initial, onSaved }) {
               onClick={saveLogo}
               disabled={cropping || submitting || !croppedAreaPixels}
             >
-              {cropping || submitting ? "Saving…" : "Save logo"}
+              {cropping || submitting ? t("profile.logo.saving") : t("profile.logo.save")}
             </button>
           </div>
 
@@ -385,6 +379,7 @@ function LogoCard({ initial, onSaved }) {
 
 /* ---------- Profile form (text only) ---------- */
 function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
+  const { t } = useTranslation("company");
   const [form, setForm] = useState(() => ({
     Governorate: initial?.Governorate || "",
     Address: initial?.Address || "",
@@ -414,10 +409,10 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
 
   const validate = () => {
     const errs = {};
-    if (!form.Governorate) errs.Governorate = "Pick a governorate.";
-    if (!form.Address.trim()) errs.Address = "Address is required.";
-    if (!isValidEmail(form.ContactEmail)) errs.ContactEmail = "Enter a valid email.";
-    if (form.About.length > 255) errs.About = "About must be 255 characters or fewer.";
+    if (!form.Governorate) errs.Governorate = t("profile.form.errors.governorate");
+    if (!form.Address.trim()) errs.Address = t("profile.form.errors.address");
+    if (!isValidEmail(form.ContactEmail)) errs.ContactEmail = t("profile.form.errors.email");
+    if (form.About.length > 255) errs.About = t("profile.form.errors.about");
     return errs;
   };
 
@@ -440,14 +435,14 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
       });
       if (res?.ok && res?.data?.company) {
         onSaved(res.data.company);
-        setStatus({ kind: "success", text: "Profile saved." });
+        setStatus({ kind: "success", text: t("profile.form.saved") });
       } else {
-        setStatus({ kind: "error", text: res?.message || "Couldn't save the profile." });
+        setStatus({ kind: "error", text: res?.message || t("profile.form.saveError") });
       }
     } catch (err) {
       setStatus({
         kind: "error",
-        text: err?.response?.data?.message || "Couldn't save the profile.",
+        text: err?.response?.data?.message || t("profile.form.saveError"),
       });
     } finally {
       setSubmitting(false);
@@ -456,28 +451,28 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
 
   return (
     <form onSubmit={handleSubmit} className="card card-pad-lg" noValidate>
-      <h3 className="card-title">Basic info</h3>
-      <p className="card-subtitle">Visible to clients on your public profile.</p>
+      <h3 className="card-title">{t("profile.form.title")}</h3>
+      <p className="card-subtitle">{t("profile.form.subtitle")}</p>
 
       <div className="stack">
         <label className="field">
-          <span className="field-label">Governorate *</span>
+          <span className="field-label">{t("profile.form.governorate")} *</span>
           <select
             className="select"
             value={form.Governorate}
             onChange={update("Governorate")}
             disabled={submitting}
           >
-            <option value="" disabled>Select a Governorate</option>
+            <option value="" disabled>{t("profile.form.governorateSelect")}</option>
             {GOVERNORATES.map((g) => (
-              <option key={g} value={g}>{g}</option>
+              <option key={g} value={g}>{t(`common:governorates.${g}`, { defaultValue: g })}</option>
             ))}
           </select>
           <FieldError message={errors.Governorate} />
         </label>
 
         <label className="field">
-          <span className="field-label">Address *</span>
+          <span className="field-label">{t("profile.form.address")} *</span>
           <div className="input-with-icon">
             <span className="input-icon"><Icon name="pin" size={16} /></span>
             <input
@@ -485,7 +480,7 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
               value={form.Address}
               onChange={update("Address")}
               maxLength={255}
-              placeholder="Street, building, city"
+              placeholder={t("profile.form.addressPlaceholder")}
               disabled={submitting}
             />
           </div>
@@ -493,7 +488,7 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
         </label>
 
         <label className="field">
-          <span className="field-label">Contact email *</span>
+          <span className="field-label">{t("profile.form.contactEmail")} *</span>
           <div className="input-with-icon">
             <span className="input-icon"><Icon name="email" size={16} /></span>
             <input
@@ -509,17 +504,17 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
         </label>
 
         <label className="field">
-          <span className="field-label">About</span>
+          <span className="field-label">{t("profile.form.about")}</span>
           <textarea
             className="input"
             rows={4}
             maxLength={255}
             value={form.About}
             onChange={update("About")}
-            placeholder="A short description of your company"
+            placeholder={t("profile.form.aboutPlaceholder")}
             disabled={submitting}
           />
-          <span className="hint">Max 255 characters. Shown on your public profile.</span>
+          <span className="hint">{t("profile.form.aboutHint")}</span>
           <FieldError message={errors.About} />
         </label>
       </div>
@@ -535,9 +530,9 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
       >
         <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
           {submitting ? (
-            <ContainerSpinner inline size={20} label="Saving…" />
+            <ContainerSpinner inline size={20} label={t("profile.form.saving")} />
           ) : (
-            <>Save profile <Icon name="check" size={16} /></>
+            <>{t("profile.form.save")} <Icon name="check" size={16} /></>
           )}
         </button>
         <InlineStatus status={status} />
@@ -550,6 +545,7 @@ function ProfileForm({ initial, onSaved, submitting, setSubmitting }) {
    Save button that only enables when the draft differs from the saved
    value, and a Remove button. */
 function PricingRow({ row, busy, moneyShape, onSave, onRemove }) {
+  const { t } = useTranslation("company");
   const initial = String(row.Price);
   const [draft, setDraft] = useState(initial);
 
@@ -566,19 +562,20 @@ function PricingRow({ row, busy, moneyShape, onSave, onRemove }) {
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}>{row.Type}</div>
+        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}><bdi>{row.Type}</bdi></div>
         <div className="muted" style={{ fontSize: 12 }}>
-          Current price: EGP {Number(row.Price).toLocaleString()}
+          {t("profile.pricing.currentPrice", { currency: t("profile.currency"), price: Number(row.Price).toLocaleString() })}
         </div>
       </div>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span className="muted" style={{ fontSize: 12 }}>EGP</span>
+        <span className="muted" style={{ fontSize: 12 }}>{t("profile.currency")}</span>
         <input
           inputMode="decimal"
+          dir="ltr"
           value={draft}
           onChange={(e) => { if (moneyShape(e.target.value)) setDraft(e.target.value); }}
           disabled={busy}
-          aria-label={`Price for ${row.Type}`}
+          aria-label={t("profile.pricing.priceAria", { type: row.Type })}
           style={{
             width: 110, height: 34, border: "1px solid var(--line)", borderRadius: 8,
             padding: "0 10px", fontSize: 14, fontFamily: "var(--font-mono)", textAlign: "right",
@@ -589,14 +586,14 @@ function PricingRow({ row, busy, moneyShape, onSave, onRemove }) {
           disabled={busy || !dirty}
           onClick={() => onSave(draft)}
         >
-          {busy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={14} /> Save</>}
+          {busy ? <ContainerSpinner inline size={14} label={t("profile.pricing.saving")} /> : <><Icon name="check" size={14} /> {t("profile.pricing.save")}</>}
         </button>
       </div>
       <button
         type="button" className="btn btn-secondary btn-sm" disabled={busy}
         onClick={onRemove} style={{ color: "var(--signal-stop, #c33)" }}
       >
-        <Icon name="logout" size={14} /> Remove
+        <Icon name="logout" size={14} /> {t("profile.pricing.remove")}
       </button>
     </li>
   );
@@ -608,6 +605,7 @@ function PricingRow({ row, busy, moneyShape, onSave, onRemove }) {
    row. Removal is blocked server-side if any active application is using
    the (company, category) pair (409 CATEGORY_IN_USE — surfaced inline). */
 function PricingForm({ companyId }) {
+  const { t } = useTranslation("company");
   const [allCategories, setAllCategories] = useState([]);
   const [savedRows, setSavedRows] = useState([]); // [{ CategoryID, Type, Price }]
   const [loading, setLoading] = useState(true);
@@ -659,11 +657,11 @@ function PricingForm({ companyId }) {
     const cid = Number(picker.categoryId);
     const price = Number(picker.price);
     if (!cid) {
-      setPicker((p) => ({ ...p, error: "Choose a category." }));
+      setPicker((p) => ({ ...p, error: t("profile.pricing.chooseError") }));
       return;
     }
     if (!price || price <= 0) {
-      setPicker((p) => ({ ...p, error: "Enter a price greater than 0." }));
+      setPicker((p) => ({ ...p, error: t("profile.pricing.priceError") }));
       return;
     }
     setPickerBusy(true);
@@ -673,11 +671,11 @@ function PricingForm({ companyId }) {
       await reload();
       const added = allCategories.find((c) => Number(c.CategoryID) === cid);
       setPicker({ open: false, categoryId: "", price: "", error: "" });
-      setStatus({ kind: "success", text: `Added ${added?.Type || "category"}.` });
+      setStatus({ kind: "success", text: t("profile.pricing.added", { type: added?.Type || t("dashboard.serviceFallback") }) });
     } catch (err) {
       setPicker((p) => ({
         ...p,
-        error: err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add category.",
+        error: err?.response?.data?.Message || err?.response?.data?.message || t("profile.pricing.addError"),
       }));
     } finally {
       setPickerBusy(false);
@@ -687,7 +685,7 @@ function PricingForm({ companyId }) {
   const handleSavePrice = async (row, draft) => {
     const numeric = Number(draft);
     if (!numeric || numeric <= 0) {
-      setStatus({ kind: "error", text: `Enter a price greater than 0 for ${row.Type}.` });
+      setStatus({ kind: "error", text: t("profile.pricing.priceForError", { type: row.Type }) });
       return;
     }
     setBusyCatId(row.CategoryID);
@@ -695,11 +693,11 @@ function PricingForm({ companyId }) {
     try {
       await upsertCompanyCategoryPrice(companyId, row.CategoryID, numeric);
       await reload();
-      setStatus({ kind: "success", text: `Updated price for ${row.Type}.` });
+      setStatus({ kind: "success", text: t("profile.pricing.updated", { type: row.Type }) });
     } catch (err) {
       setStatus({
         kind: "error",
-        text: err?.response?.data?.Message || err?.response?.data?.message || "Couldn't save price.",
+        text: err?.response?.data?.Message || err?.response?.data?.message || t("profile.pricing.saveError"),
       });
     } finally {
       setBusyCatId(null);
@@ -712,13 +710,13 @@ function PricingForm({ companyId }) {
     try {
       await deleteCompanyCategoryPrice(companyId, row.CategoryID);
       await reload();
-      setStatus({ kind: "success", text: `Removed ${row.Type}.` });
+      setStatus({ kind: "success", text: t("profile.pricing.removed", { type: row.Type }) });
     } catch (err) {
       const code = err?.response?.data?.Code;
       const active = err?.response?.data?.ActiveApplications;
       const msg = code === "CATEGORY_IN_USE"
-        ? `Can't remove ${row.Type} — ${active} active application${active === 1 ? "" : "s"} still using it.`
-        : (err?.response?.data?.Message || err?.response?.data?.message || "Couldn't remove category.");
+        ? t("profile.pricing.inUse", { type: row.Type, count: active })
+        : (err?.response?.data?.Message || err?.response?.data?.message || t("profile.pricing.removeError"));
       setStatus({ kind: "error", text: msg });
     } finally {
       setBusyCatId(null);
@@ -727,21 +725,20 @@ function PricingForm({ companyId }) {
 
   return (
     <div className="card card-pad-lg">
-      <h3 className="card-title">Service pricing</h3>
+      <h3 className="card-title">{t("profile.pricing.title")}</h3>
       <p className="card-subtitle">
-        Add the categories you service from the catalog and set a price for each. A
-        category can't be removed while you have an active application using it.
+        {t("profile.pricing.subtitle")}
       </p>
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
-          <ContainerSpinner size={64} label="Loading pricing" />
+          <ContainerSpinner size={64} label={t("profile.pricing.loading")} />
         </div>
       ) : (
         <>
           {savedRows.length === 0 ? (
             <div style={{ padding: 16, textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
-              You haven't priced any categories yet.
+              {t("profile.pricing.empty")}
             </div>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -771,14 +768,14 @@ function PricingForm({ companyId }) {
                 value={picker.categoryId}
                 onChange={(e) => setPicker((p) => ({ ...p, categoryId: e.target.value, error: "" }))}
                 disabled={pickerBusy || availableToAdd.length === 0}
-                aria-label="Choose a category to add"
+                aria-label={t("profile.pricing.chooseAria")}
                 style={{
                   height: 38, border: "1px solid var(--line)", borderRadius: 8,
                   padding: "0 10px", fontSize: 14, background: "var(--surface, #fff)",
                 }}
               >
                 {availableToAdd.length === 0 ? (
-                  <option value="">No more categories available</option>
+                  <option value="">{t("profile.pricing.noneAvailable")}</option>
                 ) : (
                   availableToAdd.map((c) => (
                     <option key={c.CategoryID} value={String(c.CategoryID)}>{c.Type}</option>
@@ -786,14 +783,14 @@ function PricingForm({ companyId }) {
                 )}
               </select>
               <input
-                type="text" inputMode="decimal" placeholder="Price (EGP)"
+                type="text" inputMode="decimal" dir="ltr" placeholder={t("profile.pricing.pricePlaceholder")}
                 value={picker.price}
                 onChange={(e) => {
                   const v = e.target.value;
                   if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) setPicker((p) => ({ ...p, price: v, error: "" }));
                 }}
                 disabled={pickerBusy || availableToAdd.length === 0}
-                aria-label="Price for new category"
+                aria-label={t("profile.pricing.newPriceAria")}
                 style={{ height: 38, border: "1px solid var(--line)", borderRadius: 8, padding: "0 10px", fontSize: 14 }}
               />
               <button
@@ -802,13 +799,13 @@ function PricingForm({ companyId }) {
                 onClick={handleAdd}
                 disabled={pickerBusy || availableToAdd.length === 0}
               >
-                {pickerBusy ? <ContainerSpinner inline size={14} label="Adding…" /> : <><Icon name="check" size={14} /> Confirm</>}
+                {pickerBusy ? <ContainerSpinner inline size={14} label={t("profile.pricing.adding")} /> : <><Icon name="check" size={14} /> {t("profile.pricing.confirm")}</>}
               </button>
               <button
                 type="button" className="btn btn-secondary btn-sm" disabled={pickerBusy}
                 onClick={() => { setPicker({ open: false, categoryId: "", price: "", error: "" }); setStatus({ kind: "", text: "" }); }}
               >
-                Cancel
+                {t("profile.pricing.cancel")}
               </button>
               {picker.error && (
                 <div style={{ gridColumn: "1 / -1", color: "var(--signal-stop, #c33)", fontSize: 12 }}>
@@ -822,10 +819,10 @@ function PricingForm({ companyId }) {
                 type="button"
                 className="btn btn-primary btn-sm"
                 disabled={availableToAdd.length === 0}
-                title={availableToAdd.length === 0 ? "You've already priced every available category." : undefined}
+                title={availableToAdd.length === 0 ? t("profile.pricing.allPriced") : undefined}
                 onClick={() => setPicker((p) => ({ ...p, open: true, error: "" }))}
               >
-                <Icon name="check" size={14} /> Add category
+                <Icon name="check" size={14} /> {t("profile.pricing.add")}
               </button>
             </div>
           )}
@@ -846,6 +843,7 @@ function PricingForm({ companyId }) {
    if the company has an active application using that port (the backend
    returns 409 PORT_IN_USE — we surface that as an inline error). */
 function PortsForm({ companyId }) {
+  const { t } = useTranslation("company");
   const [allPorts, setAllPorts] = useState([]);
   const [savedPorts, setSavedPorts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -902,11 +900,11 @@ function PortsForm({ companyId }) {
       await reload();
       const added = allPorts.find((p) => Number(p.PortID) === portId);
       setPickerOpen(false);
-      setStatus({ kind: "success", text: `Added ${added?.PortName || "port"}.` });
+      setStatus({ kind: "success", text: t("profile.ports.added", { name: added?.PortName || "" }) });
     } catch (err) {
       setStatus({
         kind: "error",
-        text: err?.response?.data?.Message || err?.response?.data?.message || "Couldn't add port.",
+        text: err?.response?.data?.Message || err?.response?.data?.message || t("profile.ports.addError"),
       });
     } finally {
       setAdding(false);
@@ -919,13 +917,13 @@ function PortsForm({ companyId }) {
     try {
       await removeCompanyPort(companyId, port.PortID);
       await reload();
-      setStatus({ kind: "success", text: `Removed ${port.PortName}.` });
+      setStatus({ kind: "success", text: t("profile.ports.removed", { name: port.PortName }) });
     } catch (err) {
       const code = err?.response?.data?.Code;
       const active = err?.response?.data?.ActiveApplications;
       const msg = code === "PORT_IN_USE"
-        ? `Can't remove ${port.PortName} — ${active} active application${active === 1 ? "" : "s"} still using it.`
-        : (err?.response?.data?.Message || err?.response?.data?.message || "Couldn't remove port.");
+        ? t("profile.ports.inUse", { name: port.PortName, count: active })
+        : (err?.response?.data?.Message || err?.response?.data?.message || t("profile.ports.removeError"));
       setStatus({ kind: "error", text: msg });
     } finally {
       setBusyPortId(null);
@@ -934,21 +932,20 @@ function PortsForm({ companyId }) {
 
   return (
     <div className="card card-pad-lg">
-      <h3 className="card-title">Ports of operation</h3>
+      <h3 className="card-title">{t("profile.ports.title")}</h3>
       <p className="card-subtitle">
-        Add ports from the catalog where you provide clearance services. A port can't be
-        removed while you have an active application using it.
+        {t("profile.ports.subtitle")}
       </p>
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
-          <ContainerSpinner size={64} label="Loading ports" />
+          <ContainerSpinner size={64} label={t("profile.ports.loading")} />
         </div>
       ) : (
         <>
           {savedPorts.length === 0 ? (
             <div style={{ padding: 16, textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
-              You haven't added any ports yet.
+              {t("profile.ports.empty")}
             </div>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -962,8 +959,8 @@ function PortsForm({ companyId }) {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}>{p.PortName}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>{p.PortType}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--navy)" }}><bdi>{p.PortName}</bdi></div>
+                    <div className="muted" style={{ fontSize: 12 }}><bdi>{p.PortType}</bdi></div>
                   </div>
                   <button
                     type="button"
@@ -973,8 +970,8 @@ function PortsForm({ companyId }) {
                     style={{ color: "var(--signal-stop, #c33)" }}
                   >
                     {busyPortId === p.PortID
-                      ? <ContainerSpinner inline size={14} label="Removing…" />
-                      : <><Icon name="logout" size={14} /> Remove</>}
+                      ? <ContainerSpinner inline size={14} label={t("profile.ports.removing")} />
+                      : <><Icon name="logout" size={14} /> {t("profile.ports.remove")}</>}
                   </button>
                 </li>
               ))}
@@ -993,7 +990,7 @@ function PortsForm({ companyId }) {
                 value={pickerSelection}
                 onChange={(e) => setPickerSelection(e.target.value)}
                 disabled={adding || availableToAdd.length === 0}
-                aria-label="Choose a port to add"
+                aria-label={t("profile.ports.chooseAria")}
                 style={{
                   flex: 1, minWidth: 200, height: 38,
                   border: "1px solid var(--line)", borderRadius: 8,
@@ -1001,7 +998,7 @@ function PortsForm({ companyId }) {
                 }}
               >
                 {availableToAdd.length === 0 ? (
-                  <option value="">No more ports available</option>
+                  <option value="">{t("profile.ports.noneAvailable")}</option>
                 ) : (
                   availableToAdd.map((p) => (
                     <option key={p.PortID} value={String(p.PortID)}>
@@ -1016,13 +1013,13 @@ function PortsForm({ companyId }) {
                 onClick={handleAdd}
                 disabled={adding || !pickerSelection || availableToAdd.length === 0}
               >
-                {adding ? <ContainerSpinner inline size={14} label="Adding…" /> : <><Icon name="check" size={14} /> Confirm</>}
+                {adding ? <ContainerSpinner inline size={14} label={t("profile.ports.adding")} /> : <><Icon name="check" size={14} /> {t("profile.ports.confirm")}</>}
               </button>
               <button
                 type="button" className="btn btn-secondary btn-sm" disabled={adding}
                 onClick={() => { setPickerOpen(false); setStatus({ kind: "", text: "" }); }}
               >
-                Cancel
+                {t("profile.ports.cancel")}
               </button>
             </div>
           ) : (
@@ -1031,10 +1028,10 @@ function PortsForm({ companyId }) {
                 type="button"
                 className="btn btn-primary btn-sm"
                 disabled={availableToAdd.length === 0}
-                title={availableToAdd.length === 0 ? "You've already added every available port." : undefined}
+                title={availableToAdd.length === 0 ? t("profile.ports.allAdded") : undefined}
                 onClick={() => setPickerOpen(true)}
               >
-                <Icon name="check" size={14} /> Add port
+                <Icon name="check" size={14} /> {t("profile.ports.add")}
               </button>
             </div>
           )}
@@ -1053,6 +1050,7 @@ function PortsForm({ companyId }) {
    can't click through into the server's 400 path. While the flag is
    still loading (`null`) we keep the button disabled to be safe. */
 function DangerZoneCard() {
+  const { t } = useTranslation("company");
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -1107,8 +1105,7 @@ function DangerZoneCard() {
     >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
         <p className="card-subtitle" style={{ margin: 0, textAlign: "center" }}>
-          Deleting your company is permanent. You won't be able to do this while
-          you have any active applications.
+          {t("profile.danger.note")}
         </p>
         <button
           type="button"
@@ -1128,25 +1125,25 @@ function DangerZoneCard() {
             gap: 8,
           }}
         >
-          {deleting ? "Deleting…" : "Delete account"}
+          {deleting ? t("profile.danger.deleting") : t("profile.danger.button")}
         </button>
         {hasActiveApplications === true && (
           <span style={{ fontSize: 12, color: "var(--ink-soft, #64748b)", textAlign: "center" }}>
-            Account deletion is disabled because you have active applications.
+            {t("profile.danger.blocked")}
           </span>
         )}
       </div>
 
       <ConfirmModal
         open={confirmOpen}
-        title={deleteSuccess ? "Account deleted" : "Delete your account?"}
-        message="Are you sure you want to delete your account? This action cannot be undone."
-        confirmLabel="Delete Account"
-        cancelLabel="Cancel"
+        title={deleteSuccess ? t("profile.danger.successTitle") : t("profile.danger.modalTitle")}
+        message={t("profile.danger.message")}
+        confirmLabel={t("profile.danger.confirm")}
+        cancelLabel={t("profile.danger.cancel")}
         variant="danger"
         busy={deleting}
         isSuccess={deleteSuccess}
-        successMessage="Your account has been deleted. Redirecting to the login page..."
+        successMessage={t("profile.danger.successMessage")}
         onConfirm={confirmDelete}
         onCancel={() => { if (!deleting && !deleteSuccess) setConfirmOpen(false); }}
       />
@@ -1156,6 +1153,7 @@ function DangerZoneCard() {
 
 /* ---------- Page ---------- */
 function CompanyProfileEdit() {
+  const { t } = useTranslation("company");
   const auth = useAuth();
   const navigate = useNavigate();
   const companyId = auth?.kind === "company" ? auth?.company?.CompanyID : null;
@@ -1177,16 +1175,16 @@ function CompanyProfileEdit() {
         if (!active) return;
         const rows = Array.isArray(data) ? data : data?.data || [];
         if (rows.length) setCompany(rows[0]);
-        else setLoadError("Couldn't find your company record.");
+        else setLoadError(t("profile.loadErrorNotFound"));
       } catch {
         if (!active) return;
-        setLoadError("Couldn't load your profile. Please try again.");
+        setLoadError(t("profile.loadError"));
       } finally {
         if (active) setLoading(false);
       }
     })();
     return () => { active = false; };
-  }, [companyId]);
+  }, [companyId, t]);
 
   /* Keep the cached auth.company in sync with what the server now stores
      so the rest of the app sees the new email/governorate/etc. */
@@ -1199,12 +1197,12 @@ function CompanyProfileEdit() {
 
   if (!companyId) {
     return (
-      <PublicLayout title="Edit profile" subtitle="Update your company info and pricing." role="Company">
+      <PublicLayout title={t("profile.signedOut.title")} subtitle={t("profile.signedOut.subtitle")} role="Company">
         <div className="banner-error">
           <Icon name="bell" size={16} />
-          You need to be signed in as a company.{" "}
+          {t("profile.signedOut.message")}{" "}
           <Link to="/company/login" style={{ color: "inherit", textDecoration: "underline" }}>
-            Sign in
+            {t("profile.signedOut.signIn")}
           </Link>
         </div>
       </PublicLayout>
@@ -1222,14 +1220,14 @@ function CompanyProfileEdit() {
               style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
             >
               <Icon name="arrow_left" size={14} />
-              Back to dashboard
+              {t("profile.back")}
             </button>
           </div>
-          <h1 className="h2" style={{ margin: 0 }}>Edit Profile</h1>
+          <h1 className="h2" style={{ margin: 0 }}>{t("profile.title")}</h1>
           <div style={{ flex: 1 }} />
         </header>
         <p className="muted" style={{ textAlign: "center", margin: "6px 0 32px" }}>
-          Update your basic info and per-category pricing.
+          {t("profile.subtitle")}
         </p>
 
         {loadError && (
@@ -1241,7 +1239,7 @@ function CompanyProfileEdit() {
 
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "64px 0" }}>
-            <ContainerSpinner size={88} label="Loading profile" />
+            <ContainerSpinner size={88} label={t("profile.loading")} />
           </div>
         ) : (
           <Reveal as="div" style={{ display: "grid", gap: 24, maxWidth: 820, margin: "0 auto" }}>

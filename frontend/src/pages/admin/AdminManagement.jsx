@@ -403,8 +403,16 @@ function CommissionRow({ company, busy, savedAt, onSave }) {
 /* ---------- Port management cards ---------- */
 const PORT_TYPES = ["Air", "Sea"];
 
+/* Catalog names are bilingual { en, ar }. These tolerate the legacy
+   plain-string shape too, so the UI doesn't blank out if the backend
+   migration hasn't been run yet. */
+const enOf = (v) => (typeof v === "string" ? v : v?.en ?? "");
+const arOf = (v) => (typeof v === "string" ? v : v?.ar ?? "");
+const catalogInputStyle = { height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14 };
+
 function AddPortForm({ onCreate, busy }) {
   const [name, setName] = useState("");
+  const [nameAr, setNameAr] = useState("");
   const [type, setType] = useState("Sea");
   const [estDate, setEstDate] = useState("");
   const [error, setError] = useState("");
@@ -413,12 +421,17 @@ function AddPortForm({ onCreate, busy }) {
     e.preventDefault();
     setError("");
     if (!name.trim() || !type || !estDate) {
-      setError("Name, type, and establishment date are required.");
+      setError("Name (EN), type, and establishment date are required.");
       return;
     }
     try {
-      await onCreate({ PortName: name.trim(), PortType: type, EstDate: estDate });
+      await onCreate({
+        PortName: { en: name.trim(), ar: nameAr.trim() || name.trim() },
+        PortType: type,
+        EstDate: estDate,
+      });
       setName("");
+      setNameAr("");
       setType("Sea");
       setEstDate("");
     } catch (err) {
@@ -430,14 +443,22 @@ function AddPortForm({ onCreate, busy }) {
     <form
       onSubmit={submit}
       className="card"
-      style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr 0.9fr auto", gap: 10, alignItems: "end", padding: 16, marginBottom: 16 }}
+      style={{ display: "grid", gridTemplateColumns: "1.2fr 1.2fr 0.7fr 0.8fr auto", gap: 10, alignItems: "end", padding: 16, marginBottom: 16 }}
     >
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span className="muted" style={{ fontSize: 12 }}>Port name</span>
+        <span className="muted" style={{ fontSize: 12 }}>Port name (EN)</span>
         <input
           value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
-          placeholder="e.g. Port Said" aria-label="Port name"
-          style={{ height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14 }}
+          placeholder="e.g. Port Said" aria-label="Port name (English)"
+          style={catalogInputStyle}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Port name (AR)</span>
+        <input
+          value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={busy}
+          placeholder="مثال: بورسعيد" aria-label="Port name (Arabic)" dir="rtl"
+          style={catalogInputStyle}
         />
       </label>
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -472,17 +493,23 @@ function AddPortForm({ onCreate, busy }) {
 
 function PortRow({ port, busy, onSave, onDelete, isLast }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(port.PortName);
+  const [name, setName] = useState(enOf(port.PortName));
+  const [nameAr, setNameAr] = useState(arOf(port.PortName));
   const [type, setType] = useState(port.PortType);
   const active = Number(port.ActiveApplications || 0);
   const frozen = active > 0;
 
   useEffect(() => {
-    setName(port.PortName);
+    setName(enOf(port.PortName));
+    setNameAr(arOf(port.PortName));
     setType(port.PortType);
   }, [port.PortName, port.PortType, editing]);
 
-  const dirty = editing && (name.trim() !== port.PortName || type !== port.PortType);
+  const dirty = editing && (
+    name.trim() !== enOf(port.PortName) ||
+    nameAr.trim() !== arOf(port.PortName) ||
+    type !== port.PortType
+  );
 
   return (
     <li style={{ borderBottom: isLast ? "none" : "1px solid var(--gray-100)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
@@ -491,8 +518,13 @@ function PortRow({ port, busy, onSave, onDelete, isLast }) {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <input
               value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
-              aria-label="Port name"
-              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 180 }}
+              aria-label="Port name (English)" placeholder="Name (EN)"
+              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 160 }}
+            />
+            <input
+              value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={busy}
+              aria-label="Port name (Arabic)" placeholder="الاسم (AR)" dir="rtl"
+              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 160 }}
             />
             <select
               value={type} onChange={(e) => setType(e.target.value)} disabled={busy}
@@ -504,7 +536,10 @@ function PortRow({ port, busy, onSave, onDelete, isLast }) {
           </div>
         ) : (
           <>
-            <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>{port.PortName}</div>
+            <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
+              {enOf(port.PortName)}
+              <span dir="rtl" style={{ color: "var(--gray-400)", fontWeight: 500, marginInlineStart: 8 }}>{arOf(port.PortName)}</span>
+            </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
               <span style={{ fontFamily: "var(--font-mono)" }}>#{port.PortID}</span>
               <span style={{ color: "var(--gray-300)", margin: "0 6px" }}>·</span>
@@ -528,7 +563,7 @@ function PortRow({ port, busy, onSave, onDelete, isLast }) {
           <>
             <button
               className="btn btn-primary btn-sm" disabled={busy || !dirty || !name.trim()}
-              onClick={() => onSave(port.PortID, { PortName: name.trim(), PortType: type }).then(() => setEditing(false))}
+              onClick={() => onSave(port.PortID, { PortName: { en: name.trim(), ar: nameAr.trim() || name.trim() }, PortType: type }).then(() => setEditing(false))}
               style={{ minWidth: 72, justifyContent: "center" }}
             >
               {busy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={14} /> Save</>}
@@ -577,18 +612,20 @@ function PortRow({ port, busy, onSave, onDelete, isLast }) {
 /* ---------- Category management cards ---------- */
 function AddCategoryForm({ onCreate, busy }) {
   const [name, setName] = useState("");
+  const [nameAr, setNameAr] = useState("");
   const [error, setError] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     if (!name.trim()) {
-      setError("Category name is required.");
+      setError("Category name (EN) is required.");
       return;
     }
     try {
-      await onCreate({ Type: name.trim() });
+      await onCreate({ Type: { en: name.trim(), ar: nameAr.trim() || name.trim() } });
       setName("");
+      setNameAr("");
     } catch (err) {
       setError(friendlyError(err, "Couldn't add category."));
     }
@@ -598,14 +635,22 @@ function AddCategoryForm({ onCreate, busy }) {
     <form
       onSubmit={submit}
       className="card"
-      style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end", padding: 16, marginBottom: 16 }}
+      style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end", padding: 16, marginBottom: 16 }}
     >
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span className="muted" style={{ fontSize: 12 }}>Category name</span>
+        <span className="muted" style={{ fontSize: 12 }}>Category name (EN)</span>
         <input
           value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
-          placeholder="e.g. Electronics" aria-label="Category name"
-          style={{ height: 36, borderRadius: 8, border: "1px solid var(--line)", padding: "0 10px", fontSize: 14 }}
+          placeholder="e.g. Electronics" aria-label="Category name (English)"
+          style={catalogInputStyle}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Category name (AR)</span>
+        <input
+          value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={busy}
+          placeholder="مثال: إلكترونيات" aria-label="Category name (Arabic)" dir="rtl"
+          style={catalogInputStyle}
         />
       </label>
       <button type="submit" className="btn btn-primary btn-sm" disabled={busy} style={{ height: 36 }}>
@@ -622,28 +667,42 @@ function AddCategoryForm({ onCreate, busy }) {
 
 function CategoryRow({ category, busy, onSave, onDelete, isLast }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(category.Type);
+  const [name, setName] = useState(enOf(category.Type));
+  const [nameAr, setNameAr] = useState(arOf(category.Type));
   const active = Number(category.ActiveApplications || 0);
   const frozen = active > 0;
 
   useEffect(() => {
-    setName(category.Type);
+    setName(enOf(category.Type));
+    setNameAr(arOf(category.Type));
   }, [category.Type, editing]);
 
-  const dirty = editing && name.trim() && name.trim() !== category.Type;
+  const dirty = editing && name.trim() && (
+    name.trim() !== enOf(category.Type) || nameAr.trim() !== arOf(category.Type)
+  );
 
   return (
     <li style={{ borderBottom: isLast ? "none" : "1px solid var(--gray-100)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
-          <input
-            value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
-            aria-label="Category name"
-            style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 220 }}
-          />
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <input
+              value={name} onChange={(e) => setName(e.target.value)} disabled={busy}
+              aria-label="Category name (English)" placeholder="Name (EN)"
+              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 200 }}
+            />
+            <input
+              value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={busy}
+              aria-label="Category name (Arabic)" placeholder="الاسم (AR)" dir="rtl"
+              style={{ height: 32, borderRadius: 6, border: "1px solid var(--line)", padding: "0 8px", fontSize: 13, minWidth: 200 }}
+            />
+          </div>
         ) : (
           <>
-            <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>{category.Type}</div>
+            <div style={{ color: "var(--navy)", fontWeight: 600, fontSize: 14 }}>
+              {enOf(category.Type)}
+              <span dir="rtl" style={{ color: "var(--gray-400)", fontWeight: 500, marginInlineStart: 8 }}>{arOf(category.Type)}</span>
+            </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
               <span style={{ fontFamily: "var(--font-mono)" }}>#{category.CategoryID}</span>
               {frozen && (
@@ -663,7 +722,7 @@ function CategoryRow({ category, busy, onSave, onDelete, isLast }) {
           <>
             <button
               className="btn btn-primary btn-sm" disabled={busy || !dirty}
-              onClick={() => onSave(category.CategoryID, { Type: name.trim() }).then(() => setEditing(false))}
+              onClick={() => onSave(category.CategoryID, { Type: { en: name.trim(), ar: nameAr.trim() || name.trim() } }).then(() => setEditing(false))}
               style={{ minWidth: 72, justifyContent: "center" }}
             >
               {busy ? <ContainerSpinner inline size={14} label="Saving…" /> : <><Icon name="check" size={14} /> Save</>}
@@ -1038,14 +1097,14 @@ const PRINT_COLS = {
   ],
   ports: [
     { key: "PortID",   label: "Port #", align: "right", mono: true, width: 70 },
-    { key: "PortName", label: "Name" },
+    { key: "PortName", label: "Name", value: (r) => [enOf(r.PortName), arOf(r.PortName)].filter(Boolean).join(" — ") },
     { key: "PortType", label: "Type" },
     { key: "EstDate",  label: "Established", mono: true, value: (r) => formatDate(r.EstDate) },
     { key: "ActiveApplications", label: "Active apps", align: "right", mono: true, value: (r) => String(r.ActiveApplications || 0) },
   ],
   categories: [
     { key: "CategoryID", label: "Cat #", align: "right", mono: true, width: 70 },
-    { key: "Type",       label: "Name" },
+    { key: "Type",       label: "Name", value: (r) => [enOf(r.Type), arOf(r.Type)].filter(Boolean).join(" — ") },
     { key: "ActiveApplications", label: "Active apps", align: "right", mono: true, value: (r) => String(r.ActiveApplications || 0) },
   ],
 };
@@ -1245,7 +1304,7 @@ function AdminManagement() {
     try {
       await createPort(body);
       await refreshPorts();
-      showNotice(`Port "${body.PortName}" added.`);
+      showNotice(`Port "${enOf(body.PortName)}" added.`);
     } finally {
       setPortAdding(false);
     }
@@ -1256,7 +1315,7 @@ function AdminManagement() {
     try {
       await updatePort(portId, body);
       await refreshPorts();
-      showNotice(`Port "${body.PortName}" updated.`);
+      showNotice(`Port "${enOf(body.PortName)}" updated.`);
     } catch (err) {
       showNotice(friendlyError(err, "Couldn't update the port."));
       throw err;
@@ -1270,7 +1329,7 @@ function AdminManagement() {
     try {
       await createCategory(body);
       await refreshCategories();
-      showNotice(`Category "${body.Type}" added.`);
+      showNotice(`Category "${enOf(body.Type)}" added.`);
     } catch (err) {
       showNotice(friendlyError(err, "Couldn't add category."));
       throw err;
@@ -1284,7 +1343,7 @@ function AdminManagement() {
     try {
       await updateCategory(categoryId, body);
       await refreshCategories();
-      showNotice(`Category renamed to "${body.Type}".`);
+      showNotice(`Category renamed to "${enOf(body.Type)}".`);
     } catch (err) {
       showNotice(friendlyError(err, "Couldn't update the category."));
       throw err;
@@ -1302,7 +1361,7 @@ function AdminManagement() {
     try {
       await deleteCategory(target.CategoryID);
       await refreshCategories();
-      showNotice(`Category "${target.Type}" deleted.`);
+      showNotice(`Category "${enOf(target.Type)}" deleted.`);
     } catch (err) {
       showNotice(friendlyError(err, "Couldn't delete the category."));
     } finally {
@@ -1320,7 +1379,7 @@ function AdminManagement() {
     try {
       await deletePort(target.PortID);
       await refreshPorts();
-      showNotice(`Port "${target.PortName}" deleted.`);
+      showNotice(`Port "${enOf(target.PortName)}" deleted.`);
     } catch (err) {
       showNotice(friendlyError(err, "Couldn't delete the port."));
     } finally {
@@ -1375,12 +1434,12 @@ function AdminManagement() {
     String(c.ContactEmail||"").toLowerCase().includes(q)
   ), [verifiedCompanies, q]);
   const filteredPorts = useMemo(() => !q ? ports : ports.filter(p =>
-    String(p.PortName||"").toLowerCase().includes(q) ||
+    `${enOf(p.PortName)} ${arOf(p.PortName)}`.toLowerCase().includes(q) ||
     String(p.PortType||"").toLowerCase().includes(q) ||
     String(p.PortID).includes(q)
   ), [ports, q]);
   const filteredCategories = useMemo(() => !q ? categories : categories.filter(c =>
-    String(c.Type||"").toLowerCase().includes(q) ||
+    `${enOf(c.Type)} ${arOf(c.Type)}`.toLowerCase().includes(q) ||
     String(c.CategoryID).includes(q)
   ), [categories, q]);
 
@@ -1856,7 +1915,7 @@ function AdminManagement() {
         open={!!deletePortTarget}
         title="Delete this port?"
         message={deletePortTarget
-          ? `“${deletePortTarget.PortName}” will be removed from the catalog and unlinked from all companies. Historical applications keep their snapshot.`
+          ? `“${enOf(deletePortTarget.PortName)}” will be removed from the catalog and unlinked from all companies. Historical applications keep their snapshot.`
           : ""
         }
         confirmLabel="Delete port"
@@ -1871,7 +1930,7 @@ function AdminManagement() {
         open={!!deleteCategoryTarget}
         title="Delete this category?"
         message={deleteCategoryTarget
-          ? `“${deleteCategoryTarget.Type}” will be removed from the catalog and unlinked from all companies' pricing. Historical applications keep their snapshot.`
+          ? `“${enOf(deleteCategoryTarget.Type)}” will be removed from the catalog and unlinked from all companies' pricing. Historical applications keep their snapshot.`
           : ""
         }
         confirmLabel="Delete category"

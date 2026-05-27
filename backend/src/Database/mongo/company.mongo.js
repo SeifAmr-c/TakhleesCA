@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { LocalizedStringSchema } from './_shared.js';
 
 /* Bounded join data — every company has a small, fixed set of ports it
    serves and categories it prices. Embedding avoids a per-list-query
@@ -6,7 +7,7 @@ import mongoose from 'mongoose';
 const CompanyPortSubSchema = new mongoose.Schema(
     {
         PortID:   { type: Number, required: true },
-        PortName: { type: String },
+        PortName: { type: LocalizedStringSchema },
         PortType: { type: String, enum: ['Air', 'Sea'] },
     },
     { _id: false }
@@ -15,9 +16,8 @@ const CompanyPortSubSchema = new mongoose.Schema(
 const CompanyCategorySubSchema = new mongoose.Schema(
     {
         CategoryID: { type: Number, required: true },
-        /* Mirrors Category.Type — open string now that the catalog is
-           admin-managed. */
-        Type:       { type: String },
+        /* Bilingual snapshot mirroring Category.Type. */
+        Type:       { type: LocalizedStringSchema },
         Price:      { type: Number, required: true, min: 0 },
     },
     { _id: false }

@@ -26,6 +26,16 @@ body {
   background: var(--bg, oklch(98% 0.008 245));
 }
 
+/* Arabic typography — Cairo is dynamically loaded the first time the
+   user switches to AR (see frontend/src/i18n/index.js → loadArabicFont).
+   Until then this rule is a no-op: the browser falls through to the
+   IBM Plex stack, which still renders Arabic glyphs acceptably. */
+html[lang="ar"] body {
+  font-family:
+    "Cairo", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 a {
   color: inherit;
 }

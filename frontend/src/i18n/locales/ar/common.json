@@ -1,0 +1,75 @@
+{
+  "brand": {
+    "name": "تخليص",
+    "homeAria": "تخليص — الرئيسية"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "companies": "الشركات",
+    "support": "الدعم",
+    "users": "المستخدمون",
+    "commissions": "العمولات",
+    "about": "من نحن",
+    "contact": "اتصل بنا",
+    "shipments": "الشحنات",
+    "recommend": "اعثر على شركة"
+  },
+  "profile": {
+    "userAria": "ملف المستخدم",
+    "adminAria": "ملف المسؤول",
+    "companyAria": "ملف الشركة"
+  },
+  "auth": {
+    "signIn": "تسجيل الدخول",
+    "signOut": "تسجيل الخروج",
+    "getStarted": "ابدأ الآن",
+    "signUp": "إنشاء حساب",
+    "companyLogin": "دخول الشركات",
+    "logout": "تسجيل الخروج"
+  },
+  "layout": {
+    "greeting": "مرحبًا <strong>{{name}}</strong>"
+  },
+  "footer": {
+    "tagline": "تخليص جمركي مُحكم للمستوردين والمصدّرين في مصر. وكلاء معتمدون، ومدفوعات ضمان، وحالة مباشرة من دخول البوابة حتى الإفراج.",
+    "product": "المنتج",
+    "browseCompanies": "تصفّح الشركات",
+    "listCompany": "أدرج شركتك",
+    "company": "الشركة",
+    "aboutUs": "من نحن",
+    "contact": "اتصل بنا",
+    "legal": "قانوني",
+    "privacy": "سياسة الخصوصية",
+    "terms": "شروط الخدمة",
+    "copyright": "© {{year}} تخليص · جميع الحقوق محفوظة"
+  },
+  "governorates": {
+    "Al Daqahliyah": "الدقهلية",
+    "Red Sea": "البحر الأحمر",
+    "Al Buhayrah": "البحيرة",
+    "Al Fayyum": "الفيوم",
+    "Al Gharbiyah": "الغربية",
+    "Alexandria": "الإسكندرية",
+    "Ismailia": "الإسماعيلية",
+    "Giza": "الجيزة",
+    "Al Minufiyah": "المنوفية",
+    "Al Minya": "المنيا",
+    "Cairo": "القاهرة",
+    "Al Qalyubiyah": "القليوبية",
+    "Luxor": "الأقصر",
+    "New Valley": "الوادي الجديد",
+    "Suez": "السويس",
+    "Ash Sharqiyah": "الشرقية",
+    "Aswan": "أسوان",
+    "Asyut": "أسيوط",
+    "Bani Suwayf": "بني سويف",
+    "Port Said": "بورسعيد",
+    "Damietta": "دمياط",
+    "South Sinai": "جنوب سيناء",
+    "Kafr ash Shaykh": "كفر الشيخ",
+    "Matruh": "مطروح",
+    "Qina": "قنا",
+    "North Sinai": "شمال سيناء",
+    "Suhaj": "سوهاج"
+  }
+}

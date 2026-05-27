@@ -4,6 +4,9 @@ import MongoStore from "connect-mongo";
 import cors from "cors";
 
 import { errorHandler } from "./middleware/errorHandler.js";
+import { resolveLanguage } from "./middleware/language.js";
+import { localizeResponses } from "./utils/localize.js";
+import { getMongoUrl, getDbName } from "./Database/mongo_connection.js";
 import userRouter from "./modules/user/user_controller.js";
 import applicationRouter from "./modules/application/application_controller.js";
 import categoryRouter from "./modules/category/category_controller.js";
@@ -53,8 +56,8 @@ export const bootstrap = () => {
   const WEB_SESSION_MAX_AGE_MS = 30 * 60 * 1000;
 
   const sessionStore = MongoStore.create({
-    mongoUrl: process.env.Mongo_url,
-    dbName: 'Takhlees',
+    mongoUrl: getMongoUrl(),
+    dbName: getDbName(),
     collectionName: 'sessions',
     /* Store TTL is the upper bound; the per-session expires field
        (driven by req.session.cookie.maxAge) is what actually decides
@@ -102,6 +105,12 @@ export const bootstrap = () => {
     }
     next();
   });
+
+  /* Resolve req.lang, then patch res.json so reference-data responses are
+     flattened to that language. Mounted before the routers so every
+     handler benefits without per-handler wiring. */
+  app.use(resolveLanguage);
+  app.use(localizeResponses);
 
   app.use("/user", userRouter);
   app.use("/application", applicationRouter);

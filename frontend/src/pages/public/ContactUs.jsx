@@ -7,14 +7,10 @@ import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { submitSupportTicket } from "../../api/payments.js";
 import { friendlyError } from "../../api/client.js";
 import { useAuth } from "../../api/authState.js";
-
-const CONTACTS = [
-  { icon: "email", label: "Email", value: "support@takhlees.com" },
-  { icon: "phone", label: "Phone", value: "+20 100 000 0000" },
-  { icon: "pin", label: "Office", value: "Smart Village, 6th Oct., Egypt" },
-];
+import { useTranslation } from "../../i18n";
 
 function ContactUs() {
+  const { t } = useTranslation("landing");
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,6 +24,14 @@ function ContactUs() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  // Phone and email are inherently LTR. Wrap them in <bdi> so they render
+  // correctly even when the surrounding paragraph is RTL.
+  const contacts = [
+    { icon: "email", label: t("contact.channels.email"), value: "support@takhlees.com", bidi: true },
+    { icon: "phone", label: t("contact.channels.phone"), value: "+20 100 000 0000", bidi: true },
+    { icon: "pin", label: t("contact.channels.office"), value: t("contact.channels.officeValue") },
+  ];
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -51,7 +55,7 @@ function ContactUs() {
     }
 
     if (!form.Message.trim()) {
-      return setError("Please describe your issue before submitting.");
+      return setError(t("contact.form.errors.emptyMessage"));
     }
 
     setSubmitting(true);
@@ -65,7 +69,7 @@ function ContactUs() {
       setSuccess(true);
       setTimeout(() => navigate("/"), 1500);
     } catch (err) {
-      setError(friendlyError(err, "Could not send your message. Please try again."));
+      setError(friendlyError(err, t("contact.form.errors.submitFailed")));
     } finally {
       setSubmitting(false);
     }
@@ -83,15 +87,12 @@ function ContactUs() {
           }}
         >
           <div>
-            <span className="eyebrow">Contact</span>
-            <h1 className="h1" style={{ fontSize: 44 }}>Talk to us.</h1>
-            <p className="lead">
-              Onboarding, pricing, or a shipment that needs attention &mdash; drop
-              us a line and a real human will reply.
-            </p>
+            <span className="eyebrow">{t("contact.eyebrow")}</span>
+            <h1 className="h1" style={{ fontSize: 44 }}>{t("contact.title")}</h1>
+            <p className="lead">{t("contact.lead")}</p>
 
             <div className="stack" style={{ marginTop: 32 }}>
-              {CONTACTS.map((c) => (
+              {contacts.map((c) => (
                 <div key={c.label} className="row" style={{ gap: 14 }}>
                   <div
                     className="card-icon"
@@ -118,7 +119,7 @@ function ContactUs() {
                         marginTop: 2,
                       }}
                     >
-                      {c.value}
+                      {c.bidi ? <bdi>{c.value}</bdi> : c.value}
                     </div>
                   </div>
                 </div>
@@ -128,28 +129,27 @@ function ContactUs() {
             <div className="card" style={{ marginTop: 32, background: "var(--steel-50)" }}>
               <div className="row" style={{ gap: 12, marginBottom: 8 }}>
                 <Icon name="bell" color="var(--ink)" />
-                <strong style={{ color: "var(--ink)" }}>Operating hours</strong>
+                <strong style={{ color: "var(--ink)" }}>{t("contact.hours.title")}</strong>
               </div>
               <p style={{ margin: 0, fontSize: 14, color: "var(--ink-soft)" }}>
-                Sun&ndash;Thu, 9am&ndash;6pm EET. Urgent shipment issues are
-                answered around the clock.
+                {t("contact.hours.body")}
               </p>
             </div>
           </div>
 
           <div className="card card-pad-lg">
-            <h2 className="h3" style={{ fontSize: 20, marginBottom: 16 }}>Send a message</h2>
+            <h2 className="h3" style={{ fontSize: 20, marginBottom: 16 }}>{t("contact.form.heading")}</h2>
             {error && <div className="banner-error"><Icon name="bell" size={18} />{error}</div>}
             {success && (
               <div className="banner-success">
                 <Icon name="check" size={18} />
-                Your ticket has been submitted successfully!
+                {t("contact.form.successBanner")}
               </div>
             )}
             <form onSubmit={handleSubmit} className="stack" noValidate>
               <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label className="field">
-                  <span className="field-label">Your name</span>
+                  <span className="field-label">{t("contact.form.name")}</span>
                   <input
                     className="input"
                     value={form.Name}
@@ -160,12 +160,13 @@ function ContactUs() {
                   />
                 </label>
                 <label className="field">
-                  <span className="field-label">Email</span>
+                  <span className="field-label">{t("contact.form.email")}</span>
                   <div className="input-with-icon">
                     <span className="input-icon"><Icon name="email" size={16} /></span>
                     <input
                       type="email"
                       className="input"
+                      dir="ltr"
                       value={form.Email}
                       onChange={update("Email")}
                       disabled={submitting}
@@ -176,7 +177,7 @@ function ContactUs() {
                 </label>
               </div>
               <label className="field">
-                <span className="field-label">Message</span>
+                <span className="field-label">{t("contact.form.message")}</span>
                 <textarea
                   className="textarea"
                   rows={6}
@@ -184,7 +185,7 @@ function ContactUs() {
                   onChange={update("Message")}
                   disabled={submitting}
                   required
-                  placeholder="Tell us more…"
+                  placeholder={t("contact.form.messagePlaceholder")}
                 />
               </label>
               <button
@@ -193,9 +194,9 @@ function ContactUs() {
                 disabled={submitting || success}
               >
                 {submitting ? (
-                  <ContainerSpinner inline size={20} label="Sending…" />
+                  <ContainerSpinner inline size={20} label={t("contact.form.sending")} />
                 ) : (
-                  <>Send message <Icon name="arrow_right" size={16} /></>
+                  <>{t("contact.form.submit")} <Icon name="arrow_right" size={16} className="icon-flip" /></>
                 )}
               </button>
             </form>

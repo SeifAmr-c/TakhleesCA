@@ -1,35 +1,26 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
 import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { recommendCompanies } from "../../api/companies.js";
+import { listCategories } from "../../api/companyCategories.js";
 import { friendlyError } from "../../api/client.js";
 import { useAuth } from "../../api/authState.js";
-
-/* Alphabetical list of Egypt governorates — hard-coded so the wizard
-   doesn't need a round-trip to populate the first dropdown. */
-const GOVERNORATES = [
-  "Alexandria", "Aswan", "Asyut", "Beheira", "Beni Suef", "Cairo",
-  "Dakahlia", "Damietta", "Faiyum", "Gharbia", "Giza", "Ismailia",
-  "Kafr El Sheikh", "Luxor", "Matrouh", "Minya", "Monufia", "New Valley",
-  "North Sinai", "Port Said", "Qalyubia", "Qena", "Red Sea", "Sharqia",
-  "Sohag", "South Sinai", "Suez",
-];
-
-/* Mirrors the Category.Type ENUM on the backend. */
-const CATEGORIES = ["Electronics", "Cars", "Clothes", "Other"];
+import { useTranslation, useLanguage } from "../../i18n";
+import { GOVERNORATES } from "../../data/governorates.js";
 
 /* Pre-baked price brackets. value = the index — what we keep in form
-   state — and min/max are sent to the API. */
+   state — and min/max are sent to the API. `key` resolves the display
+   label via recommend.priceRanges.<key>. */
 const PRICE_RANGES = [
-  { label: "Under 5,000 EGP",     min: 0,     max: 5000 },
-  { label: "5,000 – 10,000 EGP",  min: 5000,  max: 10000 },
-  { label: "10,000 – 12,000 EGP", min: 10000, max: 12000 },
-  { label: "12,000 – 20,000 EGP", min: 12000, max: 20000 },
-  { label: "20,000 – 50,000 EGP", min: 20000, max: 50000 },
-  { label: "Above 50,000 EGP",    min: 50000, max: 1000000 },
+  { key: "under5k",  min: 0,     max: 5000 },
+  { key: "5to10k",   min: 5000,  max: 10000 },
+  { key: "10to12k",  min: 10000, max: 12000 },
+  { key: "12to20k",  min: 12000, max: 20000 },
+  { key: "20to50k",  min: 20000, max: 50000 },
+  { key: "above50k", min: 50000, max: 1000000 },
 ];
 
 function StarRating({ avg }) {
@@ -45,14 +36,15 @@ function StarRating({ avg }) {
           filled={i <= filled}
         />
       ))}
-      <span style={{ fontSize: 12, color: "var(--ink-soft)", marginLeft: 4 }} className="tabular">
-        {Number(avg).toFixed(1)}
+      <span style={{ fontSize: 12, color: "var(--ink-soft)", marginInlineStart: 4 }} className="tabular">
+        <bdi>{Number(avg).toFixed(1)}</bdi>
       </span>
     </div>
   );
 }
 
 function ResultCard({ row }) {
+  const { t } = useTranslation("client");
   const initials = (row.Name || "T")
     .split(" ").filter(Boolean).slice(0, 2)
     .map((w) => w[0]).join("").toUpperCase();
@@ -79,12 +71,14 @@ function ResultCard({ row }) {
           <div>
             <div className="row" style={{ gap: 6, marginBottom: 4 }}>
               <span className="badge badge-success">
-                <Icon name="shield" size={11} /> Verified
+                <Icon name="shield" size={11} /> {t("recommend.card.verified")}
               </span>
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>{row.Name}</div>
             <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>
-              {row.Governorate || "—"} · {row.CategoryType || "—"}
+              {row.Governorate ? t(`common:governorates.${row.Governorate}`, { defaultValue: row.Governorate }) : "—"}
+              {" · "}
+              {row.CategoryType || "—"}
             </div>
           </div>
         </div>
@@ -97,7 +91,7 @@ function ResultCard({ row }) {
             fontVariantNumeric: "tabular-nums",
           }}
         >
-          EGP {price.toLocaleString()}
+          {t("recommend.currency")} <bdi>{price.toLocaleString()}</bdi>
         </span>
       </div>
 
@@ -108,17 +102,17 @@ function ResultCard({ row }) {
         style={{ justifyContent: "space-between", alignItems: "center", gap: 12 }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span className="eyebrow" style={{ color: "var(--ink-faint)" }}>Rating</span>
+          <span className="eyebrow" style={{ color: "var(--ink-faint)" }}>{t("recommend.card.rating")}</span>
           {hasReviews ? (
             <StarRating avg={rating} />
           ) : (
             <span style={{ fontSize: 13, color: "var(--ink-faint)" }}>—</span>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, textAlign: "right" }}>
-          <span className="eyebrow" style={{ color: "var(--ink-faint)" }}>Fulfilled</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, textAlign: "end" }}>
+          <span className="eyebrow" style={{ color: "var(--ink-faint)" }}>{t("recommend.card.fulfilled")}</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }} className="tabular">
-            {fulfilled}
+            <bdi>{fulfilled}</bdi>
           </span>
         </div>
       </div>
@@ -132,7 +126,7 @@ function ResultCard({ row }) {
             fontStyle: "italic",
           }}
         >
-          No reviews yet
+          {t("recommend.card.noReviews")}
         </div>
       )}
 
@@ -144,13 +138,15 @@ function ResultCard({ row }) {
         style={{ marginTop: 16, justifyContent: "center" }}
       >
         <Icon name="package" size={14} />
-        Apply Now
+        {t("recommend.card.apply")}
       </Link>
     </div>
   );
 }
 
 function RecommendationWizard() {
+  const { t } = useTranslation("client");
+  const { lang } = useLanguage();
   const auth = useAuth();
   const navigate = useNavigate();
 
@@ -158,16 +154,31 @@ function RecommendationWizard() {
     auth?.kind === "user" && auth?.role === "client" && !!auth?.user?.UserID;
 
   const [governorate, setGovernorate] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [rangeIdx, setRangeIdx] = useState("");
+
+  /* Live catalog from /category (admin-managed). Type arrives already
+     localized for the active language; re-fetch when the language flips so
+     labels stay in sync. We key the picker by CategoryID (stable across
+     languages) and submit the resolved Type, which the backend matches
+     against either Type.en or Type.ar. */
+  const [categories, setCategories] = useState([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState(null); // null = State 1, array = State 2
 
+  useEffect(() => {
+    let alive = true;
+    listCategories()
+      .then((rows) => { if (alive) setCategories(rows); })
+      .catch(() => { if (alive) setCategories([]); });
+    return () => { alive = false; };
+  }, [lang]);
+
   const canSubmit = useMemo(
-    () => !!governorate && !!category && rangeIdx !== "" && !submitting,
-    [governorate, category, rangeIdx, submitting]
+    () => !!governorate && !!categoryId && rangeIdx !== "" && !submitting,
+    [governorate, categoryId, rangeIdx, submitting]
   );
 
   const onSubmit = async (e) => {
@@ -175,12 +186,14 @@ function RecommendationWizard() {
     if (!canSubmit) return;
     const range = PRICE_RANGES[Number(rangeIdx)];
     if (!range) return;
+    const selectedCat = categories.find((c) => String(c.CategoryID) === String(categoryId));
+    if (!selectedCat) return;
     setSubmitting(true);
     setError("");
     try {
       const data = await recommendCompanies({
         governorate,
-        category,
+        category: selectedCat.Type,
         minPrice: range.min,
         maxPrice: range.max,
       });
@@ -191,7 +204,7 @@ function RecommendationWizard() {
         navigate("/login", { replace: false });
         return;
       }
-      setError(friendlyError(err, "Couldn't fetch recommendations. Please try again."));
+      setError(friendlyError(err, t("recommend.form.error")));
     } finally {
       setSubmitting(false);
     }
@@ -205,17 +218,17 @@ function RecommendationWizard() {
   if (!isSignedInClient) {
     return (
       <PublicLayout
-        title="Find a Company"
-        subtitle="Tell us what you're clearing and we'll match you with the best-fitting companies."
+        title={t("recommend.title")}
+        subtitle={t("recommend.subtitle")}
         role="Client"
       >
         <div className="card card-pad-lg" style={{ textAlign: "center", maxWidth: 520, margin: "0 auto" }}>
           <Icon name="lock" size={32} color="var(--ink-faint)" />
-          <h3 className="h3" style={{ marginTop: 12 }}>Sign in to use the matchmaker</h3>
+          <h3 className="h3" style={{ marginTop: 12 }}>{t("recommend.signedOut.title")}</h3>
           <p style={{ color: "var(--ink-soft)" }}>
-            The recommendation wizard is available to signed-in clients.
+            {t("recommend.signedOut.desc")}
           </p>
-          <Link to="/login" className="btn btn-primary" style={{ marginTop: 16 }}>Sign in</Link>
+          <Link to="/login" className="btn btn-primary" style={{ marginTop: 16 }}>{t("recommend.signedOut.signIn")}</Link>
         </div>
       </PublicLayout>
     );
@@ -223,12 +236,12 @@ function RecommendationWizard() {
 
   return (
     <PublicLayout
-      title="Find a Company"
-      subtitle="Tell us what you're clearing and we'll match you with the best-fitting companies."
+      title={t("recommend.title")}
+      subtitle={t("recommend.subtitle")}
       role="Client"
       actions={
         <Link to="/tracking" className="btn btn-secondary">
-          <Icon name="package" size={16} /> Your shipments
+          <Icon name="package" size={16} /> {t("recommend.yourShipments")}
         </Link>
       }
     >
@@ -241,56 +254,55 @@ function RecommendationWizard() {
             style={{ maxWidth: 560, margin: "0 auto" }}
           >
             <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
-              Smart Matchmaker
+              {t("recommend.form.eyebrow")}
             </span>
-            <h3 className="card-title">A few quick questions</h3>
+            <h3 className="card-title">{t("recommend.form.title")}</h3>
             <p className="card-subtitle">
-              We'll rank companies serving your governorate by fulfilled
-              applications, then average rating.
+              {t("recommend.form.subtitle")}
             </p>
 
             <div className="stack" style={{ marginTop: 8 }}>
               <label className="field">
-                <span className="field-label">Governorate *</span>
+                <span className="field-label">{t("recommend.form.governorate")} *</span>
                 <select
                   className="select"
                   value={governorate}
                   onChange={(e) => setGovernorate(e.target.value)}
                   disabled={submitting}
                 >
-                  <option value="">Select a governorate…</option>
+                  <option value="">{t("recommend.form.governorateSelect")}</option>
                   {GOVERNORATES.map((g) => (
-                    <option key={g} value={g}>{g}</option>
+                    <option key={g} value={g}>{t(`common:governorates.${g}`, { defaultValue: g })}</option>
                   ))}
                 </select>
               </label>
 
               <label className="field">
-                <span className="field-label">Category *</span>
+                <span className="field-label">{t("recommend.form.category")} *</span>
                 <select
                   className="select"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
                   disabled={submitting}
                 >
-                  <option value="">Select a category…</option>
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                  <option value="">{t("recommend.form.categorySelect")}</option>
+                  {categories.map((c) => (
+                    <option key={c.CategoryID} value={String(c.CategoryID)}>{c.Type}</option>
                   ))}
                 </select>
               </label>
 
               <label className="field">
-                <span className="field-label">Approximate fees *</span>
+                <span className="field-label">{t("recommend.form.fees")} *</span>
                 <select
                   className="select"
                   value={rangeIdx}
                   onChange={(e) => setRangeIdx(e.target.value)}
                   disabled={submitting}
                 >
-                  <option value="">Select a price range…</option>
+                  <option value="">{t("recommend.form.feesSelect")}</option>
                   {PRICE_RANGES.map((r, i) => (
-                    <option key={r.label} value={i}>{r.label}</option>
+                    <option key={r.key} value={i}>{t(`recommend.priceRanges.${r.key}`)}</option>
                   ))}
                 </select>
               </label>
@@ -308,11 +320,11 @@ function RecommendationWizard() {
                 style={{ justifyContent: "center", marginTop: 4 }}
               >
                 {submitting ? (
-                  <ContainerSpinner inline size={16} label="Matching…" />
+                  <ContainerSpinner inline size={16} label={t("recommend.form.matching")} />
                 ) : (
                   <>
                     <Icon name="ship" size={16} />
-                    Find My Match
+                    {t("recommend.form.submit")}
                   </>
                 )}
               </button>
@@ -328,24 +340,24 @@ function RecommendationWizard() {
           >
             <div>
               <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
-                {results.length} {results.length === 1 ? "match" : "matches"}
+                {t("recommend.results.matchCount", { count: results.length })}
               </span>
-              <h3 className="h3" style={{ marginTop: 4 }}>Your recommended companies</h3>
+              <h3 className="h3" style={{ marginTop: 4 }}>{t("recommend.results.title")}</h3>
               <p style={{ color: "var(--ink-soft)", margin: "4px 0 0" }}>
-                Ranked by fulfilled applications, then average rating.
+                {t("recommend.results.subtitle")}
               </p>
             </div>
             <button type="button" className="btn btn-secondary btn-sm" onClick={onStartOver}>
-              <Icon name="refresh" size={14} /> Start over
+              <Icon name="refresh" size={14} /> {t("recommend.results.startOver")}
             </button>
           </div>
 
           {results.length === 0 ? (
             <div className="card card-pad-lg" style={{ textAlign: "center" }}>
               <Icon name="package" size={32} color="var(--ink-faint)" />
-              <h3 className="h3" style={{ marginTop: 12 }}>No matches found</h3>
+              <h3 className="h3" style={{ marginTop: 12 }}>{t("recommend.results.emptyTitle")}</h3>
               <p style={{ color: "var(--ink-soft)" }}>
-                Try a wider price range or a different governorate.
+                {t("recommend.results.emptyDesc")}
               </p>
               <button
                 type="button"
@@ -353,7 +365,7 @@ function RecommendationWizard() {
                 style={{ marginTop: 16 }}
                 onClick={onStartOver}
               >
-                Adjust filters
+                {t("recommend.results.adjust")}
               </button>
             </div>
           ) : (

@@ -1,0 +1,173 @@
+{
+  "privacy": {
+    "eyebrow": "Legal · Privacy",
+    "title": "Privacy Policy",
+    "lead": "What we collect, why we collect it, and the controls you have over your data on Takhlees.",
+    "lastUpdated": "Last updated · May 23, 2026",
+    "intro": "Takhlees connects Egyptian importers and exporters with verified clearance companies. To do that we have to handle some personal and commercial data. This page explains what, why, and for how long — in plain language, with no dark patterns.",
+    "sections": [
+      {
+        "title": "Information we collect",
+        "paragraphs": [
+          "When you create an account we collect your name, email, phone number, national ID, and address so partner clearance companies can verify you and execute customs paperwork on your behalf. Companies that list on Takhlees additionally supply commercial registration, tax number, and authorized contact details.",
+          "When you submit a clearance application we collect the cargo and shipment information you enter, plus any documents you upload (bills of lading, invoices, certificates of origin). Payment events are recorded as ledger rows — we do not store full card numbers or CVCs.",
+          "We log basic technical data — IP address, browser, and request timestamps — for security, abuse prevention, and debugging."
+        ]
+      },
+      {
+        "title": "How we use it",
+        "paragraphs": [
+          "We use your data to operate the platform: to route your application to the company you selected, to let you and the company exchange documents, to display shipment status, and to bill the fixed platform fee plus the company's commission.",
+          "We use it to keep the service secure — rate-limiting, fraud checks, and investigating reported abuse. We use it to communicate with you about your applications, support tickets, and material changes to the service. We do not sell your personal information."
+        ]
+      },
+      {
+        "title": "Who we share it with",
+        "paragraphs": [
+          "The clearance company you select sees the information needed to execute your application — your name, contact details, and the documents you uploaded. Companies are contractually bound to use that data only for the clearance work you engaged them for.",
+          "We use a small set of infrastructure providers to operate the service: MongoDB Atlas for database hosting, Cloudinary for document and image storage, and a payment processor for card handling. These providers process data on our behalf under their own security commitments.",
+          "We will disclose information to authorities when compelled by valid legal process under Egyptian law, and we will notify you unless the legal process forbids it."
+        ]
+      },
+      {
+        "title": "How long we keep it",
+        "paragraphs": [
+          "Account data is retained while your account is active. Clearance applications, uploaded documents, and payment ledger entries are retained for seven years after completion to satisfy Egyptian customs and tax record-keeping requirements. Support tickets are retained for two years.",
+          "You can request account deletion at any time; we will remove identifiers from records that are not subject to a legal retention obligation, and anonymize the rest."
+        ]
+      },
+      {
+        "title": "Your rights",
+        "paragraphs": [
+          "You can view and edit your profile, change your password, and download copies of the documents you uploaded directly from your dashboard. To request deletion, correction of data you cannot edit yourself, or a portable export of your full account, write to privacy@takhlees.com.",
+          "We aim to respond within 14 days. If you believe we have mishandled your data, you may also contact the Egyptian Personal Data Protection Center."
+        ]
+      },
+      {
+        "title": "Cookies and sessions",
+        "paragraphs": [
+          "We use a single first-party session cookie to keep you signed in. It expires 30 minutes after your last activity and is marked HttpOnly and SameSite=Lax. We do not use advertising or cross-site tracking cookies."
+        ]
+      },
+      {
+        "title": "Security",
+        "paragraphs": [
+          "Passwords are hashed with bcrypt. Connections to the platform are served over HTTPS. Uploaded documents are stored with access scoped to the application they belong to. No system is perfectly secure; if we discover a breach affecting your data, we will notify you without undue delay."
+        ]
+      },
+      {
+        "title": "Changes to this policy",
+        "paragraphs": [
+          "When we make material changes we will update the date at the top of this page and, where appropriate, notify you in-app or by email before the changes take effect. Continued use of the service after a change constitutes acceptance of the revised policy."
+        ]
+      },
+      {
+        "title": "Contact",
+        "paragraphs": ["Questions about this policy or how we handle your data:"],
+        "email": "privacy@takhlees.com",
+        "address": "Takhlees, Smart Village, 6th of October City, Egypt."
+      }
+    ]
+  },
+  "terms": {
+    "eyebrow": "Legal · Terms",
+    "title": "Terms of Service",
+    "lead": "The agreement between you and Takhlees when you use the platform — what we provide, what we expect, and what happens when things go wrong.",
+    "lastUpdated": "Last updated · May 23, 2026",
+    "intro": "By creating an account or otherwise using Takhlees you agree to these Terms. Please read them in full. If you are using the service on behalf of a company, you confirm you are authorized to bind that company to these Terms.",
+    "sections": [
+      {
+        "title": "What Takhlees is",
+        "paragraphs": [
+          "Takhlees is a marketplace that connects importers and exporters (“clients”) with licensed customs clearance companies (“companies”) operating at Egyptian ports. We provide the dashboard, document exchange, and payment rails. We are not a customs broker and we do not perform clearance work ourselves."
+        ]
+      },
+      {
+        "title": "Your account",
+        "paragraphs": [
+          "You must be at least 18 years old and legally able to enter contracts in Egypt to register. You are responsible for keeping your password confidential and for everything done under your account. Notify us immediately at support@takhlees.com if you suspect unauthorized access.",
+          "Information you provide at registration must be accurate. Companies must hold a valid commercial registration and customs license; we verify these before activation."
+        ]
+      },
+      {
+        "title": "How a clearance engagement works",
+        "paragraphs": [
+          "When you submit an application to a company, you propose a clearance engagement on the terms shown in the company's listing. The contract is between you and the company — Takhlees is not a party to it. The company may accept, request changes, or decline. Once both sides accept, the engagement is binding under the company's published rates and Egyptian customs law.",
+          "The clearance company is solely responsible for executing the engagement, including the accuracy of declarations filed on your behalf and compliance with customs regulations."
+        ]
+      },
+      {
+        "title": "Fees and payments",
+        "paragraphs": [
+          "Takhlees charges a fixed platform fee per application, disclosed at checkout, and collects a commission from the clearance company on the engagement value. You will see the total payable before you confirm.",
+          "Payments are processed by a third-party payment processor. We do not store full card numbers or CVCs. Once a payment is confirmed it is non-refundable except where required by Egyptian law, or where the engagement is cancelled in writing by the company before any clearance work has begun."
+        ]
+      },
+      {
+        "title": "Acceptable use",
+        "paragraphs": ["You agree not to:"],
+        "bullets": [
+          "use Takhlees for any unlawful import or export, including sanctioned, smuggled, or counterfeit goods;",
+          "upload forged invoices, certificates of origin, or other documents;",
+          "impersonate another person, company, or government entity;",
+          "scrape, reverse-engineer, or otherwise circumvent the platform's technical controls;",
+          "post reviews you were paid to write, or attempt to manipulate ratings;",
+          "interfere with other users' access or the security of the service."
+        ],
+        "paragraphsAfter": [
+          "We may suspend or terminate accounts that violate these rules, without notice where the violation is ongoing or harmful."
+        ]
+      },
+      {
+        "title": "Content and documents you upload",
+        "paragraphs": [
+          "You retain all rights to the documents and content you upload. You grant Takhlees a limited license to store, transmit, and display that content for the sole purpose of operating the platform and delivering it to the company you engaged.",
+          "You are responsible for ensuring you have the right to share the documents you upload and that they are accurate."
+        ]
+      },
+      {
+        "title": "Reviews",
+        "paragraphs": [
+          "You may leave one review per completed engagement. Reviews must reflect a genuine experience. We may remove reviews that are off-topic, defamatory, contain personal data of third parties, or appear to be paid or coordinated."
+        ]
+      },
+      {
+        "title": "Service availability",
+        "paragraphs": [
+          "We work to keep Takhlees available around the clock, but we do not guarantee uninterrupted access. We may schedule maintenance, and outages may occur. We will use reasonable efforts to give advance notice of planned downtime."
+        ]
+      },
+      {
+        "title": "Disclaimers and liability",
+        "paragraphs": [
+          "Takhlees is provided “as is.” To the maximum extent permitted by Egyptian law, we disclaim implied warranties of merchantability, fitness for a particular purpose, and non-infringement. We do not warrant that listings are error-free or that any particular outcome will be achieved by a clearance company.",
+          "To the maximum extent permitted by law, our aggregate liability arising from your use of Takhlees is limited to the fees you paid to Takhlees (excluding amounts paid to companies) in the 12 months preceding the event giving rise to the claim. Nothing in these Terms limits liability that cannot be limited under Egyptian law."
+        ]
+      },
+      {
+        "title": "Termination",
+        "paragraphs": [
+          "You may close your account at any time from your profile settings. We may suspend or terminate accounts that violate these Terms or where required by law. Provisions intended to survive termination (payment obligations, liability limits, governing law) will continue to apply."
+        ]
+      },
+      {
+        "title": "Changes to these terms",
+        "paragraphs": [
+          "We may update these Terms from time to time. When we make material changes we will update the date at the top of this page and notify you in-app or by email. If you do not agree with the revised Terms you must stop using the service."
+        ]
+      },
+      {
+        "title": "Governing law",
+        "paragraphs": [
+          "These Terms are governed by the laws of the Arab Republic of Egypt. Disputes arising out of or relating to these Terms or the service will be brought before the competent courts of Cairo."
+        ]
+      },
+      {
+        "title": "Contact",
+        "paragraphs": ["Questions about these Terms:"],
+        "email": "legal@takhlees.com",
+        "address": "Takhlees, Smart Village, 6th of October City, Egypt."
+      }
+    ]
+  }
+}

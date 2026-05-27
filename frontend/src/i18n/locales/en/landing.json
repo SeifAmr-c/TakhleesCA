@@ -1,0 +1,200 @@
+{
+  "home": {
+    "hero": {
+      "eyebrow": "Port clearance · instrumented",
+      "title": "Clear cargo from Egyptian ports without the bureaucracy.",
+      "lead": "Takhlees connects importers with licensed clearance agencies, holds payment in escrow, and surfaces every customs milestone the moment it happens. Submit a shipment, watch it move, pay on release.",
+      "ctaSubmit": "Submit a shipment",
+      "ctaBrowse": "Browse agencies",
+      "facts": {
+        "verifiedAgencies": "Verified agencies",
+        "containersCleared": "Containers cleared",
+        "onTimePct": "On-time milestones",
+        "activation": "Avg. activation"
+      }
+    },
+    "shipmentPanel": {
+      "shipmentLabel": "Shipment",
+      "inMotion": "In motion",
+      "idle": "Idle",
+      "routeFallback": "Awaiting next shipment",
+      "clearanceFallback": "Clearance",
+      "metaFiled": "{{mode}} · FILED {{date}}",
+      "metaShipment": "SHIPMENT · FILED {{date}}",
+      "metaIdle": "NO ACTIVE CLEARANCE",
+      "modeFreight": "{{mode}} FREIGHT",
+      "modeShipment": "SHIPMENT",
+      "timeline": {
+        "submit": "Submit",
+        "match": "Match",
+        "customs": "Customs",
+        "release": "Release"
+      },
+      "stats": {
+        "filed": "Filed",
+        "fee": "Fee",
+        "docs": "Docs"
+      },
+      "currency": "EGP"
+    },
+    "liveOps": {
+      "label": "Live ops",
+      "inMotion": "{{count}} in motion",
+      "empty": "No recent activity."
+    },
+    "principles": {
+      "eyebrow": "What Takhlees does",
+      "title": "Three commitments. Read them literally.",
+      "items": [
+        {
+          "title": "Verified, not vouched",
+          "body": "Every agency on the platform exposes its commercial license number, port coverage, and review history. You verify trust against the data, not against a badge."
+        },
+        {
+          "title": "Escrow, not handshake",
+          "body": "Pay into escrow at submission. Funds release to the agency only when your container is released to you. Disputed clearances return your money."
+        },
+        {
+          "title": "Status, not status updates",
+          "body": "Every milestone — gate-in, declaration filed, customs cleared, released — lands in your dashboard the moment it happens. No more phone calls to ask where things stand."
+        }
+      ]
+    },
+    "flow": {
+      "eyebrow": "How a clearance runs",
+      "title": "From submission to release, in three moves.",
+      "stepLabel": "STEP",
+      "items": [
+        {
+          "title": "Submit",
+          "body": "Upload your bill of lading, commercial invoice, and packing list. We pull the container number and ETA automatically.",
+          "sla": "~ 4 min"
+        },
+        {
+          "title": "Match",
+          "body": "Pick from licensed agencies covering your port. One confirms inside twelve minutes on average and the file enters their queue.",
+          "sla": "~ 12 min"
+        },
+        {
+          "title": "Release",
+          "body": "The agency files the customs declaration; you watch each milestone clear in real time, with the fee held in escrow until cargo is released.",
+          "sla": "3 – 7 days"
+        }
+      ]
+    },
+    "verified": {
+      "eyebrow": "Currently active on the platform",
+      "title": "{{count}} verified clearance agencies.",
+      "lead": "Each agency on the platform exposes its commercial license, port coverage, and full review history. You verify against the data.",
+      "browseAll": "Browse all {{count}}",
+      "tableAgency": "Agency",
+      "tableRating": "Rating",
+      "loading": "Loading agencies…",
+      "empty": "No verified agencies are listed yet.",
+      "noReviews": "No reviews"
+    },
+    "reach": {
+      "eyebrow": "Operational reach",
+      "title": "Live across Egypt's three primary ports.",
+      "body": "Alexandria, Damietta, and Sokhna handle the overwhelming majority of container traffic into and out of the country. Each site has licensed agencies on the platform with active clearances in progress right now."
+    },
+    "cta": {
+      "eyebrow": "Get started",
+      "title": "Submit your first shipment in under three minutes.",
+      "leadBefore": "Average activation time across the platform: ",
+      "leadAfter": ". You only pay when the container is released to you.",
+      "importer": "Start as importer",
+      "agency": "List an agency"
+    }
+  },
+  "status": {
+    "Pending": "Pending",
+    "InProgress": "In Progress",
+    "Accepted": "Accepted",
+    "Completed": "Completed",
+    "Rejected": "Rejected"
+  },
+  "about": {
+    "eyebrow": "About Takhlees",
+    "heroTitle": "Built so cross-border trade can finally move at internet speed.",
+    "heroLead": "We're a team of operators, engineers, and logistics veterans building the trust layer between importers, exporters, and the clearance specialists who move their cargo through Egyptian ports.",
+    "stats": {
+      "founded": "Founded",
+      "partners": "Partner companies",
+      "shipments": "Shipments cleared",
+      "coverage": "Coverage",
+      "coverageValue": "Egypt-wide"
+    },
+    "mission": {
+      "eyebrow": "Our mission",
+      "title": "Clarity at every step of port clearance.",
+      "p1": "Port clearance has historically been opaque — phone calls, lost paperwork, unclear pricing. We're building the digital infrastructure that brings it into the open: vetted partners, transparent fees, and a single dashboard from “submitted” to “released.”",
+      "p2": "We started Takhlees because we lived this problem ourselves. Importers shouldn't lose deals waiting on faxes. Clearance specialists shouldn't spend half their week chasing payments. And no one should wonder where their cargo is."
+    },
+    "values": {
+      "eyebrow": "What we value",
+      "title": "Three principles, every day",
+      "trust": {
+        "title": "Trust",
+        "body": "Every company on the platform is verified before going live."
+      },
+      "efficiency": {
+        "title": "Efficiency",
+        "body": "Fewer phone calls. Less chasing. One dashboard for everything."
+      },
+      "transparency": {
+        "title": "Transparency",
+        "body": "Clear pricing, real-time status, and reviews from real clients."
+      }
+    }
+  },
+  "browse": {
+    "eyebrow": "Marketplace",
+    "title": "Verified clearance companies",
+    "matchCount_one": "{{count}} company matching your filters",
+    "matchCount_other": "{{count}} companies matching your filters",
+    "searchPlaceholder": "Search by name, governorate, bio…",
+    "filters": {
+      "all": "All"
+    },
+    "verifiedBadge": "Verified",
+    "loading": "Loading companies",
+    "review_one": "review",
+    "review_other": "reviews",
+    "noBio": "This company hasn't added a bio yet.",
+    "emptyAll": "No verified companies are listed yet.",
+    "emptyFiltered": "No matches for your filters.",
+    "errors": {
+      "load": "Couldn't reach the server. Please try again shortly."
+    }
+  },
+  "contact": {
+    "eyebrow": "Contact",
+    "title": "Talk to us.",
+    "lead": "Onboarding, pricing, or a shipment that needs attention — drop us a line and a real human will reply.",
+    "channels": {
+      "email": "Email",
+      "phone": "Phone",
+      "office": "Office",
+      "officeValue": "Smart Village, 6th Oct., Egypt"
+    },
+    "hours": {
+      "title": "Operating hours",
+      "body": "Sun–Thu, 9am–6pm EET. Urgent shipment issues are answered around the clock."
+    },
+    "form": {
+      "heading": "Send a message",
+      "name": "Your name",
+      "email": "Email",
+      "message": "Message",
+      "messagePlaceholder": "Tell us more…",
+      "sending": "Sending…",
+      "submit": "Send message",
+      "successBanner": "Your ticket has been submitted successfully!",
+      "errors": {
+        "emptyMessage": "Please describe your issue before submitting.",
+        "submitFailed": "Could not send your message. Please try again."
+      }
+    }
+  }
+}

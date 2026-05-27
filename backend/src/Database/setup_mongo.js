@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../env.js';
 import mongoose from 'mongoose';
 import { connectMongo } from './mongo_connection.js';
 
@@ -104,33 +104,128 @@ async function renameLegacyIdFields() {
     }
 }
 
+/* Curated Arabic names for the reference data we seed and for migrating
+   pre-existing English string values into the bilingual shape. Keyed by
+   lower-cased English name; anything not found mirrors English (ar = en),
+   which the admin can later correct via the management UI. */
+const AR_NAMES = {
+    // categories
+    'electronics': 'إلكترونيات',
+    'cars': 'سيارات',
+    'clothes': 'ملابس',
+    // ports
+    'alexandria': 'الإسكندرية',
+    'damietta': 'دمياط',
+    'port said': 'بورسعيد',
+    'cairo international airport': 'مطار القاهرة الدولي',
+    'suez': 'السويس',
+};
+
+/* Turn a stored plain string into the { en, ar } shape. Returns null for
+   non-strings (already localized, or absent) so callers can leave those
+   untouched — this is what keeps the migration idempotent. */
+const toLocalized = (val) => {
+    if (typeof val !== 'string') return null;
+    const en = val.trim();
+    return { en, ar: AR_NAMES[en.toLowerCase()] || en };
+};
+
+/* One-time, idempotent rewrite of the curated reference fields from a
+   plain string to the bilingual { en, ar } subdoc — on the master rows
+   (Category.Type, Port.PortName) and every denormalized snapshot
+   (Application.category/port, Review.category, Company.categories[]/
+   ports[]). Driven through the native driver so the new schema's casting
+   never trips over the old string data. Guarded on $type: 'string', so
+   re-running after conversion is a no-op. */
+async function migrateLocalizedFields() {
+    const db = mongoose.connection.db;
+
+    /* Master rows + single-valued snapshots: one updateOne per matching
+       doc (the catalog is tiny, so a cursor loop is plenty). */
+    const stringFieldTargets = [
+        ['categories',   'Type'],
+        ['ports',        'PortName'],
+        ['reviews',      'category.Type'],
+        ['applications', 'category.Type'],
+        ['applications', 'port.PortName'],
+    ];
+    for (const [coll, field] of stringFieldTargets) {
+        const has = await db.listCollections({ name: coll }).hasNext();
+        if (!has) continue;
+        const cursor = db.collection(coll).find({ [field]: { $type: 'string' } });
+        let n = 0;
+        for await (const doc of cursor) {
+            // Walk the dotted path to read the current string value.
+            const value = field.split('.').reduce((o, k) => (o == null ? o : o[k]), doc);
+            const localized = toLocalized(value);
+            if (!localized) continue;
+            await db.collection(coll).updateOne({ _id: doc._id }, { $set: { [field]: localized } });
+            n += 1;
+        }
+        if (n > 0) console.log(`Localized ${field} on ${n} doc(s) in ${coll}.`);
+    }
+
+    /* Company embedded arrays: rebuild each array, converting only the
+       string entries. (Positional $set can't do a type-conditional set
+       across all elements, so we rewrite the whole array.) */
+    const hasCompanies = await db.listCollections({ name: 'companies' }).hasNext();
+    if (hasCompanies) {
+        const companies = await db.collection('companies').find({
+            $or: [
+                { 'categories.Type': { $type: 'string' } },
+                { 'ports.PortName': { $type: 'string' } },
+            ],
+        }).toArray();
+        for (const c of companies) {
+            const categories = (c.categories || []).map((cc) => (
+                typeof cc.Type === 'string' ? { ...cc, Type: toLocalized(cc.Type) } : cc
+            ));
+            const ports = (c.ports || []).map((p) => (
+                typeof p.PortName === 'string' ? { ...p, PortName: toLocalized(p.PortName) } : p
+            ));
+            await db.collection('companies').updateOne(
+                { _id: c._id },
+                { $set: { categories, ports } }
+            );
+        }
+        if (companies.length > 0) {
+            console.log(`Localized embedded categories/ports on ${companies.length} company doc(s).`);
+        }
+    }
+}
+
 /* Seed reference data the UI depends on. Idempotent: only inserts when
    the collection is empty. */
 async function seedReferenceData() {
     /* Purge any legacy 'Other' category docs left from earlier seedings —
-       product only exposes Electronics / Cars / Clothes. */
-    await Category.deleteMany({ Type: 'Other' });
+       product only exposes Electronics / Cars / Clothes. Runs after the
+       localized migration, so the name lives under Type.en now. */
+    await Category.deleteMany({ 'Type.en': 'Other' });
 
     const catCount = await Category.countDocuments();
     if (catCount === 0) {
-        await Category.insertMany([
-            { CategoryID: 1, Type: 'Electronics' },
-            { CategoryID: 2, Type: 'Cars' },
-            { CategoryID: 3, Type: 'Clothes' },
-        ]);
+        await Category.insertMany(
+            [
+                { CategoryID: 1, name: 'Electronics' },
+                { CategoryID: 2, name: 'Cars' },
+                { CategoryID: 3, name: 'Clothes' },
+            ].map(({ CategoryID, name }) => ({ CategoryID, Type: toLocalized(name) }))
+        );
         console.log('Seeded 3 categories.');
     }
 
     const portCount = await Port.countDocuments();
     if (portCount === 0) {
         const today = new Date();
-        await Port.insertMany([
-            { PortID: 1, PortName: 'Alexandria',                  PortType: 'Sea', EstDate: today },
-            { PortID: 2, PortName: 'Damietta',                    PortType: 'Sea', EstDate: today },
-            { PortID: 3, PortName: 'Port Said',                   PortType: 'Sea', EstDate: today },
-            { PortID: 4, PortName: 'Cairo International Airport', PortType: 'Air', EstDate: today },
-            { PortID: 5, PortName: 'Suez',                        PortType: 'Sea', EstDate: today },
-        ]);
+        await Port.insertMany(
+            [
+                { PortID: 1, name: 'Alexandria',                  PortType: 'Sea' },
+                { PortID: 2, name: 'Damietta',                    PortType: 'Sea' },
+                { PortID: 3, name: 'Port Said',                   PortType: 'Sea' },
+                { PortID: 4, name: 'Cairo International Airport', PortType: 'Air' },
+                { PortID: 5, name: 'Suez',                        PortType: 'Sea' },
+            ].map(({ PortID, name, PortType }) => ({ PortID, PortName: toLocalized(name), PortType, EstDate: today }))
+        );
         console.log('Seeded 5 ports.');
     }
 }
@@ -174,9 +269,15 @@ async function ensureCountersAboveMigrated() {
 }
 
 async function main() {
+    console.log(
+        process.env.Mongo_url_local
+            ? 'Using Mongo_url_local (local sandbox).'
+            : 'Using Mongo_url.'
+    );
     await connectMongo();
     try {
         await renameLegacyIdFields();
+        await migrateLocalizedFields();
         await seedReferenceData();
         await ensureCountersAboveMigrated();
         console.log('Mongo reference data and counters are ready.');

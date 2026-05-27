@@ -3,6 +3,9 @@ import Company from '../../Database/mongo/company.mongo.js';
 import Application from '../../Database/mongo/application.mongo.js';
 import Review from '../../Database/mongo/review.mongo.js';
 import { nextId } from '../../Database/mongo/counters.js';
+import { parseLocalizedInput } from '../../utils/localize.js';
+
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /* Same definition as the port module: a category is "in use" only if at
    least one application that references it is still being worked on. Once
@@ -13,24 +16,24 @@ const ACTIVE_APPLICATION_STATUSES = ['Pending', 'In Progress'];
 
 export const createCategory = async (req, res, next) => {
   try {
-    const raw = typeof req.body.Type === 'string' ? req.body.Type.trim() : '';
-    if (!raw) {
+    const Type = parseLocalizedInput(req.body.Type);
+    if (!Type) {
       return res.status(400).json({ Status: "Error", Message: "Category Type is required." });
     }
-    /* Case-insensitive uniqueness — admins can rename freely, but we don't
-       want two rows that only differ in capitalization. */
-    const existing = await Category.findOne({ Type: new RegExp(`^${raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).lean();
+    /* Case-insensitive uniqueness on the English name — admins can rename
+       freely, but we don't want two rows that only differ in capitalization. */
+    const existing = await Category.findOne({ 'Type.en': new RegExp(`^${escapeRegex(Type.en)}$`, 'i') }).lean();
     if (existing) {
       return res.status(409).json({
         Status: "Error",
         Code: "CATEGORY_EXISTS",
-        Message: `A category named "${existing.Type}" already exists.`,
+        Message: `A category named "${existing.Type?.en ?? existing.Type}" already exists.`,
       });
     }
 
     const CategoryID = await nextId('category');
-    await Category.create({ CategoryID, Type: raw });
-    return res.status(201).json({ Status: "OK", Message: `Record Added Successfully with Id ${CategoryID}`, CategoryID, Type: raw });
+    await Category.create({ CategoryID, Type });
+    return res.status(201).json({ Status: "OK", Message: `Record Added Successfully with Id ${CategoryID}`, CategoryID, Type });
   } catch (err) {
     return next(err);
   }
@@ -56,6 +59,9 @@ export const getCategory = async (req, res, next) => {
    it so the UI can render a Frozen badge instead of a Delete button. */
 export const getCategoriesWithUsage = async (_req, res, next) => {
   try {
+    /* Admin catalog editor needs both languages, so opt out of the
+       response localizer and return the raw { en, ar } objects. */
+    res.locals.skipLocalize = true;
     const cats = await Category.find().sort({ CategoryID: 1 }).lean();
     if (cats.length === 0) return res.json([]);
 
@@ -124,8 +130,11 @@ export const searchCategory = async (req, res, next) => {
     }
     if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
 
-    const value = keyword === 'CategoryID' ? Number(keyvalue) : keyvalue;
-    const rows = await Category.find({ [keyword]: value }).sort({ CategoryID: sort }).lean();
+    /* Type is now bilingual — match against either language. */
+    const query = keyword === 'CategoryID'
+      ? { CategoryID: Number(keyvalue) }
+      : { $or: [{ 'Type.en': keyvalue }, { 'Type.ar': keyvalue }] };
+    const rows = await Category.find(query).sort({ CategoryID: sort }).lean();
     return res.json(rows);
   } catch (err) {
     return next(err);
@@ -146,26 +155,32 @@ export const updateCategory = async (req, res, next) => {
       });
     }
 
-    const incoming = typeof req.body.Type === 'string' ? req.body.Type.trim() : undefined;
-    const Type = incoming !== undefined && incoming !== '' ? incoming : existing.Type;
+    /* Merge incoming { en, ar } over the existing pair so a partial PUT
+       (e.g. only the Arabic name) doesn't blank the other language. */
+    const incoming = parseLocalizedInput(req.body.Type);
+    const Type = {
+      en: incoming?.en ?? existing.Type.en,
+      ar: incoming?.ar ?? existing.Type.ar,
+    };
 
     /* Block renames that would collide with another existing category. */
-    if (Type.toLowerCase() !== existing.Type.toLowerCase()) {
+    if (Type.en.toLowerCase() !== existing.Type.en.toLowerCase()) {
       const clash = await Category.findOne({
         CategoryID: { $ne: cid },
-        Type: new RegExp(`^${Type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+        'Type.en': new RegExp(`^${escapeRegex(Type.en)}$`, 'i'),
       }).lean();
       if (clash) {
         return res.status(409).json({
           Status: "Error",
           Code: "CATEGORY_EXISTS",
-          Message: `Another category named "${clash.Type}" already exists.`,
+          Message: `Another category named "${clash.Type?.en ?? clash.Type}" already exists.`,
         });
       }
     }
 
     await Category.updateOne({ CategoryID: cid }, { $set: { Type } });
 
+    /* Fan out the full { en, ar } object to every denormalized snapshot. */
     await Company.updateMany(
       { 'categories.CategoryID': cid },
       { $set: { 'categories.$.Type': Type } }

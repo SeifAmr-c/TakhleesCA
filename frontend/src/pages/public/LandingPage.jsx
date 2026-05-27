@@ -8,6 +8,7 @@ import { listCompanies } from "../../api/companies.js";
 import { listReviewAverages } from "../../api/reviews.js";
 import { getLandingStats } from "../../api/stats.js";
 import { useAuth } from "../../api/authState.js";
+import { useTranslation, useLanguage } from "../../i18n";
 
 /* ----------------------------------------------------------------
    Operational figures on this page are read live from the platform
@@ -17,15 +18,19 @@ import { useAuth } from "../../api/authState.js";
 
 const PLACEHOLDER = "—";
 
-const formatNum = (n) =>
-  typeof n === "number" && Number.isFinite(n) ? n.toLocaleString("en-US") : PLACEHOLDER;
+const formatNum = (n, locale) =>
+  typeof n === "number" && Number.isFinite(n)
+    ? n.toLocaleString(locale === "ar" ? "ar-EG-u-nu-latn" : "en-US")
+    : PLACEHOLDER;
 
-const formatDate = (d) => {
+const formatDate = (d, locale) => {
   if (!d) return PLACEHOLDER;
   const date = new Date(d);
-  return Number.isNaN(date.getTime())
-    ? PLACEHOLDER
-    : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (Number.isNaN(date.getTime())) return PLACEHOLDER;
+  return date.toLocaleDateString(locale === "ar" ? "ar-EG-u-nu-latn" : "en-US", {
+    month: "short",
+    day: "numeric",
+  });
 };
 
 const formatDuration = (totalSeconds) => {
@@ -59,65 +64,22 @@ function Countdown({ seconds }) {
   return <>{formatDuration(remaining)}</>;
 }
 
-const PRINCIPLES = [
-  {
-    n: "01",
-    title: "Verified, not vouched",
-    body:
-      "Every agency on the platform exposes its commercial license number, port coverage, and review history. You verify trust against the data, not against a badge.",
-  },
-  {
-    n: "02",
-    title: "Escrow, not handshake",
-    body:
-      "Pay into escrow at submission. Funds release to the agency only when your container is released to you. Disputed clearances return your money.",
-  },
-  {
-    n: "03",
-    title: "Status, not status updates",
-    body:
-      "Every milestone — gate-in, declaration filed, customs cleared, released — lands in your dashboard the moment it happens. No more phone calls to ask where things stand.",
-  },
-];
-
-const FLOW_STEPS = [
-  {
-    n: "01",
-    title: "Submit",
-    body:
-      "Upload your bill of lading, commercial invoice, and packing list. We pull the container number and ETA automatically.",
-    sla: "~ 4 min",
-  },
-  {
-    n: "02",
-    title: "Match",
-    body:
-      "Pick from licensed agencies covering your port. One confirms inside twelve minutes on average and the file enters their queue.",
-    sla: "~ 12 min",
-  },
-  {
-    n: "03",
-    title: "Release",
-    body:
-      "The agency files the customs declaration; you watch each milestone clear in real time, with the fee held in escrow until cargo is released.",
-    sla: "3 – 7 days",
-  },
-];
-
 /* ================================================================
    Hero
    ================================================================ */
 function Hero({ stats }) {
+  const { t } = useTranslation("landing");
+  const { lang } = useLanguage();
   const facts = [
-    { value: formatNum(stats?.verifiedAgencies), label: "Verified agencies" },
-    { value: formatNum(stats?.containersCleared), label: "Containers cleared" },
+    { value: formatNum(stats?.verifiedAgencies, lang), label: t("home.hero.facts.verifiedAgencies") },
+    { value: formatNum(stats?.containersCleared, lang), label: t("home.hero.facts.containersCleared") },
     {
       value: stats?.onTimePct != null ? `${stats.onTimePct}%` : PLACEHOLDER,
-      label: "On-time milestones",
+      label: t("home.hero.facts.onTimePct"),
     },
     {
       value: <Countdown seconds={stats?.avgActivationSeconds} />,
-      label: "Avg. activation",
+      label: t("home.hero.facts.activation"),
     },
   ];
   return (
@@ -131,10 +93,9 @@ function Hero({ stats }) {
           alignItems: "center",
         }}
       >
-        {/* Left: precise headline + factual proof */}
         <div>
           <span className="eyebrow eyebrow-accent fade-up stagger-1" style={{ color: "var(--safety)" }}>
-            Port clearance · instrumented
+            {t("home.hero.eyebrow")}
           </span>
           <h1
             className="h1 fade-up stagger-2"
@@ -145,7 +106,7 @@ function Hero({ stats }) {
               marginBottom: 20,
             }}
           >
-            Clear cargo from Egyptian ports without the bureaucracy.
+            {t("home.hero.title")}
           </h1>
           <p
             className="lead fade-up stagger-3"
@@ -156,22 +117,19 @@ function Hero({ stats }) {
               marginBottom: 32,
             }}
           >
-            Takhlees connects importers with licensed clearance agencies, holds
-            payment in escrow, and surfaces every customs milestone the moment
-            it happens. Submit a shipment, watch it move, pay on release.
+            {t("home.hero.lead")}
           </p>
 
           <div className="row fade-up stagger-4" style={{ gap: 12, marginBottom: 36 }}>
             <Link to="/register" className="btn btn-accent btn-lg">
-              Submit a shipment
-              <Icon name="arrow_right" size={14} />
+              {t("home.hero.ctaSubmit")}
+              <Icon name="arrow_right" size={14} className="icon-flip" />
             </Link>
             <Link to="/companies" className="btn btn-on-dark btn-lg">
-              Browse agencies
+              {t("home.hero.ctaBrowse")}
             </Link>
           </div>
 
-          {/* Headline facts — mono, tabular, hairline-separated */}
           <div
             className="fade-up stagger-5"
             style={{
@@ -186,8 +144,8 @@ function Hero({ stats }) {
               <div
                 key={f.label}
                 style={{
-                  paddingLeft: i === 0 ? 0 : 16,
-                  borderLeft:
+                  paddingInlineStart: i === 0 ? 0 : 16,
+                  borderInlineStart:
                     i === 0
                       ? "none"
                       : "1px solid oklch(100% 0 0 / 0.08)",
@@ -223,7 +181,6 @@ function Hero({ stats }) {
           </div>
         </div>
 
-        {/* Right: live shipment panel — looks like a real ops widget */}
         <LiveShipmentPanel featured={stats?.featured} />
       </div>
     </section>
@@ -231,19 +188,45 @@ function Hero({ stats }) {
 }
 
 function LiveShipmentPanel({ featured }) {
+  const { t } = useTranslation("landing");
+  const { lang } = useLanguage();
   const tracking = featured?.TrackingNumber || PLACEHOLDER;
   const status = featured?.Status || null;
   const inMotion = status === "In Progress" || status === "Accepted";
   const activeStep = status != null ? STATUS_STEP[status] ?? 0 : 2;
-  const route =
-    featured
-      ? `${featured.CategoryType || "Clearance"} → ${featured.PortName || PLACEHOLDER}`
-      : "Awaiting next shipment";
-  // Non-identifying secondary line — port mode + filing date, never the
-  // company name or client identity.
+
+  // Translate the status enum through the status namespace; keys mirror DB
+  // values with the space stripped (e.g. "In Progress" → "InProgress").
+  const statusKey = status ? status.replace(/\s+/g, "") : null;
+  const localizedStatus = statusKey ? t(`status.${statusKey}`, { defaultValue: status }) : t("home.shipmentPanel.idle");
+
+  // CategoryType is curated reference data (Phase 6 will localize it on the
+  // server). Until then, fall back to the translated "Clearance" label.
+  const categoryLabel = featured?.CategoryType || t("home.shipmentPanel.clearanceFallback");
+  const route = featured
+    ? `${categoryLabel} → ${featured.PortName || PLACEHOLDER}`
+    : t("home.shipmentPanel.routeFallback");
+
+  // PortType is an enum (Sea / Air / Land). Use it as-is for now; the AR
+  // copy keeps the English mode word as a stand-in until the enum is
+  // localized — same shape as the EN string just with translated wrappers.
   const meta = featured
-    ? `${featured.PortType ? `${featured.PortType.toUpperCase()} FREIGHT` : "SHIPMENT"} · FILED ${formatDate(featured.SubmissionDate).toUpperCase()}`
-    : "NO ACTIVE CLEARANCE";
+    ? (featured.PortType
+        ? t("home.shipmentPanel.metaFiled", {
+            mode: t("home.shipmentPanel.modeFreight", { mode: featured.PortType.toUpperCase() }),
+            date: formatDate(featured.SubmissionDate, lang).toUpperCase(),
+          })
+        : t("home.shipmentPanel.metaShipment", {
+            date: formatDate(featured.SubmissionDate, lang).toUpperCase(),
+          }))
+    : t("home.shipmentPanel.metaIdle");
+
+  const timelineSteps = [
+    t("home.shipmentPanel.timeline.submit"),
+    t("home.shipmentPanel.timeline.match"),
+    t("home.shipmentPanel.timeline.customs"),
+    t("home.shipmentPanel.timeline.release"),
+  ];
 
   return (
     <div
@@ -257,7 +240,6 @@ function LiveShipmentPanel({ featured }) {
           "0 1px 0 oklch(100% 0 0 / 0.05), 0 24px 48px -12px oklch(0% 0 0 / 0.40)",
       }}
     >
-      {/* Header — status is the headline */}
       <div
         style={{
           display: "flex",
@@ -276,14 +258,14 @@ function LiveShipmentPanel({ featured }) {
             color: "var(--ink-faint)",
           }}
         >
-          Shipment · {tracking}
+          {t("home.shipmentPanel.shipmentLabel")} · <bdi>{tracking}</bdi>
         </span>
         {inMotion ? (
           <span className="badge badge-accent">
-            <span className="dot dot-live" /> In motion
+            <span className="dot dot-live" /> {t("home.shipmentPanel.inMotion")}
           </span>
         ) : (
-          <span className="badge">{status || "Idle"}</span>
+          <span className="badge">{localizedStatus}</span>
         )}
       </div>
 
@@ -309,7 +291,7 @@ function LiveShipmentPanel({ featured }) {
       </div>
 
       <div className="timeline" style={{ marginTop: 24, marginBottom: 4 }}>
-        {["Submit", "Match", "Customs", "Release"].map((step, i) => (
+        {timelineSteps.map((step, i) => (
           <div
             key={step}
             className={`timeline-step${i < activeStep ? " done" : i === activeStep ? " active" : ""}`}
@@ -329,9 +311,9 @@ function LiveShipmentPanel({ featured }) {
           gap: 16,
         }}
       >
-        <Stat label="Filed" value={featured ? formatDate(featured.SubmissionDate) : PLACEHOLDER} mono />
-        <Stat label="Fee" value={featured ? `EGP ${formatNum(featured.Fee)}` : PLACEHOLDER} mono />
-        <Stat label="Docs" value={featured ? formatNum(featured.DocsSubmitted) : PLACEHOLDER} mono />
+        <Stat label={t("home.shipmentPanel.stats.filed")} value={featured ? formatDate(featured.SubmissionDate, lang) : PLACEHOLDER} mono />
+        <Stat label={t("home.shipmentPanel.stats.fee")} value={featured ? `${t("home.shipmentPanel.currency")} ${formatNum(featured.Fee, lang)}` : PLACEHOLDER} mono />
+        <Stat label={t("home.shipmentPanel.stats.docs")} value={featured ? formatNum(featured.DocsSubmitted, lang) : PLACEHOLDER} mono />
       </div>
     </div>
   );
@@ -369,12 +351,15 @@ function Stat({ label, value, mono = false }) {
 }
 
 /* ================================================================
-   Live operations strip — shows the platform is actually working
+   Live operations strip
    ================================================================ */
 function LiveOpsStrip({ stats }) {
+  const { t } = useTranslation("landing");
   const ops = Array.isArray(stats?.recent) ? stats.recent : [];
   const inMotionLabel =
-    typeof stats?.inMotion === "number" ? `${stats.inMotion} in motion` : "—";
+    typeof stats?.inMotion === "number"
+      ? t("home.liveOps.inMotion", { count: stats.inMotion })
+      : PLACEHOLDER;
   return (
     <section
       style={{
@@ -397,8 +382,8 @@ function LiveOpsStrip({ stats }) {
             display: "inline-flex",
             alignItems: "center",
             gap: 10,
-            paddingRight: 24,
-            borderRight: "1px solid var(--line)",
+            paddingInlineEnd: 24,
+            borderInlineEnd: "1px solid var(--line)",
           }}
         >
           <span className="dot dot-live" style={{ width: 8, height: 8 }} />
@@ -413,7 +398,7 @@ function LiveOpsStrip({ stats }) {
               whiteSpace: "nowrap",
             }}
           >
-            Live ops · {inMotionLabel}
+            {t("home.liveOps.label")} · {inMotionLabel}
           </span>
         </div>
 
@@ -429,63 +414,70 @@ function LiveOpsStrip({ stats }) {
         >
           {ops.length === 0 ? (
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-faint)" }}>
-              No recent activity.
+              {t("home.liveOps.empty")}
             </span>
           ) : (
-            ops.map((op, i) => (
-            <div
-              key={`${op.id}-${i}`}
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                color: "var(--ink-soft)",
-                display: "grid",
-                gridTemplateColumns: "52px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
-                columnGap: 14,
-                alignItems: "center",
-                minWidth: 0,
-              }}
-            >
-              <span style={{ color: "var(--ink-faint)" }}>{op.time}</span>
-              <span
-                style={{
-                  color: "var(--ink)",
-                  fontWeight: 600,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {op.id}
-              </span>
-              <span
-                style={{
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                  color:
-                    op.event === "Completed"
-                      ? "var(--signal-go)"
-                      : op.event === "Pending"
-                      ? "var(--ink-faint)"
-                      : "var(--harbor-700)",
-                }}
-              >
-                {op.event}
-              </span>
-              <span
-                style={{
-                  color: "var(--ink-faint)",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {op.port}
-              </span>
-            </div>
-          )))}
+            ops.map((op, i) => {
+              const eventKey = op.event ? op.event.replace(/\s+/g, "") : null;
+              const localizedEvent = eventKey
+                ? t(`status.${eventKey}`, { defaultValue: op.event })
+                : op.event;
+              return (
+                <div
+                  key={`${op.id}-${i}`}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    color: "var(--ink-soft)",
+                    display: "grid",
+                    gridTemplateColumns: "52px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
+                    columnGap: 14,
+                    alignItems: "center",
+                    minWidth: 0,
+                  }}
+                >
+                  <span style={{ color: "var(--ink-faint)" }}><bdi>{op.time}</bdi></span>
+                  <span
+                    style={{
+                      color: "var(--ink)",
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <bdi>{op.id}</bdi>
+                  </span>
+                  <span
+                    style={{
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                      color:
+                        op.event === "Completed"
+                          ? "var(--signal-go)"
+                          : op.event === "Pending"
+                          ? "var(--ink-faint)"
+                          : "var(--harbor-700)",
+                    }}
+                  >
+                    {localizedEvent}
+                  </span>
+                  <span
+                    style={{
+                      color: "var(--ink-faint)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {op.port}
+                  </span>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </section>
@@ -493,15 +485,18 @@ function LiveOpsStrip({ stats }) {
 }
 
 /* ================================================================
-   Principles — what this product does, stated plainly
+   Principles
    ================================================================ */
 function Principles() {
+  const { t } = useTranslation("landing");
+  const items = t("home.principles.items", { returnObjects: true });
+  const list = Array.isArray(items) ? items : [];
   return (
     <section className="section">
       <div className="container">
         <div style={{ maxWidth: 680, marginBottom: 48 }}>
-          <span className="eyebrow">What Takhlees does</span>
-          <h2 className="h2">Three commitments. Read them literally.</h2>
+          <span className="eyebrow">{t("home.principles.eyebrow")}</span>
+          <h2 className="h2">{t("home.principles.title")}</h2>
         </div>
         <div
           className="grid"
@@ -514,13 +509,13 @@ function Principles() {
             background: "var(--surface)",
           }}
         >
-          {PRINCIPLES.map((p, i) => (
+          {list.map((p, i) => (
             <div
-              key={p.n}
+              key={p.title}
               style={{
                 padding: 32,
-                borderRight:
-                  i < PRINCIPLES.length - 1
+                borderInlineEnd:
+                  i < list.length - 1
                     ? "1px solid var(--line)"
                     : "none",
               }}
@@ -535,7 +530,7 @@ function Principles() {
                   marginBottom: 16,
                 }}
               >
-                / {p.n}
+                / {String(i + 1).padStart(2, "0")}
               </div>
               <h3
                 className="h3"
@@ -569,6 +564,9 @@ function Principles() {
    Flow — Submit → Match → Release
    ================================================================ */
 function Flow() {
+  const { t } = useTranslation("landing");
+  const items = t("home.flow.items", { returnObjects: true });
+  const list = Array.isArray(items) ? items : [];
   return (
     <section
       className="section"
@@ -576,8 +574,8 @@ function Flow() {
     >
       <div className="container">
         <div style={{ maxWidth: 680, marginBottom: 48 }}>
-          <span className="eyebrow">How a clearance runs</span>
-          <h2 className="h2">From submission to release, in three moves.</h2>
+          <span className="eyebrow">{t("home.flow.eyebrow")}</span>
+          <h2 className="h2">{t("home.flow.title")}</h2>
         </div>
 
         <div
@@ -589,9 +587,9 @@ function Flow() {
           }}
           className="flow-grid"
         >
-          {FLOW_STEPS.map((step, i) => (
+          {list.map((step, i) => (
             <div
-              key={step.n}
+              key={step.title}
               style={{
                 background: "var(--surface)",
                 border: "1px solid var(--line)",
@@ -617,7 +615,7 @@ function Flow() {
                     color: "var(--brand)",
                   }}
                 >
-                  STEP {step.n}
+                  {t("home.flow.stepLabel")} {String(i + 1).padStart(2, "0")}
                 </span>
                 <span
                   className="mono"
@@ -658,13 +656,13 @@ function Flow() {
                 {step.body}
               </p>
 
-              {i < FLOW_STEPS.length - 1 && (
+              {i < list.length - 1 && (
                 <div
                   aria-hidden="true"
                   style={{
                     position: "absolute",
                     top: "50%",
-                    right: -12,
+                    insetInlineEnd: -12,
                     transform: "translateY(-50%)",
                     width: 12,
                     height: 1,
@@ -681,9 +679,11 @@ function Flow() {
 }
 
 /* ================================================================
-   Verified agencies — show trust, never claim it
+   Verified agencies
    ================================================================ */
 function Verified() {
+  const { t } = useTranslation("landing");
+  const { lang } = useLanguage();
   const [agencies, setAgencies] = useState([]);
   const [verifiedCount, setVerifiedCount] = useState(null);
 
@@ -707,7 +707,6 @@ function Verified() {
           }
         }
         setVerifiedCount(list.length);
-        // Top 6 as a preview; the full set lives behind "Browse all".
         setAgencies(
           list.slice(0, 6).map((c) => ({
             id: c.CompanyID,
@@ -727,7 +726,7 @@ function Verified() {
     return () => { active = false; };
   }, []);
 
-  const countLabel = verifiedCount ?? "—";
+  const countLabel = verifiedCount ?? PLACEHOLDER;
 
   return (
     <section className="section">
@@ -743,8 +742,8 @@ function Verified() {
           }}
         >
           <div>
-            <span className="eyebrow">Currently active on the platform</span>
-            <h2 className="h2">{countLabel} verified clearance agencies.</h2>
+            <span className="eyebrow">{t("home.verified.eyebrow")}</span>
+            <h2 className="h2">{t("home.verified.title", { count: countLabel })}</h2>
             <p
               style={{
                 margin: 0,
@@ -754,13 +753,12 @@ function Verified() {
                 maxWidth: 60 + "ch",
               }}
             >
-              Each agency on the platform exposes its commercial license, port
-              coverage, and full review history. You verify against the data.
+              {t("home.verified.lead")}
             </p>
           </div>
           <Link to="/companies" className="btn btn-secondary">
-            Browse all {countLabel}
-            <Icon name="arrow_right" size={14} />
+            {t("home.verified.browseAll", { count: countLabel })}
+            <Icon name="arrow_right" size={14} className="icon-flip" />
           </Link>
         </div>
 
@@ -772,7 +770,6 @@ function Verified() {
             overflow: "hidden",
           }}
         >
-          {/* Header row */}
           <div
             style={{
               display: "grid",
@@ -788,13 +785,13 @@ function Verified() {
               color: "var(--ink-faint)",
             }}
           >
-            <span>Agency</span>
-            <span>Rating</span>
+            <span>{t("home.verified.tableAgency")}</span>
+            <span>{t("home.verified.tableRating")}</span>
           </div>
 
           {agencies.length === 0 && (
             <div style={{ padding: "20px", fontSize: 14, color: "var(--ink-faint)" }}>
-              {verifiedCount === null ? "Loading agencies…" : "No verified agencies are listed yet."}
+              {verifiedCount === null ? t("home.verified.loading") : t("home.verified.empty")}
             </div>
           )}
           {agencies.map((a, i) => (
@@ -843,18 +840,18 @@ function Verified() {
                         color: "var(--ink)",
                       }}
                     >
-                      {a.rating.avg.toFixed(1)}
+                      {a.rating.avg.toLocaleString(lang === "ar" ? "ar-EG-u-nu-latn" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                     </span>
                     <span
                       className="mono"
                       style={{ fontSize: 12, color: "var(--ink-faint)" }}
                     >
-                      ({a.rating.count})
+                      ({formatNum(a.rating.count, lang)})
                     </span>
                   </>
                 ) : (
                   <span className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
-                    No reviews
+                    {t("home.verified.noReviews")}
                   </span>
                 )}
               </div>
@@ -867,9 +864,10 @@ function Verified() {
 }
 
 /* ================================================================
-   Operational reach — interactive map of active ports
+   Operational reach
    ================================================================ */
 function OperationalReach() {
+  const { t } = useTranslation("landing");
   return (
     <section
       className="section"
@@ -889,8 +887,8 @@ function OperationalReach() {
         }}
       >
         <div>
-          <span className="eyebrow">Operational reach</span>
-          <h2 className="h2">Live across Egypt's three primary ports.</h2>
+          <span className="eyebrow">{t("home.reach.eyebrow")}</span>
+          <h2 className="h2">{t("home.reach.title")}</h2>
           <p
             style={{
               margin: 0,
@@ -900,10 +898,7 @@ function OperationalReach() {
               maxWidth: "56ch",
             }}
           >
-            Alexandria, Damietta, and Sokhna handle the overwhelming majority of
-            container traffic into and out of the country. Each site has
-            licensed agencies on the platform with active clearances in
-            progress right now.
+            {t("home.reach.body")}
           </p>
         </div>
         <InteractiveMap />
@@ -913,17 +908,16 @@ function OperationalReach() {
 }
 
 /* ================================================================
-   CTA — flat dark band, factual
+   CTA
    ================================================================ */
 function CTA({ stats }) {
+  const { t } = useTranslation("landing");
   const auth = useAuth();
   const isCompany = auth?.role === "company";
   /* Visibility rules:
-       - Company logged in: hide the entire button column (no awkward
-         empty right-hand cell). The text expands to fill the row.
-       - Client (or any other authed non-company) logged in: show only
-         "List an agency" — the importer CTA is redundant for them.
-       - Logged out: show both buttons. */
+       - Company logged in: hide the entire button column.
+       - Any other authed user: show only the agency CTA.
+       - Logged out: show both. */
   const showImporter = !auth;
   const showAgency = !isCompany;
   const showButtons = showImporter || showAgency;
@@ -954,7 +948,7 @@ function CTA({ stats }) {
                 display: "block",
               }}
             >
-              Get started
+              {t("home.cta.eyebrow")}
             </span>
             <h2
               className="h2"
@@ -965,7 +959,7 @@ function CTA({ stats }) {
                 letterSpacing: "-0.022em",
               }}
             >
-              Submit your first shipment in under three minutes.
+              {t("home.cta.title")}
             </h2>
             <p
               style={{
@@ -976,14 +970,14 @@ function CTA({ stats }) {
                 lineHeight: 1.6,
               }}
             >
-              Average activation time across the platform:{" "}
+              {t("home.cta.leadBefore")}
               <span
                 className="mono tabular"
                 style={{ color: "#fff", fontWeight: 600 }}
               >
                 <Countdown seconds={stats?.avgActivationSeconds} />
               </span>
-              . You only pay when the container is released to you.
+              {t("home.cta.leadAfter")}
             </p>
           </div>
           {showButtons && (
@@ -993,22 +987,18 @@ function CTA({ stats }) {
                 justifyContent: "flex-end",
                 gap: 12,
                 flexShrink: 0,
-                /* When only one button renders (client case), nudge it
-                   leftward so it doesn't cling to the far-right edge.
-                   Logged-out double-button view keeps its original
-                   right-flush alignment. */
-                marginRight: showImporter && showAgency ? 0 : 80,
+                marginInlineEnd: showImporter && showAgency ? 0 : 80,
               }}
             >
               {showImporter && (
                 <Link to="/register" className="btn btn-accent btn-lg">
-                  Start as importer
-                  <Icon name="arrow_right" size={14} />
+                  {t("home.cta.importer")}
+                  <Icon name="arrow_right" size={14} className="icon-flip" />
                 </Link>
               )}
               {showAgency && (
                 <Link to="/company/register" className="btn btn-on-dark btn-lg">
-                  List an agency
+                  {t("home.cta.agency")}
                 </Link>
               )}
             </div>
@@ -1067,7 +1057,7 @@ const landingMediaQueries = `
       gap: 16px !important;
     }
     .live-ops > div:first-child {
-      border-right: none !important;
+      border-inline-end: none !important;
       border-bottom: 1px solid var(--line);
       padding: 0 0 12px !important;
     }
@@ -1086,7 +1076,7 @@ const landingMediaQueries = `
     }
     .hero [style*="grid-template-columns: repeat(4, 1fr)"] > div {
       padding: 8px 0 !important;
-      border-left: none !important;
+      border-inline-start: none !important;
     }
   }
 `;

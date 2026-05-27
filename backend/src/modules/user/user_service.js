@@ -9,12 +9,15 @@ const SALT_ROUNDS = 10;
 
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 
+// Returns null when the password is valid, otherwise { code, message }.
+// `code` is a stable identifier the frontend maps to a translated string
+// (errors namespace); `message` is the English fallback for non-i18n clients.
 const validatePassword = (password) => {
   if (!password || password.length < 8) {
-    return "Password must be at least 8 characters long.";
+    return { code: "PASSWORD_TOO_SHORT", message: "Password must be at least 8 characters long." };
   }
   if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-    return "Password must contain at least one letter and one number.";
+    return { code: "PASSWORD_WEAK", message: "Password must contain at least one letter and one number." };
   }
   return null;
 };
@@ -184,7 +187,7 @@ export const updateUser = async (req, res, next) => {
     if (req.body.Password  !== undefined) {
       const passwordError = validatePassword(req.body.Password);
       if (passwordError) {
-        return res.status(400).json({ ok: false, message: passwordError });
+        return res.status(400).json({ ok: false, code: passwordError.code, message: passwordError.message });
       }
       $set.Password = await bcrypt.hash(req.body.Password, SALT_ROUNDS);
     }
@@ -330,20 +333,20 @@ export const register = async (req, res, next) => {
     const Type = String(req.body.Type ?? "C").toUpperCase().slice(0, 1);
 
     if (!FirstName || FirstName.length < 2) {
-      return res.status(400).json({ ok: false, message: "First name is required." });
+      return res.status(400).json({ ok: false, code: "FIRST_NAME_REQUIRED", message: "First name is required." });
     }
     if (!LastName || LastName.length < 2) {
-      return res.status(400).json({ ok: false, message: "Last name is required." });
+      return res.status(400).json({ ok: false, code: "LAST_NAME_REQUIRED", message: "Last name is required." });
     }
     if (!isValidEmail(Email)) {
-      return res.status(400).json({ ok: false, message: "Valid email is required." });
+      return res.status(400).json({ ok: false, code: "EMAIL_INVALID", message: "Valid email is required." });
     }
     const passwordError = validatePassword(Password);
     if (passwordError) {
-      return res.status(400).json({ ok: false, message: passwordError });
+      return res.status(400).json({ ok: false, code: passwordError.code, message: passwordError.message });
     }
     if (Type !== "C" && Type !== "A") {
-      return res.status(400).json({ ok: false, message: 'Type must be "C" (client) or "A" (admin).' });
+      return res.status(400).json({ ok: false, code: "TYPE_INVALID", message: 'Type must be "C" (client) or "A" (admin).' });
     }
 
     let PhoneNumber = null;
@@ -356,39 +359,39 @@ export const register = async (req, res, next) => {
       Address = String(req.body.Address ?? "").trim();
 
       if (phoneRaw === undefined || phoneRaw === null || String(phoneRaw).trim() === "") {
-        return res.status(400).json({ ok: false, message: "Phone number is required for clients." });
+        return res.status(400).json({ ok: false, code: "PHONE_REQUIRED", message: "Phone number is required for clients." });
       }
       if (nidRaw === undefined || nidRaw === null || String(nidRaw).trim() === "") {
-        return res.status(400).json({ ok: false, message: "National ID is required for clients." });
+        return res.status(400).json({ ok: false, code: "NATIONAL_ID_REQUIRED", message: "National ID is required for clients." });
       }
       if (!Address) {
-        return res.status(400).json({ ok: false, message: "Address is required for clients." });
+        return res.status(400).json({ ok: false, code: "ADDRESS_REQUIRED", message: "Address is required for clients." });
       }
 
       PhoneNumber = String(phoneRaw).replace(/\D/g, "");
       NationalID = String(nidRaw).replace(/\D/g, "");
 
       if (!PhoneNumber) {
-        return res.status(400).json({ ok: false, message: "Invalid phone number." });
+        return res.status(400).json({ ok: false, code: "PHONE_INVALID", message: "Invalid phone number." });
       }
       if (!NationalID) {
-        return res.status(400).json({ ok: false, message: "Invalid national ID." });
+        return res.status(400).json({ ok: false, code: "NATIONAL_ID_INVALID", message: "Invalid national ID." });
       }
     }
 
     const existingEmail = await User.findOne({ Email }).select({ _id: 1 });
     if (existingEmail) {
-      return res.status(409).json({ ok: false, message: "Email already exists." });
+      return res.status(409).json({ ok: false, code: "EMAIL_IN_USE", message: "Email already exists." });
     }
 
     if (Type === "C") {
       const existingPhone = await User.findOne({ 'client.PhoneNumber': PhoneNumber }).select({ _id: 1 });
       if (existingPhone) {
-        return res.status(409).json({ ok: false, message: "Phone number already exists." });
+        return res.status(409).json({ ok: false, code: "PHONE_IN_USE", message: "Phone number already exists." });
       }
       const existingNID = await User.findOne({ 'client.NationalID': NationalID }).select({ _id: 1 });
       if (existingNID) {
-        return res.status(409).json({ ok: false, message: "National ID already exists." });
+        return res.status(409).json({ ok: false, code: "NATIONAL_ID_IN_USE", message: "National ID already exists." });
       }
     }
 
@@ -424,20 +427,20 @@ export const login = async (req, res, next) => {
     const Password = String(req.body.Password ?? "");
 
     if (!Email || !Email.includes("@")) {
-      return res.status(400).json({ ok: false, message: "Valid email is required." });
+      return res.status(400).json({ ok: false, code: "EMAIL_INVALID", message: "Valid email is required." });
     }
     if (!Password) {
-      return res.status(400).json({ ok: false, message: "Password is required." });
+      return res.status(400).json({ ok: false, code: "PASSWORD_REQUIRED", message: "Password is required." });
     }
 
     const user = await User.findOne({ Email });
     if (!user) {
-      return res.status(401).json({ ok: false, message: "Invalid email or password." });
+      return res.status(401).json({ ok: false, code: "INVALID_CREDENTIALS", message: "Invalid email or password." });
     }
 
     const isMatch = await bcrypt.compare(Password, user.Password);
     if (!isMatch) {
-      return res.status(401).json({ ok: false, message: "Invalid email or password." });
+      return res.status(401).json({ ok: false, code: "INVALID_CREDENTIALS", message: "Invalid email or password." });
     }
 
     req.session.userId = user.UserID;

@@ -9,6 +9,7 @@ import Application from '../../Database/mongo/application.mongo.js';
 import Review from '../../Database/mongo/review.mongo.js';
 import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
 import { nextId } from '../../Database/mongo/counters.js';
+import { localize } from '../../utils/localize.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/logo.png');
@@ -53,14 +54,15 @@ export const createCompany = async (req, res, next) => {
     const Address = req.body.Address ?? null;
     const About = req.body.About ?? null;
 
-    if (!Name) return res.status(400).json({ ok: false, message: "Name is required." });
-    if (!isValidEmail(ContactEmail)) return res.status(400).json({ ok: false, message: "Valid contact email is required." });
-    if (!Password || Password.length < 8) return res.status(400).json({ ok: false, message: "Password must be at least 8 characters long." });
+    if (!Name) return res.status(400).json({ ok: false, code: "NAME_REQUIRED", message: "Name is required." });
+    if (!isValidEmail(ContactEmail)) return res.status(400).json({ ok: false, code: "EMAIL_INVALID", message: "Valid contact email is required." });
+    if (!Password || Password.length < 8) return res.status(400).json({ ok: false, code: "PASSWORD_TOO_SHORT", message: "Password must be at least 8 characters long." });
 
     const dupEmail = await Company.findOne({ ContactEmail }).select({ _id: 1 });
     if (dupEmail) {
       return res.status(409).json({
         Status: "Error",
+        code: "EMAIL_IN_USE",
         Message: `Contact Email [${ContactEmail}] already exists. Please use a unique Contact Email.`,
       });
     }
@@ -68,6 +70,7 @@ export const createCompany = async (req, res, next) => {
     if (dupTax) {
       return res.status(409).json({
         Status: "Error",
+        code: "TAX_IN_USE",
         Message: `Tax Number [${TaxNumber}] already exists. Please use a unique Tax Number.`,
       });
     }
@@ -103,20 +106,20 @@ export const loginCompany = async (req, res, next) => {
     const Password = String(req.body.Password ?? "");
 
     if (!ContactEmail || !ContactEmail.includes("@")) {
-      return res.status(400).json({ ok: false, message: "Valid contact email is required." });
+      return res.status(400).json({ ok: false, code: "EMAIL_INVALID", message: "Valid contact email is required." });
     }
     if (!Password) {
-      return res.status(400).json({ ok: false, message: "Password is required." });
+      return res.status(400).json({ ok: false, code: "PASSWORD_REQUIRED", message: "Password is required." });
     }
 
     const company = await Company.findOne({ ContactEmail });
     if (!company) {
-      return res.status(401).json({ ok: false, message: "Invalid email or password." });
+      return res.status(401).json({ ok: false, code: "INVALID_CREDENTIALS", message: "Invalid email or password." });
     }
 
     const isMatch = await bcrypt.compare(Password, company.Password);
     if (!isMatch) {
-      return res.status(401).json({ ok: false, message: "Invalid email or password." });
+      return res.status(401).json({ ok: false, code: "INVALID_CREDENTIALS", message: "Invalid email or password." });
     }
 
     /* Regenerate the session ID on login (prevents fixation). */
@@ -560,6 +563,10 @@ export const generatePerformanceReport = async (req, res, next) => {
       },
     ]);
 
+    /* This is a PDF stream, not res.json, so flatten the bilingual
+       category name to the request language by hand. */
+    for (const row of topCategories) row.CategoryName = localize(row.CategoryName, req.lang);
+
     const reviews = await Review.find({ CompanyID }).sort({ ReviewID: -1 }).limit(5).lean();
 
     await Company.updateOne({ CompanyID }, { $inc: { PdfExportCount: 1 } });
@@ -704,12 +711,14 @@ export const recommendCompanies = async (req, res, next) => {
 
     /* Filter candidate companies via the embedded categories array, then
        compute the two ranking signals from Application and Review. */
+    /* The category arrives as a name string in the caller's current UI
+       language; match it against either stored language. */
     const companies = await Company.find({
       Governorate: governorate,
       VerficationStatus: 'Verified',
       categories: {
         $elemMatch: {
-          Type: category,
+          $or: [{ 'Type.en': category }, { 'Type.ar': category }],
           Price: { $gte: minPrice, $lte: maxPrice },
         },
       },
@@ -739,7 +748,8 @@ export const recommendCompanies = async (req, res, next) => {
     for (const c of companies) {
       /* The candidate filter ensured at least one matching category;
          find the specific one to pull its CategoryID and Price. */
-      const match = (c.categories || []).find((cc) => cc.Type === category && cc.Price >= minPrice && cc.Price <= maxPrice);
+      const match = (c.categories || []).find((cc) =>
+        (cc.Type?.en === category || cc.Type?.ar === category) && cc.Price >= minPrice && cc.Price <= maxPrice);
       if (!match) continue;
       const key = `${c.CompanyID}:${match.CategoryID}`;
       const FulfilledCount = fulfilledMap.get(key) ?? 0;

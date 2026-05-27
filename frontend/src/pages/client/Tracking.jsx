@@ -10,14 +10,17 @@ import { listApplications, cancelApplication } from "../../api/applications.js";
 import { submitReview, checkApplicationReviewed } from "../../api/reviews.js";
 import { friendlyError } from "../../api/client.js";
 import { useAuth } from "../../api/authState.js";
+import { useTranslation, useLanguage } from "../../i18n";
 
+/* status sentinel → [badge class, translation key under tracking.status] */
 const STATUS_BADGE = {
-  pending: ["badge-pending", "Pending review"],
-  in_progress: ["badge-info", "In progress"],
-  completed: ["badge-success", "Completed"],
+  pending: ["badge-pending", "pending"],
+  in_progress: ["badge-info", "inProgress"],
+  completed: ["badge-success", "completed"],
 };
 
-const STEPS = ["Submitted", "Accepted", "Clearing", "Released"];
+/* timeline step order → translation key under tracking.steps */
+const STEP_KEYS = ["submitted", "accepted", "clearing", "released"];
 
 /* DB ENUM ('Pending' | 'In Progress' | 'Completed')  →  internal sentinels
    used by the rest of the UI ('pending' | 'in_progress' | 'completed').
@@ -49,16 +52,16 @@ function formatDate(value) {
 /* Map a raw row from /application into the shape the row component expects.
    Origin/destination are derived from the joined Port + DeliveryAddress
    (backend join provides PortName, PortType, CategoryName, CompanyName, Amount). */
-function shapeApplication(raw) {
+function shapeApplication(raw, t) {
   const status = normalizeStatus(raw.Status);
   return {
     ApplicationID: raw.ApplicationID,
     CompanyID: raw.CompanyID,
-    CompanyName: raw.CompanyName || (raw.CompanyID ? `Company #${raw.CompanyID}` : "—"),
+    CompanyName: raw.CompanyName || (raw.CompanyID ? t("tracking.fallback.company", { id: raw.CompanyID }) : t("tracking.fallback.unknown")),
     CompanyLogoUrl: raw.CompanyLogoUrl || null,
     Status: status,
-    Origin: raw.PortName ? `${raw.PortName}${raw.PortType ? ` (${raw.PortType})` : ""}` : "Origin port",
-    Destination: raw.DeliveryAddress || "Delivery address",
+    Origin: raw.PortName ? `${raw.PortName}${raw.PortType ? ` (${raw.PortType})` : ""}` : t("tracking.fallback.originPort"),
+    Destination: raw.DeliveryAddress || t("tracking.fallback.deliveryAddress"),
     CreatedAt: formatDate(raw.SubmissionDate),
     Amount: raw.Amount != null ? Number(raw.Amount) : null,
     TrackingNumber: raw.TrackingNumber || null,
@@ -69,7 +72,10 @@ function shapeApplication(raw) {
 }
 
 function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isReviewed }) {
-  const [badgeClass, label] = STATUS_BADGE[a.Status] || ["badge-info", a.Status || "Unknown"];
+  const { t } = useTranslation("client");
+  const { dir } = useLanguage();
+  const [badgeClass, statusKey] = STATUS_BADGE[a.Status] || ["badge-info", null];
+  const label = statusKey ? t(`tracking.status.${statusKey}`) : (a.Status || t("tracking.status.unknown"));
   const stepIdx = statusToStepIndex(a.Status);
   const isCompleted = a.Status === "completed";
   const isPending = a.Status === "pending";
@@ -92,15 +98,15 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
           )}
           <div>
             <div className="row-meta">
-              #{a.ApplicationID} · {a.CreatedAt}
-              {a.TrackingNumber && <> · <span className="mono">{a.TrackingNumber}</span></>}
+              <bdi>#{a.ApplicationID}</bdi> · <bdi>{a.CreatedAt}</bdi>
+              {a.TrackingNumber && <> · <span className="mono"><bdi>{a.TrackingNumber}</bdi></span></>}
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>
               {a.CompanyName}
             </div>
             <div style={{ fontSize: 13, color: "var(--ink-soft)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Icon name="ship" size={13} />
-              {a.Origin} → {a.Destination}
+              {a.Origin} {dir === "rtl" ? "←" : "→"} {a.Destination}
               {a.CategoryName && (
                 <>
                   <span style={{ color: "var(--line-strong)" }}>·</span>
@@ -110,7 +116,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
               {a.Amount != null && a.Amount > 0 && (
                 <>
                   <span style={{ color: "var(--line-strong)" }}>·</span>
-                  <strong className="mono tabular" style={{ color: "var(--ink)" }}>EGP {a.Amount.toLocaleString()}</strong>
+                  <strong className="mono tabular" style={{ color: "var(--ink)" }}>{t("tracking.currency")} <bdi>{a.Amount.toLocaleString()}</bdi></strong>
                 </>
               )}
             </div>
@@ -125,13 +131,13 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
       <hr className="divider" />
 
       <div className="timeline">
-        {STEPS.map((s, i) => (
+        {STEP_KEYS.map((key, i) => (
           <div
-            key={s}
+            key={key}
             className={`timeline-step ${i < stepIdx ? "done" : i === stepIdx ? "active" : ""}`}
           >
             <span className="dot" />
-            {s}
+            {t(`tracking.steps.${key}`)}
           </div>
         ))}
       </div>
@@ -153,7 +159,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
             }}
           >
             <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
-              Completion handshake
+              {t("tracking.qr.eyebrow")}
             </span>
             <p
               style={{
@@ -164,8 +170,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
                 color: "var(--ink-soft)",
               }}
             >
-              Your QR code is hidden for security. Reveal it only when a clearance
-              officer is ready to scan.
+              {t("tracking.qr.hiddenNote")}
             </p>
             <button
               type="button"
@@ -174,7 +179,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
               style={{ marginTop: 4 }}
             >
               <Icon name="lock" size={14} />
-              Reveal QR Code
+              {t("tracking.qr.reveal")}
             </button>
           </div>
         </>
@@ -198,7 +203,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
                 cursor: cancelling ? "not-allowed" : "pointer",
               }}
             >
-              {cancelling ? "Cancelling…" : "Cancel application"}
+              {cancelling ? t("tracking.cancel.cancelling") : t("tracking.cancel.button")}
             </button>
           </div>
         </>
@@ -213,10 +218,10 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
               className={`btn btn-sm ${isReviewed ? "btn-secondary" : "btn-accent"}`}
               onClick={() => !isReviewed && onLeaveReview?.(a)}
               disabled={isReviewed}
-              title={isReviewed ? "You've already reviewed this shipment" : undefined}
+              title={isReviewed ? t("tracking.review.reviewedTitle") : undefined}
             >
               <Icon name="star" size={14} filled />
-              {isReviewed ? "Reviewed" : "Leave a review"}
+              {isReviewed ? t("tracking.review.reviewed") : t("tracking.review.leave")}
             </button>
           </div>
         </>
@@ -226,6 +231,7 @@ function ShipmentRow({ a, onLeaveReview, onRevealQr, onCancel, cancelling, isRev
 }
 
 function Tracking() {
+  const { t } = useTranslation("client");
   const auth = useAuth();
   const location = useLocation();
   /* User and Client share the same primary key (single-table inheritance),
@@ -272,7 +278,7 @@ function Tracking() {
         const data = await listApplications({ ClientID: clientId });
         if (!active) return;
         const list = Array.isArray(data) ? data : data?.data || [];
-        const shaped = list.map(shapeApplication);
+        const shaped = list.map((r) => shapeApplication(r, t));
         setApplications((prev) => {
           if (prev.length !== shaped.length) return shaped;
           for (let i = 0; i < shaped.length; i += 1) {
@@ -300,7 +306,7 @@ function Tracking() {
       active = false;
       clearInterval(id);
     };
-  }, [clientId]);
+  }, [clientId, t]);
 
   useEffect(() => {
     if (!clientId) {
@@ -314,7 +320,7 @@ function Tracking() {
         const data = await listApplications({ ClientID: clientId });
         if (!active) return;
         const list = Array.isArray(data) ? data : data?.data || [];
-        const shaped = list.map(shapeApplication);
+        const shaped = list.map((r) => shapeApplication(r, t));
         setApplications(shaped);
 
         const completedApps = shaped.filter(a => a.Status === "completed");
@@ -344,14 +350,14 @@ function Tracking() {
         }
       } catch {
         if (!active) return;
-        setError("Couldn't load your shipments. Please try again.");
+        setError(t("tracking.loadError"));
         setApplications([]);
       } finally {
         if (active) setLoading(false);
       }
     })();
     return () => { active = false; };
-  }, [clientId, location.search, refreshTick]);
+  }, [clientId, location.search, refreshTick, t]);
 
   /* The row's Cancel button only opens the confirm modal; the API call
      fires from confirmCancelApplication once the user confirms. */
@@ -377,12 +383,12 @@ function Tracking() {
           setRefreshTick((n) => n + 1);
         }, 2000);
       } else {
-        setCancelError(res?.message || "Couldn't cancel this application.");
+        setCancelError(res?.message || t("tracking.cancel.error"));
         setCancellingId(null);
         setCancelTarget(null);
       }
     } catch (err) {
-      setCancelError(friendlyError(err, "Couldn't cancel this application."));
+      setCancelError(friendlyError(err, t("tracking.cancel.error")));
       setCancellingId(null);
       setCancelTarget(null);
     }
@@ -410,7 +416,7 @@ function Tracking() {
       setReviewedIds((prev) => new Set([...prev, Number(reviewTarget.ApplicationID)]));
       setReviewSent(true);
     } catch (err) {
-      setReviewError(friendlyError(err, "Couldn't submit your review. Please try again."));
+      setReviewError(friendlyError(err, t("tracking.review.error")));
     } finally {
       setReviewSubmitting(false);
     }
@@ -425,17 +431,17 @@ function Tracking() {
   if (!clientId) {
     return (
       <PublicLayout
-        title="Your shipments"
-        subtitle="Real-time status across all your applications."
+        title={t("tracking.title")}
+        subtitle={t("tracking.subtitle")}
         role="Client"
       >
         <div className="card card-pad-lg" style={{ textAlign: "center" }}>
           <Icon name="lock" size={32} color="var(--ink-faint)" />
-          <h3 className="h3" style={{ marginTop: 12 }}>Sign in to see your shipments</h3>
+          <h3 className="h3" style={{ marginTop: 12 }}>{t("tracking.signedOut.title")}</h3>
           <p style={{ color: "var(--ink-soft)" }}>
-            Only signed-in clients can view their applications.
+            {t("tracking.signedOut.desc")}
           </p>
-          <Link to="/login" className="btn btn-primary" style={{ marginTop: 16 }}>Sign in</Link>
+          <Link to="/login" className="btn btn-primary" style={{ marginTop: 16 }}>{t("tracking.signedOut.signIn")}</Link>
         </div>
       </PublicLayout>
     );
@@ -443,32 +449,32 @@ function Tracking() {
 
   return (
     <PublicLayout
-      title="Your shipments"
-      subtitle="Real-time status across all your applications."
+      title={t("tracking.title")}
+      subtitle={t("tracking.subtitle")}
       role="Client"
       actions={
         <Link to="/companies" className="btn btn-primary">
-          <Icon name="package" size={16} /> New application
+          <Icon name="package" size={16} /> {t("tracking.newApplication")}
         </Link>
       }
     >
       {/* Summary */}
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: 24 }}>
         <div className="stat">
-          <div className="stat-label">Active</div>
-          <div className="stat-value">{summary.active}</div>
+          <div className="stat-label">{t("tracking.summary.active")}</div>
+          <div className="stat-value"><bdi>{summary.active}</bdi></div>
           <div className="stat-trend up" style={{ color: "var(--gray-500)" }}>
-            Pending or in progress
+            {t("tracking.summary.activeHint")}
           </div>
         </div>
         <div className="stat">
-          <div className="stat-label">Completed</div>
-          <div className="stat-value">{summary.completed}</div>
-          <div className="stat-trend up" style={{ color: "var(--gray-500)" }}>Lifetime</div>
+          <div className="stat-label">{t("tracking.summary.completed")}</div>
+          <div className="stat-value"><bdi>{summary.completed}</bdi></div>
+          <div className="stat-trend up" style={{ color: "var(--gray-500)" }}>{t("tracking.summary.completedHint")}</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Total submitted</div>
-          <div className="stat-value">{summary.total}</div>
+          <div className="stat-label">{t("tracking.summary.total")}</div>
+          <div className="stat-value"><bdi>{summary.total}</bdi></div>
         </div>
       </div>
 
@@ -481,14 +487,14 @@ function Tracking() {
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
-          <ContainerSpinner size={88} label="Loading shipments" />
+          <ContainerSpinner size={88} label={t("tracking.loading")} />
         </div>
       ) : applications.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: 56 }}>
           <Icon name="package" size={32} color="var(--ink-faint)" />
-          <h3 className="h3" style={{ marginTop: 12 }}>No shipments yet</h3>
-          <p style={{ color: "var(--ink-soft)" }}>Browse companies and file your first application.</p>
-          <Link to="/companies" className="btn btn-primary" style={{ marginTop: 16 }}>Browse companies</Link>
+          <h3 className="h3" style={{ marginTop: 12 }}>{t("tracking.empty.title")}</h3>
+          <p style={{ color: "var(--ink-soft)" }}>{t("tracking.empty.desc")}</p>
+          <Link to="/companies" className="btn btn-primary" style={{ marginTop: 16 }}>{t("tracking.empty.browse")}</Link>
         </div>
       ) : (
         <Reveal as="div">
@@ -542,11 +548,11 @@ function Tracking() {
             }}
           >
             <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
-              Completion handshake
+              {t("tracking.qr.eyebrow")}
             </span>
             <div style={{ textAlign: "center" }}>
               <div className="card-title" style={{ fontSize: 18 }}>
-                #{qrTarget.TrackingNumber}
+                <bdi>#{qrTarget.TrackingNumber}</bdi>
               </div>
               <div style={{ color: "var(--ink-soft)", fontSize: 13, marginTop: 2 }}>
                 {qrTarget.CompanyName}
@@ -577,7 +583,7 @@ function Tracking() {
                 color: "var(--ink-soft)",
               }}
             >
-              Hold your screen up to the clearance officer's scanner.
+              {t("tracking.qr.scanNote")}
             </p>
             <button
               type="button"
@@ -585,7 +591,7 @@ function Tracking() {
               onClick={() => setQrTarget(null)}
               style={{ marginTop: 6 }}
             >
-              Close
+              {t("tracking.qr.close")}
             </button>
           </div>
         </div>
@@ -614,28 +620,28 @@ function Tracking() {
             <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
               <div>
                 <span className="eyebrow" style={{ color: "var(--teal-dark)" }}>
-                  Application #{reviewTarget.ApplicationID}
+                  {t("tracking.review.appNumber", { id: reviewTarget.ApplicationID })}
                 </span>
-                <h3 className="card-title">Leave a review</h3>
+                <h3 className="card-title">{t("tracking.review.modalTitle")}</h3>
               </div>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={() => setReviewTarget(null)}
               >
-                Close
+                {t("tracking.review.close")}
               </button>
             </div>
 
             {reviewSent ? (
               <div className="banner-success" style={{ marginTop: 8 }}>
                 <Icon name="check" size={16} />
-                Thanks — your review for {reviewTarget.CompanyName} has been recorded.
+                {t("tracking.review.success", { company: reviewTarget.CompanyName })}
               </div>
             ) : (
               <div className="stack" style={{ marginTop: 8 }}>
                 <div className="field">
-                  <span className="field-label">Rating</span>
+                  <span className="field-label">{t("tracking.review.rating")}</span>
                   <div className="row" style={{ gap: 4 }}>
                     {[1, 2, 3, 4, 5].map((i) => (
                       <button
@@ -644,7 +650,7 @@ function Tracking() {
                         onClick={() => setReviewRating(i)}
                         className="btn btn-ghost btn-sm"
                         style={{ padding: 4, height: 32, width: 32 }}
-                        aria-label={`${i} star${i > 1 ? "s" : ""}`}
+                        aria-label={t("tracking.review.starAria", { count: i })}
                         disabled={reviewSubmitting}
                       >
                         <Icon
@@ -655,18 +661,18 @@ function Tracking() {
                         />
                       </button>
                     ))}
-                    <span style={{ fontSize: 13, color: "var(--ink-soft)", marginLeft: 6, alignSelf: "center" }}>
-                      {reviewRating} / 5
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)", marginInlineStart: 6, alignSelf: "center" }}>
+                      <bdi>{t("tracking.review.ratingValue", { rating: reviewRating })}</bdi>
                     </span>
                   </div>
                 </div>
 
                 <label className="field">
-                  <span className="field-label">Tell others how it went</span>
+                  <span className="field-label">{t("tracking.review.textLabel")}</span>
                   <textarea
                     className="textarea"
                     rows={4}
-                    placeholder="What did the company do well? Anything they could improve?"
+                    placeholder={t("tracking.review.textPlaceholder")}
                     value={reviewText}
                     onChange={(e) => setReviewText(e.target.value)}
                     disabled={reviewSubmitting}
@@ -686,7 +692,7 @@ function Tracking() {
                     onClick={() => setReviewTarget(null)}
                     disabled={reviewSubmitting}
                   >
-                    Cancel
+                    {t("tracking.review.cancel")}
                   </button>
                   <button
                     type="button"
@@ -695,9 +701,9 @@ function Tracking() {
                     disabled={!reviewText.trim() || reviewSubmitting}
                   >
                     {reviewSubmitting ? (
-                      <ContainerSpinner inline size={16} label="Submitting…" />
+                      <ContainerSpinner inline size={16} label={t("tracking.review.submitting")} />
                     ) : (
-                      <><Icon name="check" size={14} /> Submit review</>
+                      <><Icon name="check" size={14} /> {t("tracking.review.submit")}</>
                     )}
                   </button>
                 </div>
@@ -709,14 +715,14 @@ function Tracking() {
 
       <ConfirmModal
         open={Boolean(cancelTarget)}
-        title={cancelSuccess ? "Application cancelled" : "Cancel Application"}
-        message="Are you sure you want to cancel this application? This action cannot be undone."
-        confirmLabel="Cancel Application"
-        cancelLabel="Keep Application"
+        title={cancelSuccess ? t("tracking.cancel.successTitle") : t("tracking.cancel.modalTitle")}
+        message={t("tracking.cancel.message")}
+        confirmLabel={t("tracking.cancel.confirm")}
+        cancelLabel={t("tracking.cancel.keep")}
         variant="danger"
         busy={cancellingId != null}
         isSuccess={cancelSuccess}
-        successMessage="Application cancelled successfully."
+        successMessage={t("tracking.cancel.successMessage")}
         onConfirm={confirmCancelApplication}
         onCancel={() => {
           if (cancellingId == null && !cancelSuccess) setCancelTarget(null);

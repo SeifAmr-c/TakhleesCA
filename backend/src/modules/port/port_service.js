@@ -2,12 +2,14 @@ import Port from '../../Database/mongo/port.mongo.js';
 import Company from '../../Database/mongo/company.mongo.js';
 import Application from '../../Database/mongo/application.mongo.js';
 import { nextId } from '../../Database/mongo/counters.js';
+import { parseLocalizedInput } from '../../utils/localize.js';
 
 const allowedPortTypes = ['Air', 'Sea'];
 
 export const createPort = async (req, res, next) => {
   try {
-    const { PortName, PortType, EstDate } = req.body;
+    const { PortType, EstDate } = req.body;
+    const PortName = parseLocalizedInput(req.body.PortName);
 
     if (!PortName || !PortType || !EstDate) {
       return res.status(400).json({
@@ -94,6 +96,8 @@ export const deletePort = async (req, res, next) => {
    whether to render a delete or a frozen indicator. */
 export const getPortsWithUsage = async (_req, res, next) => {
   try {
+    /* Admin catalog editor needs both languages — return raw { en, ar }. */
+    res.locals.skipLocalize = true;
     const ports = await Port.find().sort({ PortID: 1 }).lean();
     if (ports.length === 0) return res.json([]);
 
@@ -123,8 +127,12 @@ export const searchPort = async (req, res, next) => {
     }
     if (!keyvalue) return res.status(400).json({ error: 'keyvalue is required' });
 
-    const value = keyword === 'PortID' ? Number(keyvalue) : keyvalue;
-    const rows = await Port.find({ [keyword]: value }).sort({ PortID: sort }).lean();
+    /* PortName is now bilingual — match against either language. */
+    let query;
+    if (keyword === 'PortID') query = { PortID: Number(keyvalue) };
+    else if (keyword === 'PortName') query = { $or: [{ 'PortName.en': keyvalue }, { 'PortName.ar': keyvalue }] };
+    else query = { [keyword]: keyvalue };
+    const rows = await Port.find(query).sort({ PortID: sort }).lean();
     return res.json(rows);
   } catch (err) {
     return next(err);
@@ -142,7 +150,13 @@ export const updatePort = async (req, res, next) => {
       });
     }
 
-    const PortName = req.body.PortName !== undefined ? req.body.PortName : existing.PortName;
+    /* Merge incoming { en, ar } over the existing pair so a partial PUT
+       doesn't blank the other language. */
+    const incoming = parseLocalizedInput(req.body.PortName);
+    const PortName = {
+      en: incoming?.en ?? existing.PortName.en,
+      ar: incoming?.ar ?? existing.PortName.ar,
+    };
     const PortType = req.body.PortType !== undefined ? req.body.PortType : existing.PortType;
     const EstDate  = req.body.EstDate  !== undefined ? req.body.EstDate  : existing.EstDate;
 
@@ -155,6 +169,7 @@ export const updatePort = async (req, res, next) => {
 
     await Port.updateOne({ PortID: pid }, { $set: { PortName, PortType, EstDate } });
 
+    /* Fan out the full { en, ar } object to every denormalized snapshot. */
     await Company.updateMany(
       { 'ports.PortID': pid },
       { $set: { 'ports.$.PortName': PortName, 'ports.$.PortType': PortType } }

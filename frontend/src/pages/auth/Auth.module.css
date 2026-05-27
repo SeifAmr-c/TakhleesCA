@@ -127,12 +127,12 @@
 }
 
 .passwordWrap input {
-  padding-right: 56px;
+  padding-inline-end: 56px;
 }
 
 .togglePassword {
   position: absolute;
-  right: 8px;
+  inset-inline-end: 8px;
   top: 50%;
   transform: translateY(-50%);
   height: 30px;

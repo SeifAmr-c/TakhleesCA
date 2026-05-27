@@ -6,6 +6,7 @@ import Application from '../../Database/mongo/application.mongo.js';
 import Company from '../../Database/mongo/company.mongo.js';
 import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
 import SupportTicket from '../../Database/mongo/support_ticket.mongo.js';
+import { localize } from '../../utils/localize.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/logo.png');
@@ -264,7 +265,7 @@ export const generateExecutiveReport = async (req, res, next) => {
     const byCategory = new Map();
     for (const r of revenueRows) {
       const key = r.CategoryID;
-      const cur = byCategory.get(key) || { CategoryName: r.category?.Type ?? null, Revenue: 0 };
+      const cur = byCategory.get(key) || { CategoryName: localize(r.category?.Type, req.lang) ?? null, Revenue: 0 };
       cur.Revenue += Number(r.revenue || 0);
       byCategory.set(key, cur);
     }

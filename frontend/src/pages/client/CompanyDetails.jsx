@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import Icon from "../../components/Icon.jsx";
@@ -9,24 +9,25 @@ import { listCompanyPorts } from "../../api/ports.js";
 import { listCompanyReviews } from "../../api/reviews.js";
 import { listCompanyCategoryPricing } from "../../api/companyCategories.js";
 import { useAuth } from "../../api/authState.js";
-
-const FALLBACK = {
-  CompanyID: 0,
-  Name: "Sample Clearance Co.",
-  Governorate: "Cairo",
-  Address: "—",
-  About:
-    "Full-service port clearance with 12 years of experience handling commercial and personal shipments through Cairo and Alexandria ports.",
-  Reviews: [],
-  AverageRating: null,
-  ReviewCount: 0,
-  Stats: { jobs: "1.2k", onTime: "98%", responseHours: "2h" },
-};
+import { useTranslation } from "../../i18n";
 
 function CompanyDetails() {
+  const { t } = useTranslation("client");
   const { companyId } = useParams();
   const auth = useAuth();
   const isCompany = auth?.role === "company";
+
+  const FALLBACK = useMemo(() => ({
+    CompanyID: 0,
+    Name: t("companyDetails.fallback.name"),
+    Governorate: t("companyDetails.fallback.governorate"),
+    Address: "—",
+    About: t("companyDetails.fallback.about"),
+    Reviews: [],
+    AverageRating: null,
+    ReviewCount: 0,
+    Stats: { jobs: "1.2k", onTime: "98%", responseHours: "2h" },
+  }), [t]);
   const [company, setCompany] = useState(null);
   const [companyPorts, setCompanyPorts] = useState([]);
   const [pricing, setPricing] = useState([]);
@@ -52,14 +53,14 @@ function CompanyDetails() {
         setPricing(Array.isArray(pricingData) ? pricingData : pricingData?.data || []);
       } catch {
         if (!active) return;
-        setError("Couldn’t load company — showing sample data.");
+        setError(t("companyDetails.loadError"));
         setCompany({ ...FALLBACK, CompanyID: companyId });
       } finally {
         if (active) setLoading(false);
       }
     })();
     return () => { active = false; };
-  }, [companyId]);
+  }, [companyId, t, FALLBACK]);
 
   const avgRating = reviews.length
     ? Math.round((reviews.reduce((sum, r) => sum + Number(r.Rating), 0) / reviews.length) * 10) / 10
@@ -72,7 +73,7 @@ function CompanyDetails() {
           className="container section"
           style={{ display: "flex", justifyContent: "center" }}
         >
-          <ContainerSpinner size={104} label="Loading company" />
+          <ContainerSpinner size={104} label={t("companyDetails.loading")} />
         </div>
       </PublicLayout>
     );
@@ -107,7 +108,7 @@ function CompanyDetails() {
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--ink-soft)"; }}
           >
             <Icon name="arrow_left" size={16} />
-            Back to companies
+            {t("companyDetails.backToCompanies")}
           </Link>
           {error && <div className="banner-error" style={{ marginTop: 16 }}>{error}</div>}
         </div>
@@ -121,7 +122,7 @@ function CompanyDetails() {
                 {c.LogoUrl ? (
                   <img
                     src={c.LogoUrl}
-                    alt={`${c.Name} logo`}
+                    alt={t("companyDetails.logoAlt", { name: c.Name })}
                     className="avatar avatar-lg"
                     style={{ width: 64, height: 64, objectFit: "cover" }}
                   />
@@ -130,18 +131,18 @@ function CompanyDetails() {
                 )}
                 <div style={{ flex: 1 }}>
                   <div className="row" style={{ marginBottom: 8 }}>
-                    <span className="badge badge-success"><Icon name="shield" size={12} /> Verified</span>
+                    <span className="badge badge-success"><Icon name="shield" size={12} /> {t("companyDetails.verified")}</span>
                     {avgRating != null && (
                       <span className="badge badge-dark">
                         <Icon name="star" size={12} color="var(--accent)" filled />
-                        <strong>{avgRating}</strong>
-                        <span className="muted">· {reviews.length} {reviews.length === 1 ? "review" : "reviews"}</span>
+                        <strong><bdi>{avgRating}</bdi></strong>
+                        <span className="muted">· {t("companyDetails.reviewCount", { count: reviews.length })}</span>
                       </span>
                     )}
                   </div>
                   <h1 className="h2" style={{ marginBottom: 6 }}>{c.Name}</h1>
                   <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-                    <Icon name="pin" size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                    <Icon name="pin" size={13} style={{ verticalAlign: "-2px", marginInlineEnd: 4 }} />
                     {[c.Governorate, c.Address].filter(Boolean).join(" · ")}
                   </p>
                 </div>
@@ -152,9 +153,9 @@ function CompanyDetails() {
                   <hr className="divider" />
                   <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
                     {[
-                      { label: "Jobs completed", value: c.Stats.jobs },
-                      { label: "On-time rate", value: c.Stats.onTime },
-                      { label: "Avg. response", value: c.Stats.responseHours },
+                      { label: t("companyDetails.stats.jobsCompleted"), value: c.Stats.jobs },
+                      { label: t("companyDetails.stats.onTimeRate"), value: c.Stats.onTime },
+                      { label: t("companyDetails.stats.avgResponse"), value: c.Stats.responseHours },
                     ].map((s) => (
                       <div key={s.label}>
                         <div
@@ -166,7 +167,7 @@ function CompanyDetails() {
                             letterSpacing: "-0.02em",
                           }}
                         >
-                          {s.value}
+                          <bdi>{s.value}</bdi>
                         </div>
                         <div
                           style={{
@@ -187,14 +188,14 @@ function CompanyDetails() {
               )}
             </Reveal>
 
-            <h2 className="h2" style={{ marginTop: 48, marginBottom: 14 }}>About</h2>
+            <h2 className="h2" style={{ marginTop: 48, marginBottom: 14 }}>{t("companyDetails.about")}</h2>
             <p className="lead" style={{ margin: 0 }}>
-              {c.About || "Trusted clearance company on the Takhlees marketplace."}
+              {c.About || t("companyDetails.aboutFallback")}
             </p>
 
             {companyPorts.length > 0 && (
               <>
-                <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Ports of operation</h2>
+                <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>{t("companyDetails.portsTitle")}</h2>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                   {companyPorts.map((p) => (
                     <span
@@ -225,10 +226,10 @@ function CompanyDetails() {
               </>
             )}
 
-            <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Service pricing</h2>
+            <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>{t("companyDetails.pricingTitle")}</h2>
             {pricing.length === 0 ? (
               <p style={{ color: "var(--ink-soft)", margin: 0 }}>
-                Pricing information not currently available.
+                {t("companyDetails.pricingUnavailable")}
               </p>
             ) : (
               <div
@@ -269,20 +270,20 @@ function CompanyDetails() {
                         letterSpacing: "-0.01em",
                       }}
                     >
-                      EGP {Number(p.Price).toLocaleString()}
+                      {t("companyDetails.currency")} <bdi>{Number(p.Price).toLocaleString()}</bdi>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>Reviews</h2>
+            <h2 className="h2" style={{ marginTop: 40, marginBottom: 14 }}>{t("companyDetails.reviewsTitle")}</h2>
             {reviews.length === 0 ? (
-              <p style={{ color: "var(--ink-soft)" }}>No reviews yet.</p>
+              <p style={{ color: "var(--ink-soft)" }}>{t("companyDetails.noReviews")}</p>
             ) : (
               <Reveal as="div" className="grid">
                 {reviews.map((r) => {
-                  const fullName = [r.FirstName, r.LastName].filter(Boolean).join(" ").trim() || "Anonymous";
+                  const fullName = [r.FirstName, r.LastName].filter(Boolean).join(" ").trim() || t("companyDetails.anonymous");
                   const initials = fullName.split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
                   return (
                     <div key={r.ReviewID} className="card card-hover">
@@ -310,21 +311,22 @@ function CompanyDetails() {
           {!isCompany && (
             <aside>
               <div className="card" style={{ position: "sticky", top: 88, padding: 24 }}>
-                <h3 className="card-title">Ready to ship?</h3>
-                <p className="card-subtitle">Submit an application and the company will pick it up.</p>
+                <h3 className="card-title">{t("companyDetails.cta.title")}</h3>
+                <p className="card-subtitle">{t("companyDetails.cta.subtitle")}</p>
                 <Link to={`/applications/new/${c.CompanyID}`} className="btn btn-primary btn-block btn-lg">
-                  Apply for service <Icon name="arrow_right" size={16} />
+                  <Icon name="arrow_right" size={16} />
+                  {t("companyDetails.cta.apply")}
                 </Link>
                 <hr className="divider" />
                 <div className="stack" style={{ gap: 10 }}>
                   <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
-                    <Icon name="check" size={16} color="var(--signal-go)" /> No charge until accepted
+                    <Icon name="check" size={16} color="var(--signal-go)" /> {t("companyDetails.cta.benefit1")}
                   </div>
                   <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
-                    <Icon name="check" size={16} color="var(--signal-go)" /> Real-time milestone updates
+                    <Icon name="check" size={16} color="var(--signal-go)" /> {t("companyDetails.cta.benefit2")}
                   </div>
                   <div className="row" style={{ gap: 10, color: "var(--ink-soft)", fontSize: 13 }}>
-                    <Icon name="check" size={16} color="var(--signal-go)" /> Secure payment held until release
+                    <Icon name="check" size={16} color="var(--signal-go)" /> {t("companyDetails.cta.benefit3")}
                   </div>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { LocalizedStringSchema } from './_shared.js';
 
 /* Reviews live in their own collection because they are aggregated
    independently of their parent application — per-company rating
@@ -17,8 +18,8 @@ const ReviewSchema = new mongoose.Schema(
 
         category: {
             type: new mongoose.Schema(
-                /* Open string to match the admin-managed Category.Type. */
-                { Type: { type: String } },
+                /* Bilingual snapshot mirroring Category.Type. */
+                { Type: LocalizedStringSchema },
                 { _id: false }
             ),
             default: null,

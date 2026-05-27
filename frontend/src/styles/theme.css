@@ -269,8 +269,7 @@
 .topnav-links a::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   bottom: -22px;
   height: 2px;
   background: var(--accent);
@@ -288,7 +287,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 16px;
+  margin-inline-start: 16px;
 }
 
 /* ============================================================
@@ -418,6 +417,10 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   outline: none;
+  /* Align to the logical start edge so fields sit on the left in LTR and
+     on the right in RTL. Some browsers don't apply direction-based
+     alignment to type="tel"/"email" inputs unless it's set explicitly. */
+  text-align: start;
   transition:
     border-color var(--duration-fast) var(--ease),
     box-shadow   var(--duration-fast) var(--ease);
@@ -449,10 +452,10 @@
 }
 .hint { font-size: 12px; color: var(--ink-faint); }
 .input-with-icon { position: relative; }
-.input-with-icon .input { padding-left: 38px; }
+.input-with-icon .input { padding-inline-start: 38px; }
 .input-with-icon .input-icon {
   position: absolute;
-  left: 12px;
+  inset-inline-start: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--ink-faint);
@@ -915,8 +918,8 @@
   background: var(--line-strong);
   width: 50%;
 }
-.timeline-step::before { left: 0; }
-.timeline-step::after  { right: 0; }
+.timeline-step::before { inset-inline-start: 0; }
+.timeline-step::after  { inset-inline-end: 0; }
 .timeline-step:first-child::before { display: none; }
 .timeline-step:last-child::after { display: none; }
 .timeline-step.done::before,
@@ -1050,6 +1053,19 @@ hr.divider {
   .topnav-cta { margin: 0; }
   .container { padding: 0 16px; }
 }
+
+/* ============================================================
+   RTL — direction-aware overrides
+   Logical properties handle most of the layout flip automatically;
+   the rules below cover the few things that can't be expressed
+   logically (transform origins, directional icons).
+   ============================================================ */
+[dir="rtl"] .topnav-links a::after { transform-origin: right center; }
+
+/* Opt-in icon mirror — apply `icon-flip` only to directional glyphs
+   (chevrons, arrows). Never apply globally: the logo, check marks,
+   and brand marks must not flip. */
+[dir="rtl"] .icon-flip { transform: scaleX(-1); }
 
 /* ============================================================
    Reduced motion — disable looping/decorative animations

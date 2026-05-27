@@ -6,22 +6,25 @@ import Reveal from "../../components/Reveal.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
 import { listCompanies } from "../../api/companies.js";
 import { listReviewAverages } from "../../api/reviews.js";
+import { useTranslation } from "../../i18n";
 
 function StarRating({ avg, count }) {
+  const { t } = useTranslation("landing");
   const filled = Math.round(avg);
   return (
     <div className="row" style={{ gap: 3, marginTop: 6, alignItems: "center" }}>
       {[1, 2, 3, 4, 5].map((i) => (
         <Icon key={i} name="star" size={12} color={i <= filled ? "var(--safety)" : "var(--line-strong)"} filled={i <= filled} />
       ))}
-      <span style={{ fontSize: 12, color: "var(--ink-soft)", marginLeft: 4 }}>
-        {avg} &nbsp;·&nbsp; {count} {count === 1 ? "review" : "reviews"}
+      <span style={{ fontSize: 12, color: "var(--ink-soft)", marginInlineStart: 4 }}>
+        {avg} &nbsp;·&nbsp; {count} {t("browse.review", { count })}
       </span>
     </div>
   );
 }
 
 function CompanyCard({ c, rating }) {
+  const { t } = useTranslation("landing");
   const initials = (c.Name || "")
     .split(" ")
     .filter(Boolean)
@@ -54,7 +57,7 @@ function CompanyCard({ c, rating }) {
           <div>
             <div className="row" style={{ gap: 6, marginBottom: 4 }}>
               <span className="badge badge-success">
-                <Icon name="shield" size={11} /> Verified
+                <Icon name="shield" size={11} /> {t("browse.verifiedBadge")}
               </span>
             </div>
             <div className="row-title" style={{ fontSize: 16 }}>{c.Name}</div>
@@ -69,18 +72,20 @@ function CompanyCard({ c, rating }) {
       <hr className="divider" />
 
       <div style={{ fontSize: 13, color: "var(--ink-soft)", minHeight: 38 }}>
-        {aboutSnippet || "This company hasn't added a bio yet."}
+        {aboutSnippet || t("browse.noBio")}
       </div>
     </Link>
   );
 }
 
 function BrowseCompanies() {
+  const { t } = useTranslation("landing");
   const [companies, setCompanies] = useState([]);
   const [ratingMap, setRatingMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  // The "All" filter value is stable as a sentinel; only its label is translated.
   const [filter, setFilter] = useState("All");
 
   useEffect(() => {
@@ -107,14 +112,14 @@ function BrowseCompanies() {
         setRatingMap(map);
       } catch {
         if (!active) return;
-        setError("Couldn't reach the server. Please try again shortly.");
+        setError(t("browse.errors.load"));
         setCompanies([]);
       } finally {
         if (active) setLoading(false);
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [t]);
 
   const filters = useMemo(() => {
     const govs = Array.from(
@@ -142,7 +147,7 @@ function BrowseCompanies() {
         }}
       >
         <div className="container">
-          <span className="eyebrow">Marketplace</span>
+          <span className="eyebrow">{t("browse.eyebrow")}</span>
           <div
             style={{
               display: "flex",
@@ -154,17 +159,17 @@ function BrowseCompanies() {
           >
             <div>
               <h1 className="h2" style={{ marginBottom: 4 }}>
-                Verified clearance companies
+                {t("browse.title")}
               </h1>
               <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-                {filtered.length} {filtered.length === 1 ? "company" : "companies"} matching your filters
+                {t("browse.matchCount", { count: filtered.length })}
               </p>
             </div>
             <div className="input-with-icon" style={{ width: 320, maxWidth: "100%" }}>
               <span className="input-icon"><Icon name="search" size={16} /></span>
               <input
                 className="input"
-                placeholder="Search by name, governorate, bio…"
+                placeholder={t("browse.searchPlaceholder")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -179,7 +184,7 @@ function BrowseCompanies() {
                   onClick={() => setFilter(f)}
                   className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-secondary"}`}
                 >
-                  {f}
+                  {f === "All" ? t("browse.filters.all") : f}
                 </button>
               ))}
             </div>
@@ -199,14 +204,14 @@ function BrowseCompanies() {
                 padding: "56px 0",
               }}
             >
-              <ContainerSpinner size={88} label="Loading companies" />
+              <ContainerSpinner size={88} label={t("browse.loading")} />
             </div>
           ) : filtered.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: 48 }}>
               <p style={{ margin: 0, color: "var(--ink-soft)" }}>
                 {companies.length === 0
-                  ? "No verified companies are listed yet."
-                  : "No matches for your filters."}
+                  ? t("browse.emptyAll")
+                  : t("browse.emptyFiltered")}
               </p>
             </div>
           ) : (

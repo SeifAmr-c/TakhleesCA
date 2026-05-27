@@ -2,16 +2,29 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import Cropper from "react-easy-crop";
 import { registerCompany } from "../../api/companies.js";
-import { friendlyError } from "../../api/client.js";
+import { friendlyError, errorCode } from "../../api/client.js";
 import { getCroppedImage } from "../../utils/cropImage.js";
 import Icon from "../../components/Icon.jsx";
 import ContainerSpinner from "../../components/ContainerSpinner.jsx";
+import { useTranslation } from "../../i18n";
+import { GOVERNORATES } from "../../data/governorates.js";
 import styles from "./Auth.module.css";
 
 const MAX_LOGO_BYTES = 4 * 1024 * 1024;
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const onlyDigits = (s) => String(s ?? "").replace(/\D/g, "");
+
+// Routes a backend error code to the input it concerns. Anything not
+// attributable to a field falls through to the generic banner.
+const FIELD_BY_CODE = {
+  NAME_REQUIRED: "Name",
+  EMAIL_INVALID: "ContactEmail",
+  EMAIL_IN_USE: "ContactEmail",
+  PASSWORD_TOO_SHORT: "Password",
+  PASSWORD_WEAK: "Password",
+  TAX_IN_USE: "TaxNumber",
+};
 
 const formatTaxNumber = (value) => {
   const digits = onlyDigits(value).slice(0, 9);
@@ -21,8 +34,6 @@ const formatTaxNumber = (value) => {
   if (digits.length > 6) parts.push(digits.slice(6, 9));
   return parts.join("-");
 };
-
-const extractErrorMessage = (err) => friendlyError(err);
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -38,6 +49,7 @@ const FieldError = ({ message }) =>
   ) : null;
 
 function CompanyRegister() {
+  const { t } = useTranslation(["auth", "errors"]);
   const [form, setForm] = useState({
     Name: "",
     ContactEmail: "",
@@ -96,13 +108,13 @@ function CompanyRegister() {
       return;
     }
     if (file.type !== "application/pdf") {
-      setErrors((m) => ({ ...m, ComReg: "Commercial registration must be a PDF." }));
+      setErrors((m) => ({ ...m, ComReg: t("companyRegister.validation.comRegType") }));
       e.target.value = "";
       setComRegFile(null);
       return;
     }
     if (file.size > MAX_PDF_BYTES) {
-      setErrors((m) => ({ ...m, ComReg: "Commercial registration PDF must be 5MB or smaller." }));
+      setErrors((m) => ({ ...m, ComReg: t("companyRegister.validation.comRegSize") }));
       e.target.value = "";
       setComRegFile(null);
       return;
@@ -117,11 +129,11 @@ function CompanyRegister() {
     setErrors((m) => ({ ...m, Logo: "" }));
     setGenericError("");
     if (!/^image\//.test(file.type)) {
-      setErrors((m) => ({ ...m, Logo: "Logo must be an image file." }));
+      setErrors((m) => ({ ...m, Logo: t("companyRegister.validation.logoType") }));
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
-      setErrors((m) => ({ ...m, Logo: "Logo image must be 4MB or smaller." }));
+      setErrors((m) => ({ ...m, Logo: t("companyRegister.validation.logoSize") }));
       return;
     }
     setCropperSrc(URL.createObjectURL(file));
@@ -152,7 +164,7 @@ function CompanyRegister() {
       URL.revokeObjectURL(cropperSrc);
       setCropperSrc("");
     } catch {
-      setGenericError("Could not crop that image. Try another one.");
+      setGenericError(t("companyRegister.validation.cropFailed"));
     } finally {
       setCropping(false);
     }
@@ -174,59 +186,38 @@ function CompanyRegister() {
      the API. Keys match form fields, plus "ComReg" for the PDF input. */
   const validate = () => {
     const errs = {};
-    if (form.Name.trim().length < 2) errs.Name = "Company name is required.";
-    if (!isValidEmail(form.ContactEmail.trim())) errs.ContactEmail = "Please enter a valid contact email.";
-    if (!form.FoundingDate) errs.FoundingDate = "Founding date is required.";
+    if (form.Name.trim().length < 2) errs.Name = t("companyRegister.validation.name");
+    if (!isValidEmail(form.ContactEmail.trim())) errs.ContactEmail = t("companyRegister.validation.email");
+    if (!form.FoundingDate) errs.FoundingDate = t("companyRegister.validation.foundingRequired");
     else if (new Date(form.FoundingDate) > new Date())
-      errs.FoundingDate = "Founding date cannot be in the future.";
+      errs.FoundingDate = t("companyRegister.validation.foundingFuture");
     if (form.Password.length < 8) {
-      errs.Password = "Password must be at least 8 characters long.";
+      errs.Password = t("companyRegister.validation.passwordShort");
     } else if (!/[A-Za-z]/.test(form.Password) || !/[0-9]/.test(form.Password)) {
-      errs.Password = "Password must contain at least one letter and one number.";
+      errs.Password = t("companyRegister.validation.passwordWeak");
     }
     const taxDigits = form.TaxNumber.replace(/-/g, "");
-    if (!/^\d{9}$/.test(taxDigits)) errs.TaxNumber = "Tax number must be 9 digits.";
-    else if (Number(taxDigits) <= 0) errs.TaxNumber = "Tax number must be a positive integer.";
-    if (!form.Governorate.trim()) errs.Governorate = "Governorate is required.";
-    if (!form.Address.trim()) errs.Address = "Address is required.";
-    if (!comRegFile) errs.ComReg = "Commercial registration PDF is required.";
+    if (!/^\d{9}$/.test(taxDigits)) errs.TaxNumber = t("companyRegister.validation.taxDigits");
+    else if (Number(taxDigits) <= 0) errs.TaxNumber = t("companyRegister.validation.taxPositive");
+    if (!form.Governorate.trim()) errs.Governorate = t("companyRegister.validation.governorate");
+    if (!form.Address.trim()) errs.Address = t("companyRegister.validation.address");
+    if (!comRegFile) errs.ComReg = t("companyRegister.validation.comRegRequired");
     return errs;
   };
 
-  /* Best-effort mapping from a server message to a field. Falls
-     through to a generic error if no input matches. */
-  const assignServerError = (message) => {
-    const text = String(message || "");
-    const lower = text.toLowerCase();
-    if (lower.includes("tax")) {
-      setErrors((m) => ({ ...m, TaxNumber: text }));
-      return;
+  /* Routes a server error to its input by code (errors namespace),
+     translating the message. Codes the form can't attribute to a field
+     fall through to the generic banner above the submit button. */
+  const routeServerError = (err) => {
+    const code = errorCode(err);
+    const fallback = friendlyError(err);
+    const text = code ? t(code, { ns: "errors", defaultValue: fallback }) : fallback;
+    const field = code && FIELD_BY_CODE[code];
+    if (field) {
+      setErrors((m) => ({ ...m, [field]: text }));
+    } else {
+      setGenericError(text || t("companyRegister.validation.failed"));
     }
-    if (lower.includes("email")) {
-      setErrors((m) => ({ ...m, ContactEmail: text }));
-      return;
-    }
-    if (lower.includes("name") && !lower.includes("user")) {
-      setErrors((m) => ({ ...m, Name: text }));
-      return;
-    }
-    if (lower.includes("password")) {
-      setErrors((m) => ({ ...m, Password: text }));
-      return;
-    }
-    if (lower.includes("governorate")) {
-      setErrors((m) => ({ ...m, Governorate: text }));
-      return;
-    }
-    if (lower.includes("address")) {
-      setErrors((m) => ({ ...m, Address: text }));
-      return;
-    }
-    if (lower.includes("registration") || lower.includes("pdf") || lower.includes("comreg")) {
-      setErrors((m) => ({ ...m, ComReg: text }));
-      return;
-    }
-    setGenericError(text || "Registration failed.");
   };
 
   const handleSubmit = async (e) => {
@@ -257,7 +248,7 @@ function CompanyRegister() {
     try {
       const res = await registerCompany(payload);
       if (res?.Status && res.Status !== "OK") {
-        assignServerError(res?.Message);
+        routeServerError({ response: { status: 400, data: res } });
         setSubmitting(false);
         return;
       }
@@ -266,7 +257,7 @@ function CompanyRegister() {
       setSucceeded(true);
       setTimeout(() => navigate("/company/login", { replace: true }), 2000);
     } catch (err) {
-      assignServerError(extractErrorMessage(err));
+      routeServerError(err);
       setSubmitting(false);
     }
   };
@@ -278,23 +269,23 @@ function CompanyRegister() {
   return (
     <div className={styles.shell}>
       <section className={styles.formSide}>
-        <Link to="/" className={styles.brandRow} aria-label="Takhlees, home">
+        <Link to="/" className={styles.brandRow} aria-label={t("brandAria")}>
           <span className={styles.brandText}>Takhlees</span>
         </Link>
 
         <div className={`${styles.formInner} ${styles.formInnerWide}`}>
           <div className={styles.tabs}>
             <NavLink to="/register" end className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ""}`}>
-              <Icon name="user" size={14} /> Personal
+              <Icon name="user" size={14} /> {t("tabs.personal")}
             </NavLink>
             <NavLink to="/company/register" className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ""}`}>
-              <Icon name="building" size={14} /> Company
+              <Icon name="building" size={14} /> {t("tabs.company")}
             </NavLink>
           </div>
 
-          <h1 className={styles.title}>List your company</h1>
+          <h1 className={styles.title}>{t("companyRegister.title")}</h1>
           <p className={styles.subtitle}>
-            Tell us about your business — we’ll review and verify before you go live.
+            {t("companyRegister.subtitle")}
           </p>
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
@@ -306,7 +297,7 @@ function CompanyRegister() {
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={buttonDisabled}
-                aria-label={logoFile ? "Change company logo" : "Upload company logo"}
+                aria-label={logoFile ? t("companyRegister.logoChange") : t("companyRegister.logoUpload")}
                 style={{
                   width: 112,
                   height: 112,
@@ -327,7 +318,7 @@ function CompanyRegister() {
                 {logoPreview ? (
                   <img
                     src={logoPreview}
-                    alt="Company logo preview"
+                    alt={t("companyRegister.logoPreviewAlt")}
                     style={{
                       position: "absolute",
                       inset: 0,
@@ -341,7 +332,7 @@ function CompanyRegister() {
                   <span style={{ display: "grid", placeItems: "center", gap: 4, color: "var(--ink-faint, #64748b)" }}>
                     <Icon name="building" size={28} />
                     <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                      Logo
+                      {t("companyRegister.logoBadge")}
                     </span>
                   </span>
                 )}
@@ -365,7 +356,7 @@ function CompanyRegister() {
                     onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = 0)}
                   >
-                    Change
+                    {t("companyRegister.logoChangeOverlay")}
                   </span>
                 )}
               </button>
@@ -378,7 +369,7 @@ function CompanyRegister() {
                 style={{ display: "none" }}
               />
               <span className="hint" style={{ textAlign: "center" }}>
-                {logoFile ? "Click to replace · cropped to a circle" : "Add a company logo (optional). It'll be cropped to a circle."}
+                {logoFile ? t("companyRegister.logoHintFilled") : t("companyRegister.logoHintEmpty")}
               </span>
               <FieldError message={errors.Logo} />
               {logoFile && (
@@ -392,13 +383,13 @@ function CompanyRegister() {
                   }}
                   disabled={buttonDisabled}
                 >
-                  Remove logo
+                  {t("companyRegister.removeLogo")}
                 </button>
               )}
             </div>
 
             <label className="field">
-              <span className="field-label">Company name</span>
+              <span className="field-label">{t("companyRegister.name")}</span>
               <div className="input-with-icon">
                 <span className="input-icon"><Icon name="building" size={16} /></span>
                 <input className="input" value={form.Name} onChange={update("Name")} required disabled={buttonDisabled} />
@@ -407,7 +398,7 @@ function CompanyRegister() {
             </label>
 
             <label className="field">
-              <span className="field-label">Contact email</span>
+              <span className="field-label">{t("companyRegister.contactEmail")}</span>
               <div className="input-with-icon">
                 <span className="input-icon"><Icon name="email" size={16} /></span>
                 <input
@@ -424,7 +415,7 @@ function CompanyRegister() {
             </label>
 
             <label className="field">
-              <span className="field-label">Founding date</span>
+              <span className="field-label">{t("companyRegister.foundingDate")}</span>
               <input
                 type="date"
                 className="input"
@@ -438,23 +429,23 @@ function CompanyRegister() {
             </label>
 
             <label className="field">
-              <span className="field-label">Tax number</span>
+              <span className="field-label">{t("companyRegister.taxNumber")}</span>
               <input
                 className="input"
                 inputMode="numeric"
                 value={form.TaxNumber}
                 onChange={handleTaxNumberChange}
                 maxLength={11}
-                placeholder="123-456-789"
+                placeholder={t("companyRegister.taxPlaceholder")}
                 required
                 disabled={buttonDisabled}
               />
-              <span className="hint">9 digits, formatted as XXX-XXX-XXX. Must be unique.</span>
+              <span className="hint">{t("companyRegister.taxHint")}</span>
               <FieldError message={errors.TaxNumber} />
             </label>
 
             <label className="field">
-              <span className="field-label">Password</span>
+              <span className="field-label">{t("companyRegister.password")}</span>
               <div className={styles.passwordWrap}>
                 <div className="input-with-icon">
                   <span className="input-icon"><Icon name="lock" size={16} /></span>
@@ -466,19 +457,19 @@ function CompanyRegister() {
                     onChange={update("Password")}
                     required
                     disabled={buttonDisabled}
-                    placeholder="At least 8 characters with a number"
+                    placeholder={t("companyRegister.passwordPlaceholder")}
                   />
                 </div>
                 <button type="button" className={styles.togglePassword} onClick={() => setShowPassword((v) => !v)} tabIndex={-1}>
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? t("hide") : t("show")}
                 </button>
               </div>
-              <span className="hint">Minimum 8 characters with at least one letter and one number.</span>
+              <span className="hint">{t("companyRegister.passwordHint")}</span>
               <FieldError message={errors.Password} />
             </label>
 
             <label className="field">
-              <span className="field-label">Governorate</span>
+              <span className="field-label">{t("companyRegister.governorate")}</span>
               <select
                 className="input"
                 value={form.Governorate}
@@ -486,46 +477,22 @@ function CompanyRegister() {
                 required
                 disabled={buttonDisabled}
               >
-                <option value="" disabled>Select a Governorate</option>
-                <option value="Al Daqahliyah">Al Daqahliyah</option>
-                <option value="Red Sea">Red Sea</option>
-                <option value="Al Buhayrah">Al Buhayrah</option>
-                <option value="Al Fayyum">Al Fayyum</option>
-                <option value="Al Gharbiyah">Al Gharbiyah</option>
-                <option value="Alexandria">Alexandria</option>
-                <option value="Ismailia">Ismailia</option>
-                <option value="Giza">Giza</option>
-                <option value="Al Minufiyah">Al Minufiyah</option>
-                <option value="Al Minya">Al Minya</option>
-                <option value="Cairo">Cairo</option>
-                <option value="Al Qalyubiyah">Al Qalyubiyah</option>
-                <option value="Luxor">Luxor</option>
-                <option value="New Valley">New Valley</option>
-                <option value="Suez">Suez</option>
-                <option value="Ash Sharqiyah">Ash Sharqiyah</option>
-                <option value="Aswan">Aswan</option>
-                <option value="Asyut">Asyut</option>
-                <option value="Bani Suwayf">Bani Suwayf</option>
-                <option value="Port Said">Port Said</option>
-                <option value="Damietta">Damietta</option>
-                <option value="South Sinai">South Sinai</option>
-                <option value="Kafr ash Shaykh">Kafr ash Shaykh</option>
-                <option value="Matruh">Matruh</option>
-                <option value="Qina">Qina</option>
-                <option value="North Sinai">North Sinai</option>
-                <option value="Suhaj">Suhaj</option>
+                <option value="" disabled>{t("companyRegister.governoratePlaceholder")}</option>
+                {GOVERNORATES.map((g) => (
+                  <option key={g} value={g}>{t(`common:governorates.${g}`, { defaultValue: g })}</option>
+                ))}
               </select>
               <FieldError message={errors.Governorate} />
             </label>
 
             <label className="field">
-              <span className="field-label">Address</span>
+              <span className="field-label">{t("companyRegister.address")}</span>
               <input
                 className="input"
                 value={form.Address}
                 onChange={update("Address")}
                 maxLength={255}
-                placeholder="Street, building, city"
+                placeholder={t("companyRegister.addressPlaceholder")}
                 required
                 disabled={buttonDisabled}
               />
@@ -533,7 +500,7 @@ function CompanyRegister() {
             </label>
 
             <div className="field">
-              <span className="field-label">Commercial registration (PDF)</span>
+              <span className="field-label">{t("companyRegister.comReg")}</span>
               <label
                 className={`${styles.dropzone} ${comRegFile ? styles.dropzoneFilled : ""}`}
               >
@@ -550,12 +517,12 @@ function CompanyRegister() {
                 {comRegFile ? (
                   <>
                     <span className={styles.dropzoneFilename}>{comRegFile.name}</span>
-                    <span className={styles.dropzoneSubtext}>Click to replace</span>
+                    <span className={styles.dropzoneSubtext}>{t("companyRegister.comRegReplace")}</span>
                   </>
                 ) : (
                   <>
-                    <span className={styles.dropzoneTitle}>Click to upload PDF</span>
-                    <span className={styles.dropzoneSubtext}>PDF only · max 5MB</span>
+                    <span className={styles.dropzoneTitle}>{t("companyRegister.comRegUpload")}</span>
+                    <span className={styles.dropzoneSubtext}>{t("companyRegister.comRegSubtext")}</span>
                   </>
                 )}
               </label>
@@ -563,17 +530,17 @@ function CompanyRegister() {
             </div>
 
             <label className="field">
-              <span className="field-label">About</span>
+              <span className="field-label">{t("companyRegister.about")}</span>
               <textarea
                 className="input"
                 rows={4}
                 maxLength={255}
                 value={form.About}
                 onChange={update("About")}
-                placeholder="A short description of your company"
+                placeholder={t("companyRegister.aboutPlaceholder")}
                 disabled={buttonDisabled}
               />
-              <span className="hint">If accepted, this is what the user sees like a bio for the company. If left blank, we'll use a default description.</span>
+              <span className="hint">{t("companyRegister.aboutHint")}</span>
             </label>
 
             {genericError && (
@@ -593,19 +560,19 @@ function CompanyRegister() {
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={buttonDisabled}>
               {succeeded ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  Account created successfully
-                  <ContainerSpinner inline size={18} label="Redirecting…" />
+                  {t("companyRegister.success")}
+                  <ContainerSpinner inline size={18} label={t("companyRegister.redirecting")} />
                 </span>
               ) : submitting ? (
-                <ContainerSpinner inline size={20} label="Submitting…" />
+                <ContainerSpinner inline size={20} label={t("companyRegister.submitting")} />
               ) : (
-                <>Submit for verification <Icon name="arrow_right" size={16} /></>
+                <>{t("companyRegister.submit")} <Icon name="arrow_right" size={16} className="icon-flip" /></>
               )}
             </button>
           </form>
 
           <p className={styles.footerLinks}>
-            Already listed? <Link to="/company/login" className={styles.footerLink}>Sign in</Link>
+            {t("companyRegister.footerPrompt")} <Link to="/company/login" className={styles.footerLink}>{t("companyRegister.footerLink")}</Link>
           </p>
         </div>
       </section>
@@ -614,7 +581,7 @@ function CompanyRegister() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Crop your logo"
+          aria-label={t("companyRegister.cropper.ariaLabel")}
           style={{
             position: "fixed",
             inset: 0,
@@ -641,9 +608,9 @@ function CompanyRegister() {
             }}
           >
             <div>
-              <h3 style={{ margin: 0, fontSize: 18 }}>Crop your logo</h3>
+              <h3 style={{ margin: 0, fontSize: 18 }}>{t("companyRegister.cropper.title")}</h3>
               <p style={{ margin: "4px 0 0", color: "var(--ink-soft, #475569)", fontSize: 13 }}>
-                Drag to position, scroll or use the slider to zoom.
+                {t("companyRegister.cropper.instructions")}
               </p>
             </div>
 
@@ -700,7 +667,7 @@ function CompanyRegister() {
               }}
             >
               <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, width: "100%" }}>
-                <span style={{ color: "var(--ink-soft, #475569)", minWidth: 40 }}>Zoom</span>
+                <span style={{ color: "var(--ink-soft, #475569)", minWidth: 40 }}>{t("companyRegister.cropper.zoom")}</span>
                 <input
                   type="range"
                   min={0.5}
@@ -726,7 +693,7 @@ function CompanyRegister() {
                   onClick={cancelCrop}
                   disabled={cropping}
                 >
-                  Cancel
+                  {t("companyRegister.cropper.cancel")}
                 </button>
                 <button
                   type="button"
@@ -734,7 +701,7 @@ function CompanyRegister() {
                   onClick={confirmCrop}
                   disabled={cropping || !croppedAreaPixels}
                 >
-                  {cropping ? "Saving…" : "Save logo"}
+                  {cropping ? t("companyRegister.cropper.saving") : t("companyRegister.cropper.save")}
                 </button>
               </div>
             </div>

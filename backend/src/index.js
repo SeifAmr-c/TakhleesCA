@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { bootstrap } from "./app.controller.js";
 import { connectMongo } from "./Database/mongo_connection.js";
 

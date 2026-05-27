@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
+import { LocalizedStringSchema } from './_shared.js';
 
 const CategorySchema = new mongoose.Schema(
     {
         CategoryID: { type: Number, index: true, unique: true },
-        /* Type is admin-managed: kept as an open string so new service
-           categories can be added without a schema migration. */
-        Type:       { type: String, required: true, trim: true },
+        /* Admin-managed bilingual name. Field stays named `Type` so the
+           flattened API response key is unchanged for existing clients;
+           localize() collapses { en, ar } to the active language. */
+        Type:       { type: LocalizedStringSchema, required: true },
     },
     { timestamps: true }
 );
