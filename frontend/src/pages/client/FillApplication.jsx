@@ -342,12 +342,6 @@ function PaymentStep({ payment, setPayment, errors, setErrors, submitting, price
   const [flipped, setFlipped] = useState(false);
   const network = detectNetwork(payment.CardNumber);
 
-  const update = (key) => (e) => {
-    const value = e.target.value;
-    setPayment((p) => ({ ...p, [key]: value }));
-    setErrors((m) => ({ ...m, [key]: "" }));
-  };
-
   /* XXXX-XXXX-XXXX-XXXX — strip non-digits, cap at 16 digits, dash every 4. */
   const onCardNumberChange = (e) => {
     const digits = e.target.value.replace(/\D/g, "").slice(0, 16);
