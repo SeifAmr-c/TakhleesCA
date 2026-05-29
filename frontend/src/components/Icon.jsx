@@ -53,6 +53,12 @@ const PATHS = {
     "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
   eye_off:
     "M3 3l18 18M10 10a3 3 0 0 0 4 4M9.9 4.2A10 10 0 0 1 22 12c-.6 1.1-1.5 2.3-2.7 3.4M6.1 6.1C3.7 7.8 2 10 2 12c0 0 4 7 10 7 1.6 0 3.1-.4 4.5-1",
+  chat:
+    "M21 15a4 4 0 0 1-4 4H8l-5 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z",
+  send:
+    "M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z",
+  close:
+    "M6 6l12 12M18 6 6 18",
 };
 
 function Icon({ name, size = 20, strokeWidth = 1.8, color, fill, filled, style, className }) {

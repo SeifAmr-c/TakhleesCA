@@ -1,0 +1,251 @@
+/* Takhlees assistant — floating premium chat widget.
+   Positioning uses logical inset so it mirrors automatically under dir=rtl
+   (the app toggles <html dir> via the i18n provider). */
+
+.tk-chat-fab {
+  position: fixed;
+  inset-block-end: 24px;
+  inset-inline-end: 24px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 22px 0 18px;
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--teal) 100%);
+  box-shadow: 0 10px 30px -8px oklch(20% 0.055 245 / 0.45);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.2s ease;
+}
+.tk-chat-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 38px -10px oklch(20% 0.055 245 / 0.55); }
+.tk-chat-fab:active { transform: translateY(0); }
+.tk-chat-fab__pulse { display: inline-flex; }
+
+@media (max-width: 600px) {
+  .tk-chat-fab { inset-block-end: 16px; inset-inline-end: 16px; padding: 0 18px; }
+  .tk-chat-fab__label { display: none; }
+}
+
+.tk-chat-panel {
+  position: fixed;
+  inset-block-end: 24px;
+  inset-inline-end: 24px;
+  z-index: 1001;
+  width: 384px;
+  max-width: calc(100vw - 32px);
+  height: min(640px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: 0 24px 60px -12px oklch(20% 0.055 245 / 0.40);
+  transform-origin: bottom right;
+  animation: tk-chat-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[dir="rtl"] .tk-chat-panel { transform-origin: bottom left; }
+
+@media (max-width: 600px) {
+  .tk-chat-panel {
+    inset: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+}
+
+@keyframes tk-chat-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tk-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  color: var(--ink-on-dark);
+  background: linear-gradient(135deg, var(--brand-deep) 0%, var(--teal-dark) 100%);
+}
+.tk-chat-header__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 0.16);
+  flex-shrink: 0;
+}
+.tk-chat-header__title { font-weight: 700; font-size: 15px; line-height: 1.2; }
+.tk-chat-header__subtitle { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+.tk-chat-header__close {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-on-dark);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.tk-chat-header__close:hover { background: oklch(100% 0 0 / 0.14); opacity: 1; }
+
+.tk-chat-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg);
+}
+
+.tk-chat-msg { display: flex; flex-direction: column; max-width: 86%; }
+.tk-chat-msg--user { align-self: flex-end; align-items: flex-end; }
+.tk-chat-msg--assistant { align-self: flex-start; align-items: flex-start; }
+
+.tk-chat-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tk-chat-msg--user .tk-chat-bubble {
+  background: var(--brand);
+  color: #fff;
+  border-end-end-radius: 4px;
+}
+.tk-chat-msg--assistant .tk-chat-bubble {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-end-start-radius: 4px;
+}
+
+.tk-chat-typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+.tk-chat-typing span {
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  background: var(--ink-faint);
+  animation: tk-chat-bounce 1.2s infinite ease-in-out;
+}
+.tk-chat-typing span:nth-child(2) { animation-delay: 0.15s; }
+.tk-chat-typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tk-chat-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Recommendation cards inside an assistant turn */
+.tk-chat-recs { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%; }
+.tk-rec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tk-rec:hover { border-color: var(--line-strong); box-shadow: var(--shadow-xs); }
+.tk-rec__logo {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--teal-dark);
+  font-weight: 700;
+  font-size: 14px;
+}
+.tk-rec__info { flex: 1; min-width: 0; }
+.tk-rec__name { font-weight: 600; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-rec__meta { font-size: 11px; color: var(--ink-faint); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.tk-rec__actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+
+.tk-chat-suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.tk-chat-suggestion {
+  text-align: start;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.tk-chat-suggestion:hover { border-color: var(--teal); color: var(--ink); background: var(--surface-2); }
+
+.tk-chat-footer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.tk-chat-input {
+  flex: 1;
+  resize: none;
+  max-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tk-chat-input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px oklch(60% 0.08 245 / 0.15); }
+.tk-chat-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px; height: 42px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--teal) 100%);
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+.tk-chat-send:hover:not(:disabled) { transform: translateY(-1px); }
+.tk-chat-send:disabled { opacity: 0.45; cursor: not-allowed; }
+/* The paper-plane glyph points right; mirror it under RTL. */
+[dir="rtl"] .tk-chat-send svg { transform: scaleX(-1); }
+
+.tk-chat-error {
+  font-size: 12px;
+  color: var(--accent-dark);
+  padding: 6px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-chat-panel { animation: none; }
+  .tk-chat-typing span { animation: none; }
+  .tk-chat-fab { transition: none; }
+}

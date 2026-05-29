@@ -1,4 +1,24 @@
 {
+  "chat": {
+    "launcher": "Ask Takhlees",
+    "title": "Takhlees Assistant",
+    "subtitle": "Recommendations & document help",
+    "greeting": "Hi! I can recommend verified clearance companies and explain the documents you need to apply. How can I help?",
+    "placeholder": "Ask about companies or documents…",
+    "send": "Send",
+    "close": "Close",
+    "error": "Something went wrong. Please try again.",
+    "suggestions": {
+      "recommend": "Recommend a clearance company in Cairo",
+      "documents": "What documents do I need to apply?",
+      "howItWorks": "How does customs clearance work?"
+    },
+    "card": {
+      "view": "View",
+      "apply": "Apply",
+      "currency": "EGP"
+    }
+  },
   "companyDetails": {
     "loading": "Loading company",
     "backToCompanies": "Back to companies",

@@ -21,6 +21,7 @@ import reviewRouter from "./modules/review/review_controller.js";
 import supportTicketRouter from "./modules/support_ticket/support_ticket_controller.js";
 import adminRouter from "./modules/admin/admin_controller.js";
 import statsRouter from "./modules/stats/stats_controller.js";
+import chatbotRouter from "./modules/chatbot/chatbot_controller.js";
 
 export const bootstrap = () => {
   const app = express();
@@ -126,6 +127,7 @@ export const bootstrap = () => {
   app.use("/supportticket", supportTicketRouter);
   app.use("/admin", adminRouter);
   app.use("/stats", statsRouter);
+  app.use("/chatbot", chatbotRouter);
 
   app.use((req, res) => {
     res.status(404).json({ ok: false, message: "Route not found" });

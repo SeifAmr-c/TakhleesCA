@@ -709,80 +709,90 @@ export const recommendCompanies = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: "minPrice cannot be greater than maxPrice." });
     }
 
-    /* Filter candidate companies via the embedded categories array, then
-       compute the two ranking signals from Application and Review. */
-    /* The category arrives as a name string in the caller's current UI
-       language; match it against either stored language. */
-    const companies = await Company.find({
-      Governorate: governorate,
-      VerficationStatus: 'Verified',
-      categories: {
-        $elemMatch: {
-          $or: [{ 'Type.en': category }, { 'Type.ar': category }],
-          Price: { $gte: minPrice, $lte: maxPrice },
-        },
-      },
-    }).lean();
-
-    if (!companies.length) return res.status(200).json({ ok: true, data: [] });
-
-    const companyIds = companies.map((c) => c.CompanyID);
-
-    /* Fulfilled count per (company, category). */
-    const fulfilledAgg = await Application.aggregate([
-      { $match: { CompanyID: { $in: companyIds }, Status: 'Completed' } },
-      { $group: { _id: { c: '$CompanyID', cat: '$CategoryID' }, n: { $sum: 1 } } },
-    ]);
-    const fulfilledMap = new Map();
-    for (const r of fulfilledAgg) fulfilledMap.set(`${r._id.c}:${r._id.cat}`, r.n);
-
-    /* Average rating per (company, category). */
-    const ratingAgg = await Review.aggregate([
-      { $match: { CompanyID: { $in: companyIds } } },
-      { $group: { _id: { c: '$CompanyID', cat: '$CategoryID' }, avg: { $avg: '$Rating' } } },
-    ]);
-    const ratingMap = new Map();
-    for (const r of ratingAgg) ratingMap.set(`${r._id.c}:${r._id.cat}`, r.avg);
-
-    const rows = [];
-    for (const c of companies) {
-      /* The candidate filter ensured at least one matching category;
-         find the specific one to pull its CategoryID and Price. */
-      const match = (c.categories || []).find((cc) =>
-        (cc.Type?.en === category || cc.Type?.ar === category) && cc.Price >= minPrice && cc.Price <= maxPrice);
-      if (!match) continue;
-      const key = `${c.CompanyID}:${match.CategoryID}`;
-      const FulfilledCount = fulfilledMap.get(key) ?? 0;
-      const avg = ratingMap.get(key);
-      rows.push({
-        CompanyID: c.CompanyID,
-        Name: c.Name,
-        ContactEmail: c.ContactEmail,
-        Governorate: c.Governorate,
-        Address: c.Address,
-        About: c.About,
-        LogoUrl: c.LogoUrl,
-        VerficationStatus: c.VerficationStatus,
-        CategoryID: match.CategoryID,
-        CategoryType: match.Type,
-        CategoryPrice: Number(match.Price),
-        FulfilledCount: Number(FulfilledCount),
-        AverageRating: avg == null ? null : Number(Number(avg).toFixed(2)),
-      });
-    }
-
-    rows.sort((a, b) => {
-      if (b.FulfilledCount !== a.FulfilledCount) return b.FulfilledCount - a.FulfilledCount;
-      const ar = a.AverageRating ?? -Infinity;
-      const br = b.AverageRating ?? -Infinity;
-      if (br !== ar) return br - ar;
-      return a.Name.localeCompare(b.Name);
-    });
-
+    const rows = await queryRecommendations({ governorate, category, minPrice, maxPrice });
     return res.status(200).json({ ok: true, data: rows });
   } catch (err) {
     return next(err);
   }
+};
+
+/* Core recommendation query, shared by the HTTP handler above and the
+   assistant chatbot's recommend_companies tool. Inputs are assumed already
+   validated (non-empty strings, finite non-negative prices, min <= max).
+   Returns ranked rows with CategoryType left as the raw { en, ar } pair so
+   each caller localizes for its own audience. */
+export const queryRecommendations = async ({ governorate, category, minPrice, maxPrice }) => {
+  /* Filter candidate companies via the embedded categories array, then
+     compute the two ranking signals from Application and Review. The
+     category arrives as a name string in the caller's UI language; match
+     it against either stored language. */
+  const companies = await Company.find({
+    Governorate: governorate,
+    VerficationStatus: 'Verified',
+    categories: {
+      $elemMatch: {
+        $or: [{ 'Type.en': category }, { 'Type.ar': category }],
+        Price: { $gte: minPrice, $lte: maxPrice },
+      },
+    },
+  }).lean();
+
+  if (!companies.length) return [];
+
+  const companyIds = companies.map((c) => c.CompanyID);
+
+  /* Fulfilled count per (company, category). */
+  const fulfilledAgg = await Application.aggregate([
+    { $match: { CompanyID: { $in: companyIds }, Status: 'Completed' } },
+    { $group: { _id: { c: '$CompanyID', cat: '$CategoryID' }, n: { $sum: 1 } } },
+  ]);
+  const fulfilledMap = new Map();
+  for (const r of fulfilledAgg) fulfilledMap.set(`${r._id.c}:${r._id.cat}`, r.n);
+
+  /* Average rating per (company, category). */
+  const ratingAgg = await Review.aggregate([
+    { $match: { CompanyID: { $in: companyIds } } },
+    { $group: { _id: { c: '$CompanyID', cat: '$CategoryID' }, avg: { $avg: '$Rating' } } },
+  ]);
+  const ratingMap = new Map();
+  for (const r of ratingAgg) ratingMap.set(`${r._id.c}:${r._id.cat}`, r.avg);
+
+  const rows = [];
+  for (const c of companies) {
+    /* The candidate filter ensured at least one matching category;
+       find the specific one to pull its CategoryID and Price. */
+    const match = (c.categories || []).find((cc) =>
+      (cc.Type?.en === category || cc.Type?.ar === category) && cc.Price >= minPrice && cc.Price <= maxPrice);
+    if (!match) continue;
+    const key = `${c.CompanyID}:${match.CategoryID}`;
+    const FulfilledCount = fulfilledMap.get(key) ?? 0;
+    const avg = ratingMap.get(key);
+    rows.push({
+      CompanyID: c.CompanyID,
+      Name: c.Name,
+      ContactEmail: c.ContactEmail,
+      Governorate: c.Governorate,
+      Address: c.Address,
+      About: c.About,
+      LogoUrl: c.LogoUrl,
+      VerficationStatus: c.VerficationStatus,
+      CategoryID: match.CategoryID,
+      CategoryType: match.Type,
+      CategoryPrice: Number(match.Price),
+      FulfilledCount: Number(FulfilledCount),
+      AverageRating: avg == null ? null : Number(Number(avg).toFixed(2)),
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (b.FulfilledCount !== a.FulfilledCount) return b.FulfilledCount - a.FulfilledCount;
+    const ar = a.AverageRating ?? -Infinity;
+    const br = b.AverageRating ?? -Infinity;
+    if (br !== ar) return br - ar;
+    return a.Name.localeCompare(b.Name);
+  });
+
+  return rows;
 };
 
 /* Admin-only: update strictly the Comm percentage for a given CompanyID.

@@ -29,6 +29,7 @@ import AdminProfileEdit from "./pages/admin/AdminProfileEdit.jsx";
 import AdminCommissions from "./pages/admin/AdminCommissions.jsx";
 
 import ScrollToTop from "./components/ScrollToTop.jsx";
+import ChatWidget from "./components/ChatWidget.jsx";
 
 function RequireAuth({ children }) {
   const auth = useAuth();
@@ -89,6 +90,7 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ChatWidget />
     </BrowserRouter>
   );
 }
