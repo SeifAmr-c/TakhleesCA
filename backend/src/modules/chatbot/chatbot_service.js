@@ -275,7 +275,17 @@ export const streamMessage = async (req, res, next) => {
       })
       .filter(Boolean);
 
-    const ai = new GoogleGenAI({ apiKey });
+    /* In production the Gemini call must originate from a US region (the
+       free tier is blocked in the EU, where Render/Frankfurt runs). When
+       GEMINI_BASE_URL is set we route the SDK through the US Vercel proxy
+       (api/gemini), authenticated with the shared GEMINI_PROXY_SECRET.
+       Unset locally → the SDK calls Google directly. */
+    const baseUrl = process.env.GEMINI_BASE_URL;
+    const proxySecret = process.env.GEMINI_PROXY_SECRET;
+    const httpOptions = baseUrl
+      ? { baseUrl, headers: proxySecret ? { "x-proxy-secret": proxySecret } : {} }
+      : undefined;
+    const ai = new GoogleGenAI(httpOptions ? { apiKey, httpOptions } : { apiKey });
     const systemInstruction = buildSystemInstruction(lang, categoryNames);
 
     /* Gemini intermittently returns 503 (model overloaded). Retry a couple
