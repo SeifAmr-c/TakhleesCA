@@ -50,10 +50,12 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // Preserve any other query params the SDK appended (e.g. alt=sse), minus ours.
+  // Preserve any other query params the SDK appended (e.g. alt=sse), minus the
+  // routing params. `upstreamPath` is ours; `path` is auto-injected by Vercel
+  // from the rewrite's :path* capture — neither must leak to Google.
   const extra = [];
   for (const [k, v] of Object.entries(req.query)) {
-    if (k === "upstreamPath") continue;
+    if (k === "upstreamPath" || k === "path") continue;
     for (const val of Array.isArray(v) ? v : [v]) {
       extra.push(`${encodeURIComponent(k)}=${encodeURIComponent(val)}`);
     }
