@@ -16,4 +16,6 @@ router.get("/tickets/pending", requireAdmin, adminService.listPendingTickets);
 router.get("/tickets/resolved", requireAdmin, adminService.listResolvedTickets);
 router.put("/tickets/:id/resolve", requireAdmin, adminService.resolveTicket);
 
+router.get("/chatlogs", requireAdmin, adminService.listChatLogs);
+
 export default router;

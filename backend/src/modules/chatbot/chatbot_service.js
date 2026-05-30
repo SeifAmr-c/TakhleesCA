@@ -18,6 +18,8 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import Category from "../../Database/mongo/category.mongo.js";
+import ChatLog from "../../Database/mongo/chatlog.mongo.js";
+import { nextId } from "../../Database/mongo/counters.js";
 import { queryRecommendations } from "../company/company_service.js";
 import { localize } from "../../utils/localize.js";
 
@@ -258,6 +260,18 @@ const sseEvent = (res, event, data) => {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 };
 
+/* How long to pause AFTER emitting a token, to mimic a person typing rather
+   than dumping the whole answer at once. Whitespace flushes fast; words tick
+   at a steady cadence; and we linger after sentence- or clause-ending
+   punctuation so the reply reads as if the assistant is thinking between
+   thoughts. Covers Arabic punctuation (، ؛ ؟) too. */
+const tokenDelay = (token) => {
+  if (/^\s+$/.test(token)) return /\n/.test(token) ? 200 : 14;
+  if (/[.!?؟]$/.test(token)) return 260;
+  if (/[,،؛:]$/.test(token)) return 130;
+  return 30;
+};
+
 /* Map the frontend chat history to Gemini `contents`. The frontend sends
    [{ role: 'user' | 'assistant', content }]; Gemini wants role 'model' for
    the assistant and a parts array. Keep only the last MAX_HISTORY turns. */
@@ -295,6 +309,35 @@ const isQuotaError = (err) => {
   return /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(String(err?.message || ""));
 };
 
+/* Which tool the assistant reached for decides the FAQ bucket. A recommend
+   turn is the most specific signal, so it wins if both tools ran. */
+const intentFromTools = (toolNames) => {
+  if (toolNames.has("recommend_companies")) return "recommendation";
+  if (toolNames.has("get_application_requirements")) return "documents";
+  return "general";
+};
+
+/* Best-effort: persist one Q&A row for the FAQ dataset. Never throws — a
+   logging failure must not break the chat reply the client already received.
+   Skipped for error fallbacks (no real answer to learn from). */
+const persistChatLog = async ({ userId, lang, question, answer, intent, recommendationCount }) => {
+  try {
+    if (!userId || !question || !answer) return;
+    const ChatLogID = await nextId("chatlog");
+    await ChatLog.create({
+      ChatLogID,
+      UserID: userId,
+      Language: lang,
+      Question: question.slice(0, 2000),
+      Answer: answer.slice(0, 4000),
+      Intent: intent,
+      RecommendationCount: recommendationCount || 0,
+    });
+  } catch (err) {
+    console.error("[chatbot] chat log write failed:", err?.message || err);
+  }
+};
+
 export const streamMessage = async (req, res, next) => {
   try {
     const lang = req.lang === "ar" ? "ar" : "en";
@@ -309,6 +352,10 @@ export const streamMessage = async (req, res, next) => {
     if (!contents.length || contents[contents.length - 1].role !== "user") {
       return res.status(400).json({ ok: false, message: "A user message is required." });
     }
+
+    /* Grab the client's question now — `contents` is mutated with tool
+       round-trips below, so the last entry won't stay the user's message. */
+    const userQuestion = contents[contents.length - 1].parts?.[0]?.text || "";
 
     const categories = await Category.find().lean();
     const categoryNames = categories
@@ -367,6 +414,10 @@ export const streamMessage = async (req, res, next) => {
     let recommendations = [];
     let requirements = [];
     let finalText = "";
+    /* Track which tools ran (for the FAQ intent) and whether Gemini answered
+       cleanly (so we don't log error fallbacks as if they were real replies). */
+    const toolsUsed = new Set();
+    let geminiOk = false;
     try {
       for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
         const result = await generate(contents);
@@ -376,6 +427,7 @@ export const streamMessage = async (req, res, next) => {
           contents.push({ role: "model", parts: calls.map((c) => ({ functionCall: c })) });
           const responseParts = [];
           for (const call of calls) {
+            toolsUsed.add(call.name);
             const out = await dispatchTool(call.name, call.args, lang, categories);
             if (Array.isArray(out.recommendations) && out.recommendations.length) {
               recommendations = out.recommendations;
@@ -390,6 +442,7 @@ export const streamMessage = async (req, res, next) => {
         }
 
         finalText = (result.text || "").trim();
+        geminiOk = true;
         break;
       }
     } catch (err) {
@@ -400,6 +453,20 @@ export const streamMessage = async (req, res, next) => {
     }
 
     if (!finalText) finalText = FALLBACK_REPLY[lang];
+
+    /* Persist the turn for the FAQ dataset before streaming, so a mid-stream
+       client disconnect can't lose it. Only real answers are worth learning
+       from. Fire-and-forget — persistChatLog never throws. */
+    if (geminiOk) {
+      persistChatLog({
+        userId: req.session?.userId,
+        lang,
+        question: userQuestion,
+        answer: finalText,
+        intent: intentFromTools(toolsUsed),
+        recommendationCount: recommendations.length,
+      });
+    }
 
     /* Open the SSE stream and emit the answer word-by-word. */
     res.writeHead(200, {
@@ -418,7 +485,7 @@ export const streamMessage = async (req, res, next) => {
     for (const token of tokenize(finalText)) {
       if (closed) return;
       sseEvent(res, "token", { text: token });
-      await sleep(18);
+      await sleep(tokenDelay(token));
     }
 
     if (!closed) {

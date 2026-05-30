@@ -6,6 +6,8 @@ import Application from '../../Database/mongo/application.mongo.js';
 import Company from '../../Database/mongo/company.mongo.js';
 import CompanyPayment from '../../Database/mongo/company_payment.mongo.js';
 import SupportTicket from '../../Database/mongo/support_ticket.mongo.js';
+import ChatLog from '../../Database/mongo/chatlog.mongo.js';
+import User from '../../Database/mongo/user.mongo.js';
 import { localize } from '../../utils/localize.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -250,6 +252,44 @@ export const resolveTicket = async (req, res, next) => {
       message: `Ticket [${ticketId}] marked resolved.`,
       data: { ticket: shapeTicket(updated) },
     });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/* Chat logs for the FAQ dataset — newest first, capped so the admin payload
+   stays bounded. Each row is joined back to its client (by UserID) so the
+   admin can see who asked; the chat itself only stores the UserID. */
+export const listChatLogs = async (req, res, next) => {
+  try {
+    const rows = await ChatLog.find().sort({ _id: -1 }).limit(1000).lean();
+
+    const userIds = [...new Set(rows.map((r) => r.UserID).filter((id) => id != null))];
+    const users = userIds.length
+      ? await User.find({ UserID: { $in: userIds } })
+          .select({ UserID: 1, FirstName: 1, LastName: 1, Email: 1 })
+          .lean()
+      : [];
+    const byId = new Map(users.map((u) => [u.UserID, u]));
+
+    const data = rows.map((r) => {
+      const u = byId.get(r.UserID);
+      return {
+        ChatLogID: r.ChatLogID,
+        UserID: r.UserID,
+        ClientFirstName: u?.FirstName ?? null,
+        ClientLastName: u?.LastName ?? null,
+        ClientEmail: u?.Email ?? null,
+        Language: r.Language,
+        Question: r.Question,
+        Answer: r.Answer,
+        Intent: r.Intent,
+        RecommendationCount: r.RecommendationCount ?? 0,
+        CreatedAt: r.createdAt,
+      };
+    });
+
+    return res.json({ ok: true, count: data.length, data });
   } catch (err) {
     return next(err);
   }

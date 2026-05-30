@@ -17,6 +17,7 @@ import {
   getPendingTickets,
   getResolvedTickets,
   resolveTicket,
+  getChatLogs,
 } from "../../api/admin.js";
 import { updateCompanyCommission } from "../../api/companies.js";
 import { friendlyError } from "../../api/client.js";
@@ -33,7 +34,7 @@ import {
   deleteCategory,
 } from "../../api/companyCategories.js";
 
-const TABS = ["companies", "support", "users", "commissions", "ports", "categories"];
+const TABS = ["companies", "support", "users", "commissions", "ports", "categories", "chatlogs"];
 const SUBS = {
   companies:   ["pending", "verified"],
   support:     ["pending", "resolved"],
@@ -41,8 +42,9 @@ const SUBS = {
   commissions: ["all"],
   ports:       ["all"],
   categories:  ["all"],
+  chatlogs:    ["all"],
 };
-const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all", ports: "all", categories: "all" };
+const DEFAULT_SUB = { companies: "pending", support: "pending", users: "all", commissions: "all", ports: "all", categories: "all", chatlogs: "all" };
 
 const HASH_ALIASES = {
   "companies-section": "companies",
@@ -326,6 +328,74 @@ function UserRow({ user }) {
         ID #{user.UserID}
       </div>
     </div>
+  );
+}
+
+/* Maps a chat log's intent to a label, icon, and badge accent — keeps the
+   FAQ list scannable by what the client was trying to do. */
+const INTENT_META = {
+  documents:      { label: "Documents",      icon: "doc",     color: "var(--navy)",        bg: "var(--gray-50)" },
+  recommendation: { label: "Recommendation", icon: "building", color: "var(--success)",     bg: "var(--gray-50)" },
+  general:        { label: "General",         icon: "chat",    color: "var(--ink-soft)",    bg: "var(--gray-50)" },
+};
+
+const formatDateTime = (input) => {
+  if (!input) return "—";
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString();
+};
+
+function ChatLogRow({ log, isLast }) {
+  const clientName = fullName(log.ClientFirstName, log.ClientLastName) || `Client #${log.UserID}`;
+  const intent = INTENT_META[log.Intent] || INTENT_META.general;
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 14,
+        padding: "18px 20px",
+        borderBottom: isLast ? "none" : "1px solid var(--gray-100)",
+      }}
+    >
+      <div
+        style={{
+          width: 32, height: 32, borderRadius: 8,
+          display: "grid", placeItems: "center",
+          background: intent.bg, color: intent.color,
+          flexShrink: 0, marginTop: 2,
+        }}
+      >
+        <Icon name={intent.icon} size={15} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-faint)" }}>
+            #{log.ChatLogID} · <strong style={{ color: "var(--navy)" }}>{clientName}</strong>
+            {log.ClientEmail ? ` · ${log.ClientEmail}` : ""}
+          </span>
+          <span
+            className="badge"
+            style={{ background: intent.bg, color: intent.color, flexShrink: 0, textTransform: "uppercase", fontSize: 10, letterSpacing: "0.04em" }}
+          >
+            {intent.label}
+            {log.Intent === "recommendation" && log.RecommendationCount === 0 ? " · 0 results" : ""}
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--gray-900, #111827)", lineHeight: 1.5, fontWeight: 600 }} dir="auto">
+          {log.Question}
+        </p>
+        <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--gray-700)", lineHeight: 1.5 }} dir="auto">
+          {log.Answer}
+        </p>
+        <div className="muted" style={{ fontSize: 11, marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span>{formatDateTime(log.CreatedAt)}</span>
+          <span style={{ color: "var(--gray-300)" }}>·</span>
+          <span style={{ textTransform: "uppercase" }}>{log.Language}</span>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -1107,6 +1177,15 @@ const PRINT_COLS = {
     { key: "Type",       label: "Name", value: (r) => [enOf(r.Type), arOf(r.Type)].filter(Boolean).join(" — ") },
     { key: "ActiveApplications", label: "Active apps", align: "right", mono: true, value: (r) => String(r.ActiveApplications || 0) },
   ],
+  chatlogs: [
+    { key: "ChatLogID", label: "#", align: "right", mono: true, width: 50, nowrap: true },
+    { key: "Client",    label: "Client", value: (r) => fullName(r.ClientFirstName, r.ClientLastName) || `Client #${r.UserID}`, nowrap: true },
+    { key: "Intent",    label: "Intent", value: (r) => (INTENT_META[r.Intent] || INTENT_META.general).label, nowrap: true },
+    { key: "Question",  label: "Question" },
+    { key: "Answer",    label: "Answer" },
+    { key: "Language",  label: "Lang", nowrap: true },
+    { key: "CreatedAt", label: "When", value: (r) => formatDateTime(r.CreatedAt), nowrap: true },
+  ],
 };
 
 function ExportPdfButton({ onClick }) {
@@ -1130,6 +1209,7 @@ function AdminManagement() {
   const [users, setUsers] = useState([]);
   const [ports, setPorts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [chatLogs, setChatLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [companyBusyId, setCompanyBusyId] = useState(null);
   const [ticketBusyId, setTicketBusyId] = useState(null);
@@ -1233,11 +1313,21 @@ function AdminManagement() {
     }
   };
 
+  const refreshChatLogs = async () => {
+    try {
+      const res = await getChatLogs();
+      setChatLogs(Array.isArray(res?.data) ? res.data : []);
+    } catch (err) {
+      console.error("getChatLogs failed:", err?.response?.status, err?.response?.data || err);
+      setChatLogs([]);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        await Promise.all([refreshCompanies(), refreshTickets(), refreshUsers(), refreshPorts(), refreshCategories()]);
+        await Promise.all([refreshCompanies(), refreshTickets(), refreshUsers(), refreshPorts(), refreshCategories(), refreshChatLogs()]);
       } finally {
         if (active) setLoading(false);
       }
@@ -1442,6 +1532,14 @@ function AdminManagement() {
     `${enOf(c.Type)} ${arOf(c.Type)}`.toLowerCase().includes(q) ||
     String(c.CategoryID).includes(q)
   ), [categories, q]);
+  const filteredChatLogs = useMemo(() => !q ? chatLogs : chatLogs.filter(l =>
+    String(l.Question||"").toLowerCase().includes(q) ||
+    String(l.Answer||"").toLowerCase().includes(q) ||
+    fullName(l.ClientFirstName, l.ClientLastName).toLowerCase().includes(q) ||
+    String(l.ClientEmail||"").toLowerCase().includes(q) ||
+    String(l.Intent||"").toLowerCase().includes(q) ||
+    String(l.ChatLogID).includes(q)
+  ), [chatLogs, q]);
 
   const primaryTabs = [
     { id: "companies",   label: "Companies",       icon: "building", count: pendingCompanies.length + verifiedCompanies.length },
@@ -1450,6 +1548,7 @@ function AdminManagement() {
     { id: "commissions", label: "Commissions",     icon: "receipt",  count: verifiedCompanies.length },
     { id: "ports",       label: "Ports",           icon: "anchor",   count: ports.length },
     { id: "categories",  label: "Categories",      icon: "package",  count: categories.length },
+    { id: "chatlogs",    label: "Chat logs",       icon: "chat",     count: chatLogs.length },
   ];
 
   const subTabs = {
@@ -1465,6 +1564,7 @@ function AdminManagement() {
     commissions: [],
     ports: [],
     categories: [],
+    chatlogs: [],
   };
 
   /* Print exports — each one feeds the rows + column map for the current
@@ -1802,6 +1902,39 @@ function AdminManagement() {
     </>
   );
 
+  const renderChatLogsAll = () => (
+    <>
+      <SectionHeader
+        eyebrow="Assistant" eyebrowIcon="chat"
+        title="Chatbot conversations"
+        count={`${filteredChatLogs.length} of ${chatLogs.length} logged questions`}
+        actions={<ExportPdfButton onClick={() => openPrint("chatlogs", "Chatbot conversations", filteredChatLogs)} />}
+      />
+      <SearchFilter value={filter} onChange={setFilter} placeholder="Filter by question, answer, client, or intent…" />
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+          <ContainerSpinner size={80} label="Loading chat logs" />
+        </div>
+      ) : filteredChatLogs.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: 48 }}>
+          <Icon name="chat" size={28} color="var(--ink-faint)" />
+          <h3 className="h3" style={{ marginTop: 12 }}>{chatLogs.length === 0 ? "No conversations yet" : "No matches"}</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            {chatLogs.length === 0 ? "Client questions to the assistant will be logged here for your FAQ." : "Try a different search term."}
+          </p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {filteredChatLogs.map((l, i) => (
+              <ChatLogRow key={l.ChatLogID} log={l} isLast={i === filteredChatLogs.length - 1} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+
   const renderContent = () => {
     if (tab === "companies") return sub === "verified" ? renderCompaniesVerified() : renderCompaniesPending();
     if (tab === "support") return sub === "resolved" ? renderSupportResolved() : renderSupportPending();
@@ -1809,6 +1942,7 @@ function AdminManagement() {
     if (tab === "commissions") return renderUsersCommissions();
     if (tab === "ports") return renderPortsAll();
     if (tab === "categories") return renderCategoriesAll();
+    if (tab === "chatlogs") return renderChatLogsAll();
     return null;
   };
 

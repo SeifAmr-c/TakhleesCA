@@ -65,6 +65,13 @@ export const resolveTicket = async (ticketId) => {
   return data;
 };
 
+// ── Chatbot logs / FAQ dataset (admin only) ────────────────────
+// GET /admin/chatlogs → { ok, count, data: [...] }
+export const getChatLogs = async () => {
+  const { data } = await api.get("/admin/chatlogs");
+  return data;
+};
+
 // GET /admin/export-report → streamed application/pdf as a Blob.
 export const exportAdminReport = async () => {
   const response = await api.get("/admin/export-report", {
