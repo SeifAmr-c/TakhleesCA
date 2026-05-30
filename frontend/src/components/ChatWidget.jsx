@@ -190,14 +190,14 @@ function ChatWidget() {
   return (
     <>
       {!open && (
-        <button type="button" className="tk-chat-fab" onClick={() => setOpen(true)} aria-label={t("chat.launcher")}>
+        <button type="button" dir="ltr" className="tk-chat-fab" onClick={() => setOpen(true)} aria-label={t("chat.launcher")}>
           <span className="tk-chat-fab__logo"><img src={logo} alt="" /></span>
           <span className="tk-chat-fab__label">{t("chat.launcher")}</span>
         </button>
       )}
 
       {open && (
-        <div className="tk-chat-panel" role="dialog" aria-label={t("chat.title")}>
+        <div dir="ltr" className="tk-chat-panel" role="dialog" aria-label={t("chat.title")}>
           <div className="tk-chat-header">
             <span className="tk-chat-header__avatar"><img src={logo} alt="" /></span>
             <div>
@@ -213,7 +213,7 @@ function ChatWidget() {
             {/* Greeting + starter prompts (only before the first turn) */}
             {messages.length === 0 && (
               <div className="tk-chat-msg tk-chat-msg--assistant">
-                <div className="tk-chat-bubble">{t("chat.greeting")}</div>
+                <div dir="auto" className="tk-chat-bubble">{t("chat.greeting")}</div>
                 <div className="tk-chat-suggestions">
                   {suggestions.map((s) => (
                     <button key={s} type="button" className="tk-chat-suggestion" onClick={() => send(s)}>
@@ -235,7 +235,7 @@ function ChatWidget() {
                       <span className="tk-chat-typing"><span /><span /><span /></span>
                     </div>
                   ) : (
-                    m.content && <div className="tk-chat-bubble">{m.content}</div>
+                    m.content && <div dir="auto" className="tk-chat-bubble">{m.content}</div>
                   )}
                   {isAssistant && m.requirements?.length > 0 && (
                     <div className="tk-chat-reqs">

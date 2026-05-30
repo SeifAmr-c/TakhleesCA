@@ -1,8 +1,11 @@
 /* Takhlees assistant — floating premium chat widget.
    The widget is pinned to the physical right edge in BOTH languages (physical
    `right`, not logical `inset-inline-end`), so switching to Arabic does not
-   flip it to the left — it stays where it sits in English. Text/content inside
-   still mirrors normally under dir=rtl. */
+   flip it to the left — it stays where it sits in English. The widget root
+   also forces `dir="ltr"` (see ChatWidget.jsx), so the conversation layout
+   (bubble sides, header, suggestions) stays identical regardless of site
+   language; only each bubble's own text auto-detects direction (`dir="auto"`)
+   so Arabic messages still read naturally. */
 
 .tk-chat-fab {
   position: fixed;
@@ -288,8 +291,6 @@
 }
 .tk-chat-send:hover:not(:disabled) { transform: translateY(-1px); }
 .tk-chat-send:disabled { opacity: 0.45; cursor: not-allowed; }
-/* The paper-plane glyph points right; mirror it under RTL. */
-[dir="rtl"] .tk-chat-send svg { transform: scaleX(-1); }
 
 .tk-chat-error {
   font-size: 12px;
