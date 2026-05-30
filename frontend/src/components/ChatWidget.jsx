@@ -4,6 +4,7 @@ import Icon from "./Icon.jsx";
 import { useAuth } from "../api/authState.js";
 import { useTranslation, useLanguage } from "../i18n";
 import { streamChatMessage } from "../api/chatbot.js";
+import logo from "../assets/logo.png";
 import "./ChatWidget.css";
 
 const initials = (name) =>
@@ -161,7 +162,7 @@ function ChatWidget() {
     <>
       {!open && (
         <button type="button" className="tk-chat-fab" onClick={() => setOpen(true)} aria-label={t("chat.launcher")}>
-          <span className="tk-chat-fab__pulse"><Icon name="sparkle" size={20} /></span>
+          <span className="tk-chat-fab__logo"><img src={logo} alt="" /></span>
           <span className="tk-chat-fab__label">{t("chat.launcher")}</span>
         </button>
       )}
@@ -169,7 +170,7 @@ function ChatWidget() {
       {open && (
         <div className="tk-chat-panel" role="dialog" aria-label={t("chat.title")}>
           <div className="tk-chat-header">
-            <span className="tk-chat-header__avatar"><Icon name="sparkle" size={20} /></span>
+            <span className="tk-chat-header__avatar"><img src={logo} alt="" /></span>
             <div>
               <div className="tk-chat-header__title">{t("chat.title")}</div>
               <div className="tk-chat-header__subtitle">{t("chat.subtitle")}</div>

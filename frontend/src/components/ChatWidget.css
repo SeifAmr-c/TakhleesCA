@@ -1,11 +1,13 @@
 /* Takhlees assistant — floating premium chat widget.
-   Positioning uses logical inset so it mirrors automatically under dir=rtl
-   (the app toggles <html dir> via the i18n provider). */
+   The widget is pinned to the physical right edge in BOTH languages (physical
+   `right`, not logical `inset-inline-end`), so switching to Arabic does not
+   flip it to the left — it stays where it sits in English. Text/content inside
+   still mirrors normally under dir=rtl. */
 
 .tk-chat-fab {
   position: fixed;
   inset-block-end: 24px;
-  inset-inline-end: 24px;
+  right: 24px;
   z-index: 1000;
   display: inline-flex;
   align-items: center;
@@ -25,17 +27,27 @@
 }
 .tk-chat-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 38px -10px oklch(20% 0.055 245 / 0.55); }
 .tk-chat-fab:active { transform: translateY(0); }
-.tk-chat-fab__pulse { display: inline-flex; }
+/* Logo sits in a white chip so the dark mark reads on the gradient button. */
+.tk-chat-fab__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  background: #fff;
+  flex-shrink: 0;
+}
+.tk-chat-fab__logo img { width: 22px; height: 22px; object-fit: contain; display: block; }
 
 @media (max-width: 600px) {
-  .tk-chat-fab { inset-block-end: 16px; inset-inline-end: 16px; padding: 0 18px; }
+  .tk-chat-fab { inset-block-end: 16px; right: 16px; padding: 0 18px; }
   .tk-chat-fab__label { display: none; }
 }
 
 .tk-chat-panel {
   position: fixed;
   inset-block-end: 24px;
-  inset-inline-end: 24px;
+  right: 24px;
   z-index: 1001;
   width: 384px;
   max-width: calc(100vw - 32px);
@@ -50,7 +62,8 @@
   transform-origin: bottom right;
   animation: tk-chat-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
 }
-[dir="rtl"] .tk-chat-panel { transform-origin: bottom left; }
+/* Panel stays bottom-right in both languages, so the open animation grows
+   from the bottom-right corner regardless of direction. */
 
 @media (max-width: 600px) {
   .tk-chat-panel {
@@ -82,9 +95,10 @@
   justify-content: center;
   width: 38px; height: 38px;
   border-radius: 999px;
-  background: oklch(100% 0 0 / 0.16);
+  background: #fff;
   flex-shrink: 0;
 }
+.tk-chat-header__avatar img { width: 24px; height: 24px; object-fit: contain; display: block; }
 .tk-chat-header__title { font-weight: 700; font-size: 15px; line-height: 1.2; }
 .tk-chat-header__subtitle { font-size: 12px; opacity: 0.8; margin-top: 2px; }
 .tk-chat-header__close {

@@ -22,7 +22,11 @@ import { queryRecommendations } from "../company/company_service.js";
 import { localize } from "../../utils/localize.js";
 
 const MODEL = "gemini-2.5-flash";
-const MAX_TOOL_ROUNDS = 5;
+/* Each tool-using message costs ~2 Gemini calls (decide tool + write answer),
+   and the model can request both of our tools in a single round. Cap the loop
+   at 3 so a message can use both tools + a final answer, but no single message
+   can ever burn more than 3 calls of the (limited, free-tier) daily quota. */
+const MAX_TOOL_ROUNDS = 3;
 const MAX_HISTORY = 10;
 const MAX_RESULTS = 6;
 
@@ -250,6 +254,25 @@ const FALLBACK_REPLY = {
   ar: "عذرًا، لم أتمكن من معالجة طلبك الآن. من فضلك حاول مرة أخرى.",
 };
 
+/* Shown when Gemini's free-tier quota is exhausted (429 / RESOURCE_EXHAUSTED). */
+const BUSY_REPLY = {
+  en: "I'm getting a lot of requests right now. Please try again in a minute.",
+  ar: "أتلقى عددًا كبيرًا من الطلبات حاليًا. من فضلك حاول مرة أخرى بعد دقيقة.",
+};
+
+/* Shown for any other Gemini-side failure (overload, network, bad response). */
+const UNAVAILABLE_REPLY = {
+  en: "Sorry, the assistant is briefly unavailable. Please try again in a moment.",
+  ar: "عذرًا، المساعد غير متاح مؤقتًا. من فضلك حاول مرة أخرى بعد لحظات.",
+};
+
+/* Gemini surfaces quota errors as status 429 / RESOURCE_EXHAUSTED. Match on
+   both the status and the message so a friendly reply replaces the raw error. */
+const isQuotaError = (err) => {
+  if (err?.status === 429) return true;
+  return /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(String(err?.message || ""));
+};
+
 export const streamMessage = async (req, res, next) => {
   try {
     const lang = req.lang === "ar" ? "ar" : "en";
@@ -316,29 +339,37 @@ export const streamMessage = async (req, res, next) => {
       throw lastErr;
     };
 
-    /* Resolve any tool calls first (not streamed — usually one round). */
+    /* Resolve any tool calls first (not streamed — usually one round). A
+       Gemini failure here (quota, overload, network) must not surface as raw
+       JSON — turn it into a friendly chat reply so the widget stays premium. */
     let recommendations = [];
     let finalText = "";
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const result = await generate(contents);
+    try {
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+        const result = await generate(contents);
 
-      const calls = result.functionCalls || [];
-      if (calls.length) {
-        contents.push({ role: "model", parts: calls.map((c) => ({ functionCall: c })) });
-        const responseParts = [];
-        for (const call of calls) {
-          const out = await dispatchTool(call.name, call.args, lang, categories);
-          if (Array.isArray(out.recommendations) && out.recommendations.length) {
-            recommendations = out.recommendations;
+        const calls = result.functionCalls || [];
+        if (calls.length) {
+          contents.push({ role: "model", parts: calls.map((c) => ({ functionCall: c })) });
+          const responseParts = [];
+          for (const call of calls) {
+            const out = await dispatchTool(call.name, call.args, lang, categories);
+            if (Array.isArray(out.recommendations) && out.recommendations.length) {
+              recommendations = out.recommendations;
+            }
+            responseParts.push({ functionResponse: { name: call.name, response: out.modelResponse } });
           }
-          responseParts.push({ functionResponse: { name: call.name, response: out.modelResponse } });
+          contents.push({ role: "user", parts: responseParts });
+          continue;
         }
-        contents.push({ role: "user", parts: responseParts });
-        continue;
-      }
 
-      finalText = (result.text || "").trim();
-      break;
+        finalText = (result.text || "").trim();
+        break;
+      }
+    } catch (err) {
+      console.error("[chatbot] Gemini call failed:", err?.status, err?.message || err);
+      finalText = isQuotaError(err) ? BUSY_REPLY[lang] : UNAVAILABLE_REPLY[lang];
+      recommendations = [];
     }
 
     if (!finalText) finalText = FALLBACK_REPLY[lang];
