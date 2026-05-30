@@ -17,6 +17,9 @@
       "view": "View",
       "apply": "Apply",
       "currency": "EGP"
+    },
+    "requirements": {
+      "title": "Required to apply"
     }
   },
   "companyDetails": {

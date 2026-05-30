@@ -17,6 +17,9 @@
       "view": "عرض",
       "apply": "تقديم طلب",
       "currency": "ج.م"
+    },
+    "requirements": {
+      "title": "المطلوب للتقديم"
     }
   },
   "companyDetails": {

@@ -10,6 +10,31 @@ import "./ChatWidget.css";
 const initials = (name) =>
   (name || "T").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
+/* Map each requirement's stable English `type` to an icon. Falls back to a
+   generic doc glyph if the backend ever adds a new requirement type. */
+const REQ_ICON = {
+  "ACID Number": "shield",
+  "National ID / Passport": "user",
+  "Proof Of Payment": "receipt",
+  Delegation: "doc",
+  "Shipping Document": "package",
+};
+
+/* One application requirement, rendered as a premium checklist row. */
+function ReqCard({ req }) {
+  return (
+    <div className="tk-req">
+      <span className="tk-req__icon">
+        <Icon name={REQ_ICON[req.type] || "doc"} size={16} />
+      </span>
+      <div className="tk-req__info">
+        <div className="tk-req__name">{req.name}</div>
+        {req.description && <div className="tk-req__desc">{req.description}</div>}
+      </div>
+    </div>
+  );
+}
+
 /* One recommended company, rendered as a tappable card with View/Apply. */
 function RecCard({ rec }) {
   const { t } = useTranslation("client");
@@ -89,7 +114,7 @@ function ChatWidget() {
 
       const history = [...messages, { role: "user", content }];
       /* Append the user turn plus an empty assistant turn we stream into. */
-      setMessages([...history, { role: "assistant", content: "", recommendations: [] }]);
+      setMessages([...history, { role: "assistant", content: "", recommendations: [], requirements: [] }]);
       setInput("");
       setStreaming(true);
 
@@ -116,7 +141,11 @@ function ChatWidget() {
             const next = [...prev];
             const last = next[next.length - 1];
             if (last && last.role === "assistant") {
-              next[next.length - 1] = { ...last, recommendations: data.recommendations || [] };
+              next[next.length - 1] = {
+                ...last,
+                recommendations: data.recommendations || [],
+                requirements: data.requirements || [],
+              };
             }
             return next;
           });
@@ -207,6 +236,17 @@ function ChatWidget() {
                     </div>
                   ) : (
                     m.content && <div className="tk-chat-bubble">{m.content}</div>
+                  )}
+                  {isAssistant && m.requirements?.length > 0 && (
+                    <div className="tk-chat-reqs">
+                      <div className="tk-chat-reqs__title">
+                        <Icon name="check" size={13} />
+                        {t("chat.requirements.title")}
+                      </div>
+                      {m.requirements.map((req, ri) => (
+                        <ReqCard key={req.type || ri} req={req} />
+                      ))}
+                    </div>
                   )}
                   {isAssistant && m.recommendations?.length > 0 && (
                     <div className="tk-chat-recs">

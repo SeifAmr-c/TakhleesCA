@@ -80,6 +80,19 @@ const DOC_REQUIREMENTS = [
   },
 ];
 
+/* The ACID number is entered as a 19-digit value on the apply form (not an
+   uploaded file), so it lives outside DOC_REQUIREMENTS — but clients still
+   need it to apply, so the requirements tool lists it first. Mirrors the
+   ACID field + /^\d{19}$/ rule in frontend/src/pages/client/FillApplication.jsx. */
+const ACID_REQUIREMENT = {
+  type: "ACID Number",
+  name: { en: "ACID Number", ar: "رقم ACID" },
+  desc: {
+    en: "Your 19-digit ACID number from Egypt's Nafeza (Advance Cargo Information) system, registered before the shipment leaves its origin.",
+    ar: "رقم ACID المكوّن من 19 رقمًا من منظومة نافذة (معلومات الشحن المسبقة) المصرية، ويُسجَّل قبل مغادرة الشحنة بلد المنشأ.",
+  },
+};
+
 const FUNCTION_DECLARATIONS = [
   {
     name: "recommend_companies",
@@ -111,7 +124,7 @@ const FUNCTION_DECLARATIONS = [
   {
     name: "get_application_requirements",
     description:
-      "Return the exact list of documents a client must upload to submit a customs-clearance application on Takhlees. Call this whenever the client asks what documents/papers are needed to apply or start a shipment.",
+      "Return the exact list of things a client needs to submit a customs-clearance application on Takhlees — the four documents they must upload plus the 19-digit ACID number they must enter. Call this whenever the client asks what documents/papers/requirements are needed to apply or start a shipment.",
     parameters: { type: Type.OBJECT, properties: {} },
   },
 ];
@@ -134,7 +147,7 @@ const buildSystemInstruction = (lang, categoryNames) => {
     "- Before recommending, if the governorate, category, or budget is missing and you cannot reasonably infer it, ask one short clarifying question. Otherwise call the tool.",
     "- If recommend_companies returns zero companies, do NOT call it again. Tell the client no verified companies matched and suggest widening the budget or trying a nearby governorate.",
     "- The UI renders the recommended companies as interactive cards the client can tap to view or apply, so do NOT repeat the full list in prose. Give a brief, warm summary (1-3 sentences) and invite them to tap a card.",
-    "- For document questions, call get_application_requirements and present the list clearly.",
+    "- For document questions, call get_application_requirements. The UI renders the returned items as a polished checklist of cards below your reply, so do NOT repeat them as a bulleted list in prose. Give a brief 1-2 sentence intro (noting they'll also need their 19-digit ACID number) and invite them to review the checklist.",
     "- Politely decline anything unrelated to customs clearance, shipping, or the Takhlees platform.",
     "- Be concise, warm, and professional.",
     "",
@@ -212,13 +225,22 @@ const runRecommendTool = async (args, lang, categories) => {
 };
 
 const runRequirementsTool = (lang) => {
-  const docs = DOC_REQUIREMENTS.map((d) => ({
+  /* ACID first (entered as a number, not uploaded), then the four uploaded
+     documents — the order the client meets them on the apply form. `type` is
+     the stable English key the UI maps to an icon; name/description are
+     localized for both the model summary and the rendered cards. */
+  const items = [ACID_REQUIREMENT, ...DOC_REQUIREMENTS].map((d) => ({
+    type: d.type,
     name: d.name[lang] || d.name.en,
     description: d.desc[lang] || d.desc.en,
   }));
   return {
-    modelResponse: { count: docs.length, documents: docs },
-    recommendations: null,
+    /* Compact text projection for the model; the UI renders `requirements` as cards. */
+    modelResponse: {
+      count: items.length,
+      requirements: items.map(({ name, description }) => ({ name, description })),
+    },
+    requirements: items,
   };
 };
 
@@ -343,6 +365,7 @@ export const streamMessage = async (req, res, next) => {
        Gemini failure here (quota, overload, network) must not surface as raw
        JSON — turn it into a friendly chat reply so the widget stays premium. */
     let recommendations = [];
+    let requirements = [];
     let finalText = "";
     try {
       for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
@@ -357,6 +380,9 @@ export const streamMessage = async (req, res, next) => {
             if (Array.isArray(out.recommendations) && out.recommendations.length) {
               recommendations = out.recommendations;
             }
+            if (Array.isArray(out.requirements) && out.requirements.length) {
+              requirements = out.requirements;
+            }
             responseParts.push({ functionResponse: { name: call.name, response: out.modelResponse } });
           }
           contents.push({ role: "user", parts: responseParts });
@@ -370,6 +396,7 @@ export const streamMessage = async (req, res, next) => {
       console.error("[chatbot] Gemini call failed:", err?.status, err?.message || err);
       finalText = isQuotaError(err) ? BUSY_REPLY[lang] : UNAVAILABLE_REPLY[lang];
       recommendations = [];
+      requirements = [];
     }
 
     if (!finalText) finalText = FALLBACK_REPLY[lang];
@@ -395,7 +422,7 @@ export const streamMessage = async (req, res, next) => {
     }
 
     if (!closed) {
-      sseEvent(res, "done", { recommendations });
+      sseEvent(res, "done", { recommendations, requirements });
       res.end();
     }
   } catch (err) {
