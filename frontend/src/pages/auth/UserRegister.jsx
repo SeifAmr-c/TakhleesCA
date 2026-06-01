@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { register } from "../../api/auth.js";
 import { friendlyError, errorCode } from "../../api/client.js";
 import Icon from "../../components/Icon.jsx";
@@ -63,6 +63,7 @@ function UserRegister() {
      redirect timer fires. */
   const [succeeded, setSucceeded] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const update = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -142,7 +143,7 @@ function UserRegister() {
          it disabled, and redirect after a short pause so the success
          affordance is visible to the user. */
       setSucceeded(true);
-      setTimeout(() => navigate("/login", { replace: true }), 2000);
+      setTimeout(() => navigate("/login", { replace: true, state: location.state }), 2000);
     } catch (err) {
       routeServerError(err);
       setSubmitting(false);
@@ -295,7 +296,7 @@ function UserRegister() {
           </form>
 
           <p className={styles.footerLinks}>
-            {t("userRegister.footerPrompt")} <Link to="/login" className={styles.footerLink}>{t("userRegister.footerLink")}</Link>
+            {t("userRegister.footerPrompt")} <Link to="/login" state={location.state} className={styles.footerLink}>{t("userRegister.footerLink")}</Link>
           </p>
         </div>
 

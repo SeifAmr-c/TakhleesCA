@@ -150,7 +150,7 @@ function UserLogin() {
           </form>
 
           <p className={styles.footerLinks}>
-            {t("userLogin.footerPrompt")} <Link to="/register" className={styles.footerLink}>{t("userLogin.footerLink")}</Link>
+            {t("userLogin.footerPrompt")} <Link to="/register" state={location.state} className={styles.footerLink}>{t("userLogin.footerLink")}</Link>
           </p>
         </div>
 
