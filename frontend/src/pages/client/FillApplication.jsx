@@ -693,6 +693,14 @@ function FillApplication() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
+
+  /* The wizard swaps steps via local state, not the router, so ScrollToTop
+     never fires. Reset the scroll on each step change so a new step opens at
+     the top instead of wherever the previous step's Continue button sat. */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
+
   const [ports, setPorts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [submitting, setSubmitting] = useState(false);
