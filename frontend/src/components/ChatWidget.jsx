@@ -77,14 +77,26 @@ function RecCard({ rec }) {
   );
 }
 
+/* sessionStorage key holding the login the user last consented under. We store
+   the login's `expiresAt` (minted fresh on every login in authState.js) so the
+   recording notice reappears once per login: a new login => new expiresAt =>
+   stored value no longer matches => consent is required again. Page refreshes
+   within the same login keep the value, so we don't re-nag on every navigation. */
+const CONSENT_KEY = "takhlees_chat_consent";
+
 function ChatWidget() {
   const auth = useAuth();
   const { t } = useTranslation("client");
   const { lang } = useLanguage();
 
   const isClient = auth?.kind === "user" && auth?.role === "client" && !!auth?.user?.UserID;
+  const loginId = auth?.expiresAt ?? null;
 
   const [open, setOpen] = useState(false);
+  /* Whether the recording notice has been accepted for the current login. */
+  const [consented, setConsented] = useState(false);
+  /* Whether the recording-notice dialog is currently shown. */
+  const [showConsent, setShowConsent] = useState(false);
   const [messages, setMessages] = useState([]); // { role, content, recommendations? }
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -105,6 +117,46 @@ function ChatWidget() {
 
   /* Abort any in-flight stream on unmount. */
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  /* Re-evaluate consent whenever the login changes (login / logout / re-login).
+     If this login hasn't accepted the notice yet, force the panel closed so the
+     dialog shows on the next launch. */
+  useEffect(() => {
+    let accepted = false;
+    try {
+      accepted = loginId != null && sessionStorage.getItem(CONSENT_KEY) === String(loginId);
+    } catch {
+      accepted = false;
+    }
+    setConsented(accepted);
+    if (!accepted) {
+      setOpen(false);
+      setShowConsent(false);
+    }
+  }, [loginId]);
+
+  /* Launcher click: open straight away if already consented this login,
+     otherwise surface the recording notice first. */
+  const onLaunch = useCallback(() => {
+    if (consented) setOpen(true);
+    else setShowConsent(true);
+  }, [consented]);
+
+  const acceptConsent = useCallback(() => {
+    try {
+      if (loginId != null) sessionStorage.setItem(CONSENT_KEY, String(loginId));
+    } catch {
+      /* sessionStorage unavailable (private mode) — proceed for this view only. */
+    }
+    setConsented(true);
+    setShowConsent(false);
+    setOpen(true);
+  }, [loginId]);
+
+  const rejectConsent = useCallback(() => {
+    setShowConsent(false);
+    setOpen(false);
+  }, []);
 
   const send = useCallback(
     (text) => {
@@ -190,10 +242,35 @@ function ChatWidget() {
   return (
     <>
       {!open && (
-        <button type="button" dir="ltr" className="tk-chat-fab" onClick={() => setOpen(true)} aria-label={t("chat.launcher")}>
+        <button type="button" dir="ltr" className="tk-chat-fab" onClick={onLaunch} aria-label={t("chat.launcher")}>
           <span className="tk-chat-fab__logo"><img src={logo} alt="" /></span>
           <span className="tk-chat-fab__label">{t("chat.launcher")}</span>
         </button>
+      )}
+
+      {showConsent && (
+        <div className="tk-chat-consent" role="presentation" onClick={rejectConsent}>
+          <div
+            dir="auto"
+            className="tk-chat-consent__card"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("chat.consent.title")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="tk-chat-consent__icon"><Icon name="shield" size={22} /></span>
+            <div className="tk-chat-consent__title">{t("chat.consent.title")}</div>
+            <p className="tk-chat-consent__body">{t("chat.consent.body")}</p>
+            <div className="tk-chat-consent__actions">
+              <button type="button" className="btn btn-secondary" onClick={rejectConsent}>
+                {t("chat.consent.reject")}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={acceptConsent}>
+                {t("chat.consent.accept")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {open && (

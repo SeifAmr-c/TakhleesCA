@@ -298,8 +298,66 @@
   padding: 6px 14px;
 }
 
+/* Recording-consent notice — shown once per login before the chat opens. */
+.tk-chat-consent {
+  position: fixed;
+  inset: 0;
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: oklch(20% 0.055 245 / 0.45);
+  backdrop-filter: blur(2px);
+  animation: tk-consent-fade 0.18s ease;
+}
+.tk-chat-consent__card {
+  width: 100%;
+  max-width: 380px;
+  padding: 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 60px -12px oklch(20% 0.055 245 / 0.45);
+  animation: tk-consent-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tk-chat-consent__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px; height: 48px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  color: var(--teal-dark);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--line);
+}
+.tk-chat-consent__title { font-weight: 700; font-size: 17px; color: var(--ink); }
+.tk-chat-consent__body {
+  margin: 8px 0 20px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.tk-chat-consent__actions {
+  display: flex;
+  gap: 10px;
+}
+.tk-chat-consent__actions .btn { flex: 1; justify-content: center; }
+
+@keyframes tk-consent-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes tk-consent-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tk-chat-panel { animation: none; }
   .tk-chat-typing span { animation: none; }
   .tk-chat-fab { transition: none; }
+  .tk-chat-consent, .tk-chat-consent__card { animation: none; }
 }

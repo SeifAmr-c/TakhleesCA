@@ -20,6 +20,12 @@
     },
     "requirements": {
       "title": "Required to apply"
+    },
+    "consent": {
+      "title": "Before you start",
+      "body": "This conversation will be recorded and may be reviewed by Takhlees administrators to help us improve our service. Do you agree to continue?",
+      "accept": "Accept & continue",
+      "reject": "Decline"
     }
   },
   "companyDetails": {
