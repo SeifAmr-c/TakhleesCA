@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   FlatList,
   Modal,
@@ -210,22 +211,30 @@ export default function TrackingScreen({ session, onSignOut }) {
   const [rows, setRows] = useState([]);
   const [revealed, setRevealed] = useState(null);
 
+  /* `mode`:
+       'initial' (default) — full-screen spinner; first load of the screen.
+       'refresh'           — pull-to-refresh spinner.
+       'silent'            — background poll/focus refetch; no spinner, no
+                             error banner so a transient blip doesn't replace
+                             the list the user is looking at. */
   const load = useCallback(
-    async (isRefresh) => {
+    async (mode = 'initial') => {
       if (!clientId) {
         setError('No client associated with this session.');
         setLoading(false);
         setRefreshing(false);
         return;
       }
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+      if (mode === 'refresh') setRefreshing(true);
+      else if (mode !== 'silent') setLoading(true);
+      if (mode !== 'silent') setError(null);
       try {
         const data = await listClientApplications(clientId);
         setRows(Array.isArray(data) ? data : []);
       } catch (e) {
-        setError(e.message || 'Could not load your shipments.');
+        if (mode !== 'silent') {
+          setError(e.message || 'Could not load your shipments.');
+        }
         if (e.status === 401) onSignOut?.();
       } finally {
         setLoading(false);
@@ -235,9 +244,37 @@ export default function TrackingScreen({ session, onSignOut }) {
     [clientId, onSignOut]
   );
 
+  /* Refetch every time the tab regains focus. The first focus shows the
+     spinner; later focuses refresh silently — so returning to this tab after
+     a company scanned the QR reflects the new status without a manual pull. */
+  const hasLoadedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      load(hasLoadedRef.current ? 'silent' : 'initial');
+      hasLoadedRef.current = true;
+    }, [load])
+  );
+
+  /* While the QR modal is open the client is presenting the code to the
+     company. Poll so the moment the company scans it and the backend flips
+     the application to Completed, this screen updates on its own — matching
+     the instant feedback the company's scanner gets, instead of forcing the
+     client to pull-to-refresh. */
   useEffect(() => {
-    load(false);
-  }, [load]);
+    if (!revealed) return undefined;
+    const id = setInterval(() => load('silent'), 3000);
+    return () => clearInterval(id);
+  }, [revealed, load]);
+
+  /* Once the polled status for the revealed shipment reads Completed, the QR
+     is spent — dismiss the modal so the now-Completed card is visible. */
+  useEffect(() => {
+    if (!revealed) return;
+    const current = rows.find((r) => r.ApplicationID === revealed.ApplicationID);
+    if (current && String(current.Status || '').toLowerCase() === 'completed') {
+      setRevealed(null);
+    }
+  }, [rows, revealed]);
 
   const displayName =
     session?.user?.FirstName
@@ -256,7 +293,7 @@ export default function TrackingScreen({ session, onSignOut }) {
         <View style={styles.center}>
           <Text style={styles.errorTitle}>Could not load shipments</Text>
           <Text style={styles.errorBody}>{error}</Text>
-          <Pressable style={styles.retry} onPress={() => load(false)}>
+          <Pressable style={styles.retry} onPress={() => load('initial')}>
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         </View>
@@ -272,7 +309,7 @@ export default function TrackingScreen({ session, onSignOut }) {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => load(true)}
+              onRefresh={() => load('refresh')}
               tintColor={brand.tabActive}
               colors={[brand.tabActive]}
             />

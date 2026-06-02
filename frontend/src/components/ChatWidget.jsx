@@ -120,8 +120,17 @@ function ChatWidget() {
 
   /* Re-evaluate consent whenever the login changes (login / logout / re-login).
      If this login hasn't accepted the notice yet, force the panel closed so the
-     dialog shows on the next launch. */
+     dialog shows on the next launch. Crucially we also wipe the conversation
+     state: this widget stays mounted across logout→login, so without resetting
+     here the next user would open the chat and read the previous user's history.
+     Abort any in-flight stream from the prior login before clearing. */
   useEffect(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setInput("");
+    setError("");
+    setStreaming(false);
+
     let accepted = false;
     try {
       accepted = loginId != null && sessionStorage.getItem(CONSENT_KEY) === String(loginId);
